@@ -133,7 +133,16 @@ flow, and where each skill earns its keep here:
 The 14 tests in `lib/poker/engine.test.ts` are the regression suite for the whole
 project. Run them after any change to `lib/poker`, and keep them green.
 
+## Current state (updated 2026-07-29)
+
+**M1 is shipped and live at https://hcwk-wizard.vercel.app.** Email signup,
+the outs drill, and XP/streak persistence are verified in production. Google
+OAuth is deferred to the start of M2 (blocked on Google-account MFA). Secrets
+and a working test account live in git-ignored `.env.local`. `main` on
+`crey16/hcwk-wizard` auto-deploys to Vercel. Read `docs/05-m1-status.md`
+before touching anything.
+
 ## Getting oriented
 
 Read in this order: `docs/01-architecture.md` → `docs/02-migration-from-stackschool.md`
-→ `docs/03-api-surface.md` → `docs/04-roadmap.md`.
+→ `docs/03-api-surface.md` → `docs/04-roadmap.md` → `docs/05-m1-status.md`.

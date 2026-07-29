@@ -3,9 +3,20 @@
 Sequenced so there is a real, shareable URL as early as possible. Deployment
 problems are the ones that eat days; surface them in milestone 1, not at the end.
 
-## M1 — Skeleton on a live URL
+## M1 — Skeleton on a live URL ✅ SHIPPED 2026-07-29
 
-**Done when:** you can send a friend a link, they sign up with Google, do one
+**Live at https://hcwk-wizard.vercel.app** — email+password signup, the outs
+drill, and XP/streak persistence all verified against production (12/12 live
+checks: trigger-created profiles, XP through the FastAPI function, RLS
+two-account isolation, ET streak dates). See `docs/05-m1-status.md` for the
+full state, infrastructure references, and deploy learnings.
+
+**One deliberate deferral:** Google sign-in. The button ships but the provider
+is unconfigured — Google Cloud console access is blocked until MFA is enabled
+on the Google account. Moved to the top of M2 (below). Original done-when
+otherwise met, with email signup standing in for Google.
+
+**Done when (original):** you can send a friend a link, they sign up with Google, do one
 outs drill, and their XP persists.
 
 1. `npx create-next-app@latest` (App Router, TypeScript, Tailwind) at the repo root.
@@ -25,6 +36,15 @@ role key must be a Vercel env var, never in client code; `@supabase/ssr` cookie
 handling in middleware is the usual source of "logged out on refresh".
 
 ## M2 — The full drill set
+
+**Carried over from M1 (do first):**
+- **Google OAuth provider.** Prereq: enable MFA on the Google account, then
+  Google Cloud console → OAuth consent screen + Web client with redirect URI
+  `https://ajaryvyorhwnhinzubqd.supabase.co/auth/v1/callback` → paste client
+  ID/secret into Supabase → Auth → Providers → Google. The app-side button
+  already works.
+- Decide whether to re-enable Supabase "Confirm email" (off for M1 so friends
+  can sign up instantly; needs an SMTP story if turned back on).
 
 Port the 10 modules from the trainer HTML. The behaviour is fully specified by
 that file, and the engine already exists.
