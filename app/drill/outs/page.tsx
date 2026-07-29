@@ -1,13 +1,6 @@
-import { DrillShell } from "@/components/drill/DrillShell";
+import { DrillShell, type Profile } from "@/components/drill/DrillShell";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseConfigured } from "@/lib/supabase/env";
-
-interface Profile {
-  username: string;
-  xp: number;
-  level: number;
-  streak_count: number;
-}
 
 /**
  * Best-effort profile fetch. Returns null (never throws) whenever Supabase

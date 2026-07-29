@@ -6,7 +6,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { Rng, Spot } from "../poker/engine.js";
+import type { Spot } from "../poker/engine.js";
 import { hitProbability } from "../poker/engine.js";
 import { buildAttemptRequest } from "./recordAttempt.js";
 

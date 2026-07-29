@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Header } from "@/components/ui/Header";
 import { OutsDrill, type OutsDrillResult } from "@/components/drill/OutsDrill";
 import { recordAttempt } from "@/lib/drill/recordAttempt";
 
-interface Profile {
+export interface Profile {
   username: string;
   xp: number;
   level: number;
@@ -28,10 +28,16 @@ export interface DrillShellProps {
  */
 export function DrillShell({ profile: initialProfile }: DrillShellProps) {
   const [profile, setProfile] = useState<Profile | null>(initialProfile);
+  // Monotonic counter guarding against out-of-order recordAttempt responses:
+  // each request captures the counter value at issue time, and only the
+  // response matching the latest issued request is applied to state.
+  const latestRequestId = useRef(0);
 
   const handleResult = useCallback((result: OutsDrillResult) => {
+    const requestId = ++latestRequestId.current;
     void recordAttempt(result).then((update) => {
       if (!update) return;
+      if (requestId !== latestRequestId.current) return;
       setProfile({
         username: update.username,
         xp: update.xp,
