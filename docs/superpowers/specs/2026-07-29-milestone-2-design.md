@@ -109,7 +109,7 @@ export interface DrillQuestion {
   options: { label: string; value: string | number }[];
   answer: string | number;
   acceptable?: (string | number)[];
-  layout: "two" | "grid3";
+  layout: "one" | "two" | "grid3";
   explain: (chosen: string | number) => Explain;
   payload: Record<string, unknown>;
 }
@@ -289,7 +289,9 @@ Generators take an injectable `rng`, so tests are deterministic and can loop
 - The answer is always derived from `lib/poker` — never a hand-written constant.
   A test that hard-codes an expected out count is itself a bug.
 - `options` contains `answer`, has no duplicate values, and its length agrees
-  with `layout`: exactly 2 for `"two"`, 3 or 4 for `"grid3"`.
+  with `layout`: exactly 2 for `"two"`, 3 or 4 for `"grid3"`, exactly 4 for
+  `"one"` (the single-column layout used by the long-text concept questions in
+  `concepts` and `implied`'s concept mode).
 - `outs`: the named draw and the out count agree with `DRAW_OUTS` in unknown
   mode (correctness rule 5), and a card that makes a hand living on the board
   alone is never counted (rule 3).
