@@ -55,6 +55,15 @@ test("safeNext: rejects non-path-starting strings", () => {
   assert.equal(safeNext("javascript:alert(1)"), "/drill/outs");
 });
 
+test("safeNext: rejects backslash open-redirect payloads", () => {
+  // WHATWG URL parsing treats "\" as "/", so "/\evil.com" and "/\\evil.com"
+  // both resolve to "https://evil.com/" once handed to the browser's URL
+  // parser (e.g. via router.push). Neither starts with "//", so the old
+  // check let them through — see CLAUDE.md-adjacent review notes.
+  assert.equal(safeNext("/\\evil.com"), "/drill/outs");
+  assert.equal(safeNext("/\\\\evil.com"), "/drill/outs");
+});
+
 test("safeNext: defaults to /drill/outs for null/empty", () => {
   assert.equal(safeNext(null), "/drill/outs");
   assert.equal(safeNext(""), "/drill/outs");

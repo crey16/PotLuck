@@ -32,12 +32,15 @@ export function shouldRedirectToLogin(pathname: string, hasUser: boolean): boole
  * Sanitize the `next` query param used by /login and /auth/callback so it
  * can only ever send the browser to a same-origin relative path. Rejects
  * absolute URLs (https://evil.com), protocol-relative URLs (//evil.com),
- * and anything else that doesn't start with a single leading slash.
+ * backslash variants (/\evil.com, /\\evil.com — WHATWG URL parsing treats
+ * "\" as "/", so router.push would resolve these to https://evil.com/), and
+ * anything else that doesn't start with a single leading slash.
  */
 export function safeNext(raw: string | null): string {
   if (!raw) return DEFAULT_NEXT;
-  // Reject protocol-relative ("//evil.com") and anything not starting with
-  // exactly one leading slash (absolute URLs, javascript:, bare hostnames).
-  if (!raw.startsWith("/") || raw.startsWith("//")) return DEFAULT_NEXT;
+  // Reject protocol-relative ("//evil.com"), anything not starting with
+  // exactly one leading slash (absolute URLs, javascript:, bare hostnames),
+  // and any backslash (browsers normalize "\" to "/" before resolving).
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return DEFAULT_NEXT;
   return raw;
 }

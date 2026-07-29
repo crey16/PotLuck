@@ -3,18 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { dealDrawSpot, describeOuts, type Spot } from "@/lib/poker/engine";
 import { buildOutsQuestion, type OutsQuestion } from "@/lib/drill/outsQuestion";
+import type { OutsDrillResult } from "@/lib/drill/recordAttempt";
 import { Felt, Seat, Divider } from "@/components/ui/Felt";
 import { PlayingCard } from "@/components/ui/PlayingCard";
 import { StatTile } from "@/components/ui/StatTile";
 import { OptionButton, type OptionButtonState } from "@/components/ui/OptionButton";
 import { FeedbackPanel, WorkTable, WorkRow } from "@/components/ui/FeedbackPanel";
 
-/** Reported to the caller after every answered question. Unused until Task 6. */
-export interface OutsDrillResult {
-  spot: Spot;
-  answer: number;
-  correct: boolean;
-}
+export type { OutsDrillResult };
 
 export interface OutsDrillProps {
   /** Profile level for the Level tile — falls back to 1 while unauthenticated. */
@@ -61,17 +57,15 @@ export function OutsDrill({ level = 1, onResult }: OutsDrillProps) {
       if (correct) {
         setScore((s) => s + 10);
         setCorrectCount((c) => c + 1);
-        setStreak((s) => {
-          const next = s + 1;
-          setBestStreak((b) => Math.max(b, next));
-          return next;
-        });
+        const nextStreak = streak + 1;
+        setStreak(nextStreak);
+        setBestStreak((b) => Math.max(b, nextStreak));
       } else {
         setStreak(0);
       }
       onResult?.({ spot, answer: value, correct });
     },
-    [phase, question, spot, onResult]
+    [phase, question, spot, streak, onResult]
   );
 
   const handleNext = useCallback(() => {
@@ -108,7 +102,8 @@ export function OutsDrill({ level = 1, onResult }: OutsDrillProps) {
         <StatTile label="Score" value={score} />
         <StatTile label="Accuracy" value={`${accuracy}%`} meterPercent={accuracy} />
         <StatTile label="Streak" value={streak} sub={`best ${bestStreak}`} />
-        <StatTile label="Level" value={level} pips={level % 3} />
+        {/* The pip display caps visually at 3 while XP level is unbounded. */}
+        <StatTile label="Level" value={level} pips={Math.min(level, 3)} />
       </div>
 
       <div className="panel">
