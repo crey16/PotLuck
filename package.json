@@ -10,7 +10,8 @@
     "test": "tsx --test lib/poker/*.test.ts lib/drill/*.test.ts lib/supabase/*.test.ts components/ui/*.test.ts",
     "api": "uvicorn api.index:app --port 8000 --reload --env-file .env.local",
     "api:bare": "uvicorn api.index:app --port 8000 --reload",
-    "dev:all": "concurrently \"npm:dev\" \"npm:api\""
+    "dev:all": "concurrently \"npm:dev\" \"npm:api\"",
+    "dev:all:bare": "concurrently \"npm:dev\" \"npm:api:bare\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
