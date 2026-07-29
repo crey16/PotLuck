@@ -1,7 +1,20 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async rewrites() {
+    // Dev only: proxy /api/* to the local uvicorn server (npm run api).
+    // In production, Vercel routes /api/* to the Python function natively —
+    // no rewrite needed (or wanted; it would just add a hop).
+    if (process.env.NODE_ENV !== "development") {
+      return [];
+    }
+    return [
+      {
+        source: "/api/:path*",
+        destination: "http://127.0.0.1:8000/api/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

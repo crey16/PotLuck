@@ -1,0 +1,5 @@
+[tool.vercel]
+entrypoint = "api/index.py"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
