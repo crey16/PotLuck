@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GTO4OMC — Poker Math Trainer</title>
+<style>
+:root{
+  color-scheme: dark;
+  --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#222221; --surface-3:#2a2a28;
+  --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --line:#383835; --ring:rgba(255,255,255,0.10);
+  --blue:#3987e5; --aqua:#199e70; --violet:#9085e9; --orange:#d95926;
+  --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+  --card-face:#f6f5f1; --card-ink:#141413; --card-red:#c62828;
+  --card-blue:#1565c0; --card-green:#2e7d32;
+  --radius:14px;
+}
+html[data-theme="light"]{
+  color-scheme: light;
+  --plane:#f2f1ed; --surface:#fcfcfb; --surface-2:#f4f3ef; --surface-3:#e9e8e2;
+  --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --line:#c3c2b7; --ring:rgba(11,11,11,0.10);
+  --blue:#2a78d6; --aqua:#1baf7a; --violet:#4a3aa7; --orange:#eb6834;
+  --good:#0ca30c; --warn:#b07800; --crit:#d03b3b;
+  --card-face:#ffffff; --card-ink:#141413;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--plane); color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:940px;margin:0 auto;padding:20px 16px 72px}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.brand h1{font-size:20px;margin:0;letter-spacing:-.01em}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.spacer{flex:1}
+.iconbtn{background:var(--surface);border:1px solid var(--ring);color:var(--ink-2);
+  border-radius:10px;padding:7px 11px;cursor:pointer;font-size:12.5px}
+.iconbtn:hover{background:var(--surface-3);color:var(--ink)}
+
+/* ---------- stat tiles ---------- */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.tile{background:var(--surface);border:1px solid var(--ring);border-radius:var(--radius);padding:11px 13px}
+.tile .lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tile .val{font-size:23px;font-weight:600;margin-top:3px;letter-spacing:-.02em}
+.tile .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+.meter{height:5px;background:var(--grid);border-radius:3px;margin-top:8px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--blue);border-radius:3px;transition:width .4s}
+.lvlpips{display:flex;gap:4px;margin-top:9px}
+.lvlpips span{flex:1;height:5px;border-radius:3px;background:var(--grid)}
+.lvlpips span.on{background:var(--violet)}
+
+/* ---------- tabs ---------- */
+nav.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.tab{background:var(--surface);border:1px solid var(--ring);color:var(--ink-2);
+  padding:7px 12px;border-radius:999px;cursor:pointer;font-size:13px;white-space:nowrap;
+  display:flex;align-items:center;gap:7px}
+.tab:hover{background:var(--surface-3);color:var(--ink)}
+.tab.active{background:var(--ink);color:var(--plane);border-color:var(--ink);font-weight:600}
+.tab .dot{width:6px;height:6px;border-radius:50%;background:var(--grid)}
+.tab.active .dot{display:none}
+.tab .dot.g{background:var(--good)} .tab .dot.w{background:var(--warn)} .tab .dot.c{background:var(--crit)}
+
+/* ---------- panel ---------- */
+.panel{background:var(--surface);border:1px solid var(--ring);border-radius:18px;padding:20px}
+.qhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.qhead .kicker{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.qhead .chip{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--surface-3);color:var(--ink-2)}
+.prompt{font-size:17px;font-weight:600;margin:8px 0 4px;letter-spacing:-.01em}
+.sub{color:var(--ink-2);font-size:13.5px;margin-bottom:14px}
+
+/* ---------- table / cards ---------- */
+.felt{background:var(--surface-2);border:1px solid var(--ring);border-radius:var(--radius);
+  padding:16px;margin:14px 0;display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:center}
+.seat{text-align:center}
+.seat .who{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:7px}
+.hand{display:flex;gap:6px;justify-content:center}
+.divider{width:1px;align-self:stretch;background:var(--line);min-height:64px}
+.card{width:46px;height:64px;background:var(--card-face);border-radius:6px;position:relative;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  box-shadow:0 1px 3px rgba(0,0,0,.45);border:1px solid rgba(0,0,0,.18);flex:none;
+  color:var(--card-ink)}
+.card .r,.card .s{color:var(--card-ink)}
+.card .r{font-size:21px;font-weight:700;line-height:1;letter-spacing:-.03em}
+.card .s{font-size:15px;line-height:1;margin-top:2px}
+.card.red .r,.card.red .s{color:var(--card-red)}
+.card.blu .r,.card.blu .s{color:var(--card-blue)}
+.card.grn .r,.card.grn .s{color:var(--card-green)}
+.card.back{background:repeating-linear-gradient(45deg,#2b4a6f,#2b4a6f 5px,#22405f 5px,#22405f 10px)}
+.card.hl{outline:2px solid var(--warn);outline-offset:1px}
+.potbar{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:12px 0 2px}
+.pill{background:var(--surface-3);border:1px solid var(--ring);border-radius:10px;padding:7px 13px;text-align:center;min-width:104px}
+.pill .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.pill .v{font-size:17px;font-weight:600;margin-top:1px;font-variant-numeric:tabular-nums}
+
+/* ---------- options ---------- */
+.opts{display:grid;gap:8px;margin-top:16px}
+.opts.two{grid-template-columns:1fr 1fr}
+.opts.grid3{grid-template-columns:repeat(3,1fr)}
+.opt{background:var(--surface-2);border:1px solid var(--ring);color:var(--ink);
+  border-radius:12px;padding:12px 14px;cursor:pointer;text-align:left;font-size:15px;
+  font-family:inherit;transition:background .12s,border-color .12s;display:flex;align-items:center;gap:10px}
+.opt:hover:not(:disabled){background:var(--surface-3);border-color:var(--line)}
+.opt:disabled{cursor:default}
+.opt .key{width:20px;height:20px;border-radius:5px;background:var(--surface-3);color:var(--muted);
+  font-size:11px;display:flex;align-items:center;justify-content:center;flex:none;font-weight:600}
+.opt.correct{border-color:var(--good);background:color-mix(in srgb,var(--good) 14%,var(--surface-2))}
+.opt.wrong{border-color:var(--crit);background:color-mix(in srgb,var(--crit) 14%,var(--surface-2))}
+.opt .mark{margin-left:auto;font-size:13px;font-weight:600}
+.opt.correct .mark{color:var(--good)} .opt.wrong .mark{color:var(--crit)}
+
+/* ---------- feedback ---------- */
+.fb{margin-top:16px;border-radius:14px;border:1px solid var(--ring);background:var(--surface-2);overflow:hidden;display:none}
+.fb.show{display:block}
+.fb .bar{padding:11px 15px;font-weight:600;font-size:14px;display:flex;align-items:center;gap:9px}
+.fb.ok .bar{background:color-mix(in srgb,var(--good) 18%,var(--surface-2));color:var(--good)}
+.fb.no .bar{background:color-mix(in srgb,var(--crit) 18%,var(--surface-2));color:var(--crit)}
+.fb .body{padding:14px 15px 16px;font-size:14px;color:var(--ink-2)}
+.work{font-variant-numeric:tabular-nums}
+.work .row{display:flex;gap:10px;padding:5px 0;border-bottom:1px dashed var(--grid);align-items:baseline}
+.work .row:last-child{border-bottom:0}
+.work .lbl{flex:1;color:var(--muted);font-size:13px}
+.work .num{font-weight:600;color:var(--ink);font-size:14px}
+.note{margin-top:11px;padding:10px 12px;border-left:3px solid var(--blue);background:var(--surface-3);
+  border-radius:0 8px 8px 0;font-size:13.5px;color:var(--ink-2)}
+.note.warnl{border-left-color:var(--warn)}
+.actions{display:flex;gap:10px;margin-top:16px;align-items:center;flex-wrap:wrap}
+.btn{background:var(--ink);color:var(--plane);border:0;border-radius:11px;padding:11px 20px;
+  font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn:hover{opacity:.88}
+.btn.ghost{background:transparent;color:var(--ink-2);border:1px solid var(--ring);font-weight:500}
+.btn.ghost:hover{color:var(--ink);background:var(--surface-3)}
+.hint{color:var(--muted);font-size:12.5px}
+
+/* ---------- preflop range grid ---------- */
+.scenrow{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 4px}
+.scen{background:var(--surface-2);border:1px solid var(--ring);color:var(--ink-2);
+  border-radius:9px;padding:6px 11px;font-size:12.5px;cursor:pointer;font-family:inherit}
+.scen:hover{background:var(--surface-3);color:var(--ink)}
+.scen.on{background:var(--ink);color:var(--plane);border-color:var(--ink);font-weight:600}
+.pfgrid{margin:14px 0 4px}
+.legend{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin-bottom:11px;font-size:12.5px;color:var(--ink-2)}
+.legend .lg{display:flex;align-items:center;gap:6px}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block;border:1px solid var(--ring)}
+.legend b{color:var(--ink);font-variant-numeric:tabular-nums}
+.grid13{display:grid;grid-template-columns:repeat(13,1fr);gap:2px;max-width:620px;margin:0 auto}
+.gc{aspect-ratio:1/1;border-radius:3px;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:600;color:#fff;letter-spacing:-.02em;
+  text-shadow:0 1px 2px rgba(0,0,0,.55);cursor:default;overflow:hidden}
+.gc.dim{color:var(--muted);text-shadow:none}
+.gc.pick{outline:2px solid var(--ink);outline-offset:1px;z-index:2}
+@media(max-width:560px){.gc{font-size:7.5px;border-radius:2px}.grid13{gap:1px}}
+
+/* ---------- reference ---------- */
+.ref h3{font-size:15px;margin:22px 0 8px;letter-spacing:-.01em}
+.ref h3:first-child{margin-top:2px}
+.ref p{color:var(--ink-2);font-size:14px;margin:6px 0}
+.formula{background:var(--surface-2);border:1px solid var(--ring);border-radius:10px;
+  padding:11px 14px;margin:8px 0;font-size:14.5px;font-variant-numeric:tabular-nums}
+.formula b{color:var(--ink)}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums;margin-top:8px}
+table.t th{text-align:right;color:var(--muted);font-weight:500;font-size:11.5px;text-transform:uppercase;
+  letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
+table.t th:first-child,table.t td:first-child{text-align:left}
+table.t td{padding:6px 8px;border-bottom:1px solid var(--grid);text-align:right}
+table.t tr:hover td{background:var(--surface-2)}
+table.t td.hi{color:var(--warn)}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;
+  background:var(--surface-3);color:var(--ink-2);margin-left:6px}
+footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center}
+@media(max-width:620px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .opts.two,.opts.grid3{grid-template-columns:1fr}
+  .card{width:40px;height:56px}.card .r{font-size:18px}
+  .divider{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <h1>Poker Math Trainer</h1>
+    <p>Outs · Rule of 2 &amp; 4 · Pot odds · Implied odds · EV · Bluff math</p>
+  </div>
+  <div class="spacer"></div>
+  <button class="iconbtn" id="villBtn" title="Unknown: you see only your cards and the board. Face-up: villain\u2019s hand is shown and dead outs are stripped.">Opponent: unknown</button>
+  <button class="iconbtn" id="colorBtn">4-color deck: off</button>
+  <button class="iconbtn" id="themeBtn">Light mode</button>
+  <button class="iconbtn" id="resetBtn">Reset</button>
+</header>
+
+<div class="stats">
+  <div class="tile">
+    <div class="lab">Score</div><div class="val" id="sScore">0</div>
+    <div class="sub" id="sScoreSub">answer to earn points</div>
+  </div>
+  <div class="tile">
+    <div class="lab">Accuracy</div><div class="val" id="sAcc">—</div>
+    <div class="meter"><i id="sAccBar" style="width:0%"></i></div>
+  </div>
+  <div class="tile">
+    <div class="lab">Streak</div><div class="val" id="sStreak">0</div>
+    <div class="sub" id="sStreakSub">best 0</div>
+  </div>
+  <div class="tile">
+    <div class="lab">Level</div><div class="val" id="sLvl">1</div>
+    <div class="lvlpips"><span class="on"></span><span></span><span></span></div>
+  </div>
+</div>
+
+<nav class="tabs" id="tabs"></nav>
+
+<div class="panel" id="panel"></div>
+
+<footer>Built from the GTO4OMC episode on poker math. Out counts and equities are computed with a full hand evaluator, never looked up. Progress is session-only.</footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   1. CARD / HAND ENGINE  (verified against an independent
+      implementation: exact enumeration, no approximations)
+   ============================================================ */
+const RANKS="23456789TJQKA", SUITS="shdc";
+const SUITGLYPH={s:"♠",h:"♥",d:"♦",c:"♣"};
+const RANKNAME={2:"Two",3:"Three",4:"Four",5:"Five",6:"Six",7:"Seven",8:"Eight",9:"Nine",10:"Ten",11:"Jack",12:"Queen",13:"King",14:"Ace"};
+const rankOf=c=>(c>>2)+2, suitOf=c=>c&3;
+const cardStr=c=>RANKS[c>>2]+SUITS[c&3];
+function deck(){const d=[];for(let i=0;i<52;i++)d.push(i);return d;}
+
+const C5IDX=[];
+for(let a=0;a<7;a++)for(let b=a+1;b<7;b++)for(let c=b+1;c<7;c++)for(let d=c+1;d<7;d++)for(let e=d+1;e<7;e++)C5IDX.push([a,b,c,d,e]);
+
+function score5(a,b,c,d,e){
+  const cs=[a,b,c,d,e];
+  const rs=cs.map(rankOf).sort((x,y)=>y-x);
+  const s0=suitOf(a);
+  const flush=suitOf(b)===s0&&suitOf(c)===s0&&suitOf(d)===s0&&suitOf(e)===s0;
+  const cnt={};for(const r of rs)cnt[r]=(cnt[r]||0)+1;
+  const groups=Object.keys(cnt).map(k=>[+k,cnt[k]]).sort((p,q)=>q[1]-p[1]||q[0]-p[0]);
+  const uniq=[...new Set(rs)];
+  let st=0;
+  if(uniq.length===5){
+    if(uniq[0]-uniq[4]===4)st=uniq[0];
+    else if(uniq[0]===14&&uniq[1]===5&&uniq[4]===2)st=5;
+  }
+  let cat,tie;
+  if(flush&&st){cat=8;tie=[st];}
+  else if(groups[0][1]===4){cat=7;tie=[groups[0][0],groups[1][0]];}
+  else if(groups[0][1]===3&&groups[1][1]===2){cat=6;tie=[groups[0][0],groups[1][0]];}
+  else if(flush){cat=5;tie=rs;}
+  else if(st){cat=4;tie=[st];}
+  else if(groups[0][1]===3){cat=3;tie=[groups[0][0],groups[1][0],groups[2][0]];}
+  else if(groups[0][1]===2&&groups[1][1]===2){cat=2;tie=[groups[0][0],groups[1][0],groups[2][0]];}
+  else if(groups[0][1]===2){cat=1;tie=[groups[0][0],groups[1][0],groups[2][0],groups[3][0]];}
+  else {cat=0;tie=rs;}
+  let v=cat;for(let i=0;i<5;i++)v=v*15+(tie[i]||0);
+  return v;
+}
+function best7(cs){
+  if(cs.length===7){let b=0;for(let i=0;i<21;i++){const x=C5IDX[i];
+    const v=score5(cs[x[0]],cs[x[1]],cs[x[2]],cs[x[3]],cs[x[4]]);if(v>b)b=v;}return b;}
+  let b=0,n=cs.length;
+  for(let a=0;a<n;a++)for(let q=a+1;q<n;q++)for(let c=q+1;c<n;c++)for(let d=c+1;d<n;d++)for(let e=d+1;e<n;e++){
+    const v=score5(cs[a],cs[q],cs[c],cs[d],cs[e]);if(v>b)b=v;}
+  return b;
+}
+const CATNAME=["high card","one pair","two pair","three of a kind","a straight","a flush","a full house","four of a kind","a straight flush"];
+const plural=r=>RANKNAME[r]+(r===6?"es":"s");
+function handName(cs){
+  const v=best7(cs), P5=759375; // 15^5
+  const cat=Math.floor(v/P5), t0=Math.floor(v/50625)%15, t1=Math.floor(v/3375)%15;
+  if(cat===0)return RANKNAME[t0]+" high";
+  if(cat===1)return "a pair of "+plural(t0);
+  if(cat===2)return "two pair, "+plural(t0)+" and "+plural(t1);
+  if(cat===3)return "three "+plural(t0);
+  if(cat===6)return "a full house, "+plural(t0)+" full of "+plural(t1);
+  if(cat===7)return "four "+plural(t0);
+  return CATNAME[cat];
+}
+function rest(dead){const s=new Set(dead);return deck().filter(c=>!s.has(c));}
+
+function equityExact(hero,vill,board){
+  const r=rest([...hero,...vill,...board]);let w=0,t=0,n=0;
+  if(board.length===3){
+    for(let i=0;i<r.length;i++)for(let j=i+1;j<r.length;j++){
+      const b=[board[0],board[1],board[2],r[i],r[j]];
+      const h=best7([hero[0],hero[1],...b]),v=best7([vill[0],vill[1],...b]);
+      if(h>v)w++;else if(h===v)t++;n++;}
+  } else {
+    for(let i=0;i<r.length;i++){
+      const b=[...board,r[i]];
+      const h=best7([hero[0],hero[1],...b]),v=best7([vill[0],vill[1],...b]);
+      if(h>v)w++;else if(h===v)t++;n++;}
+  }
+  return {eq:(w+t/2)/n,n:n};
+}
+function outsExact(hero,vill,board){
+  const r=rest([...hero,...vill,...board]);const clean=[],chop=[];
+  for(const c of r){const b=[...board,c];
+    const h=best7([hero[0],hero[1],...b]),v=best7([vill[0],vill[1],...b]);
+    if(h>v)clean.push(c);else if(h===v)chop.push(c);}
+  return {clean:clean,chop:chop,unseen:r.length};
+}
+function ahead(hero,vill,board){
+  const h=best7([...hero,...board]),v=best7([...vill,...board]);
+  return h>v?1:h===v?0:-1;
+}
+
+/* ---------- draw classification (for labelling only) ---------- */
+function describeDraw(hero,board){
+  const all=[...hero,...board];
+  const sc={};for(const c of all)sc[suitOf(c)]=(sc[suitOf(c)]||0)+1;
+  const heroSuits=hero.map(suitOf);
+  let fd=false,bd=false;
+  for(const s of new Set(heroSuits)) { if(sc[s]===4)fd=true; else if(sc[s]===3)bd=true; }
+  const rs=[...new Set(all.map(rankOf))].sort((a,b)=>a-b);
+  const withWheel=rs.includes(14)?[1,...rs]:rs;
+  let straightOuts=0;
+  for(let r=2;r<=14;r++){
+    if(all.some(c=>rankOf(c)===r))continue;
+    const set=new Set([...withWheel,r]);if(r===14)set.add(1);
+    let run=0,mx=0;
+    for(let k=1;k<=14;k++){ if(set.has(k)){run++;mx=Math.max(mx,run);} else run=0; }
+    if(mx>=5) straightOuts++;
+  }
+  // straightOuts counts distinct RANKS that complete a straight:
+  // 1 rank = gutshot (4 cards), 2 ranks = open-ender or double gutshot (8 cards)
+  const wset=new Set(withWheel);
+  let run=0,hasFour=false;
+  for(let k=1;k<=14;k++){ if(wset.has(k)){run++;if(run>=4)hasFour=true;} else run=0; }
+  const bRanks=board.map(rankOf),topB=Math.max(...bRanks);
+  const overs=hero.filter(c=>rankOf(c)>topB).length;
+  const tags=[];
+  if(fd)tags.push("flush draw");
+  if(straightOuts>=2)tags.push(hasFour?"open-ended straight draw":"double gutshot");
+  else if(straightOuts>0)tags.push("gutshot");
+  if(!fd&&bd)tags.push("backdoor flush");
+  if(overs===2&&!fd&&straightOuts===0)tags.push("two overcards");
+  else if(overs===1&&!fd&&straightOuts===0)tags.push("one overcard");
+  return tags.length?tags.join(" + "):"no obvious draw";
+}
+// label that also accounts for outs coming from pairing up, not just the draw
+function drawLabel(sp,cleanOuts){
+  const heroRanks=new Set(sp.hero.map(rankOf));
+  const pairOuts=cleanOuts.filter(c=>heroRanks.has(rankOf(c))).length;
+  let t=sp.draw;
+  if(pairOuts>0&&!/overcard/.test(t)) t=(t==="no obvious draw"?"":t+" + ")+"pairing up ("+pairOuts+")";
+  return t;
+}
+
+/* ============================================================
+   2. MATH HELPERS — the formulas the episode teaches
+   Convention used EVERYWHERE in this trainer:
+     POT  = total pot AFTER villain's bet (their bet is in it)
+     CALL = what it costs you to call
+   ============================================================ */
+const reqEquity=(pot,call)=>call/(pot+call);                 // pot odds -> break-even equity
+const evCall=(e,pot,call)=>e*pot-(1-e)*call;                 // EV of calling
+const bluffBE=(potBefore,bet)=>bet/(potBefore+bet);          // folds needed for a 0-EV bluff
+const mdf=(potBefore,bet)=>potBefore/(potBefore+bet);        // minimum defence frequency
+const impliedNeeded=(e,pot,call)=>(call*(1-e)-e*pot)/e;      // extra $ needed later to break even
+const trueTwoCard=n=>1-((47-n)*(46-n))/(47*46);              // 2 cards to come, 47 unseen
+const trueOneCard=n=>n/46;                                   // 1 card to come, 46 unseen
+const oddsStr=(e)=>{const r=(1-e)/e;return r.toFixed(1)+" : 1";};
+const money=v=>"$"+Math.round(v).toLocaleString();
+const pct=v=>(v*100).toFixed(1)+"%";
+const rnd=n=>Math.floor(Math.random()*n);
+const pick=a=>a[rnd(a.length)];
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function roundTo(v,s){return Math.round(v/s)*s;}
+function uniqNums(arr){const s=new Set(),o=[];for(const v of arr){const k=Math.round(v*100)/100;if(!s.has(k)){s.add(k);o.push(v);}}return o;}
+// build exactly n distinct numeric choices, always containing the answer
+function buildOpts(answer,candidates,n,minGap){
+  const gap=minGap||0.05, out=[answer];
+  const near=v=>out.some(x=>Math.abs(x-v)<gap);
+  for(const v of shuffle(uniqNums(candidates)))
+    if(out.length<n&&isFinite(v)&&!near(v))out.push(v);
+  let k=1;
+  while(out.length<n&&k<60){
+    const v=+((answer||10)*(1+0.22*k)).toFixed(1);
+    if(!near(v)&&isFinite(v)&&v!==0)out.push(v);
+    k++;
+  }
+  return shuffle(out);
+}
+// human-readable breakdown of which cards are the outs
+function outsBreakdown(cards){
+  if(!cards.length)return "none";
+  const SUITWORD={s:"spades",h:"hearts",d:"diamonds",c:"clubs"};
+  const bySuit={},parts=[];let left=cards.slice();
+  cards.forEach(c=>{(bySuit[suitOf(c)]=bySuit[suitOf(c)]||[]).push(c);});
+  for(const s in bySuit) if(bySuit[s].length>=5){
+    parts.push(bySuit[s].length+" "+SUITWORD[SUITS[s]]+" "+SUITGLYPH[SUITS[s]]);
+    left=left.filter(c=>suitOf(c)!==+s);
+  }
+  const byRank={};
+  left.forEach(c=>{(byRank[rankOf(c)]=byRank[rankOf(c)]||[]).push(c);});
+  Object.keys(byRank).map(Number).sort((a,b)=>b-a).forEach(r=>{
+    const g=byRank[r];
+    parts.push(g.length>1
+      ? g.length+" "+plural(r).toLowerCase()
+      : "the "+cardStr(g[0]).replace("T","10").replace(/[shdc]$/,m=>SUITGLYPH[m]));
+  });
+  return parts.join(" · ");
+}
+
+/* ============================================================
+   3. SCENARIO GENERATION
+   ============================================================ */
+// keep holdings to hands a real player would actually be holding on the flop
+function plausibleHand(h){
+  const a=rankOf(h[0]),b=rankOf(h[1]);
+  const hi=Math.max(a,b),lo=Math.min(a,b),gap=hi-lo;
+  const suited=suitOf(h[0])===suitOf(h[1]);
+  if(gap===0)return true;                       // any pocket pair
+  if(suited){
+    if(gap<=4)return true;                      // suited connectors & gappers
+    if(hi>=13)return true;                      // suited ace / suited king
+    return lo>=9;                               // suited two-high
+  }
+  if(hi===14&&lo>=9)return true;                // AT+ offsuit
+  if(hi>=12&&lo>=10)return true;                // KJ, KQ, QJ, QT, KT
+  if(gap<=2&&lo>=8)return true;                 // T9, J9, 98 offsuit
+  return false;
+}
+function dealSpot(opts){
+  // rejection-sample a real flop/turn spot where hero is behind and drawing
+  const street=opts.street||"flop";
+  const nBoard=street==="flop"?3:4;
+  for(let tries=0;tries<6000;tries++){
+    const d=shuffle(deck());
+    const hero=[d[0],d[1]], vill=[d[2],d[3]], board=d.slice(4,4+nBoard);
+    if(!opts.anyHand&&(!plausibleHand(hero)||!plausibleHand(vill)))continue;
+    if(ahead(hero,vill,board)!==-1)continue;
+    const o=outsExact(hero,vill,board);
+    const n=o.clean.length;
+    if(n<opts.min||n>opts.max)continue;
+    if(o.chop.length>2)continue;
+    if(opts.needDraw){
+      const dd=describeDraw(hero,board);
+      if(dd==="no obvious draw")continue;
+      if(opts.cleanDraw&&!/flush draw|straight draw|gutshot/.test(dd))continue;
+    }
+    return {hero,vill,board,street,outs:n,chop:o.chop.length,draw:describeDraw(hero,board)};
+  }
+  return null;
+}
+function spotForLevel(lvl,street){
+  const cfg = lvl===1?{min:4,max:9,needDraw:true,cleanDraw:true}
+            : lvl===2?{min:2,max:12,needDraw:true}
+            :          {min:2,max:15,needDraw:false};
+  return dealSpot(Object.assign({street:street||"flop"},cfg))
+      || dealSpot({street:street||"flop",min:1,max:20})
+      || dealSpot({street:street||"flop",min:1,max:20,anyHand:true});
+}
+
+/* ============================================================
+   4. RENDERING
+   ============================================================ */
+let fourColor=false;
+function cardHTML(c,hl){
+  const r=RANKS[c>>2], s=SUITS[c&3];
+  let cls="card";
+  if(fourColor){ cls+= s==="h"?" red": s==="d"?" blu": s==="c"?" grn":""; }
+  else { cls+= (s==="h"||s==="d")?" red":""; }
+  if(hl)cls+=" hl";
+  return '<div class="'+cls+'"><div class="r">'+(r==="T"?"10":r)+'</div><div class="s">'+SUITGLYPH[s]+'</div></div>';
+}
+function handHTML(cs,hl){return '<div class="hand">'+cs.map(c=>cardHTML(c,hl)).join("")+'</div>';}
+// cards that finish your draw but still lose — the trap this trainer is built around
+function deadOuts(sp){
+  const r=rest([...sp.hero,...sp.vill,...sp.board]),out=[];
+  for(const c of r){
+    const b=[...sp.board,c];
+    const hv=best7([...sp.hero,...b]);
+    if(Math.floor(hv/759375)<4)continue;              // must actually make you a straight or better
+    if(hv>best7([...sp.vill,...b]))continue;          // it wins — not dead
+    out.push({card:c,you:handName([...sp.hero,...b]),them:handName([...sp.vill,...b])});
+  }
+  return out;
+}
+function deadOutsHTML(sp){
+  const d=deadOuts(sp);
+  if(!d.length)return '';
+  const list=d.map(x=>'<b>'+cardStr(x.card).replace("T","10").replace(/[shdc]$/,m=>SUITGLYPH[m])+'</b> gives you '+x.you+' but hands them '+x.them).join('; ');
+  return '<div class="note warnl"><b>Dead outs ('+d.length+').</b> '+list+
+    '. These complete your draw and still lose, so they never counted. This is the most expensive miscount in poker — always check what the card does for <i>them</i> before you add it to your total.</div>';
+}
+function feltHTML(sp,withVill){
+  let h='<div class="felt">';
+  h+='<div class="seat"><div class="who">Your hand</div>'+handHTML(sp.hero)+'</div>';
+  h+='<div class="divider"></div>';
+  h+='<div class="seat"><div class="who">Board — '+(sp.street==="flop"?"flop":"turn")+'</div>'+handHTML(sp.board)+'</div>';
+  if(withVill&&sp.vill){
+    h+='<div class="divider"></div>';
+    h+='<div class="seat"><div class="who">Villain (shown)</div>'+handHTML(sp.vill)+'</div>';
+  }
+  return h+'</div>';
+}
+function pillsHTML(list){
+  return '<div class="potbar">'+list.map(p=>'<div class="pill"><div class="k">'+p[0]+'</div><div class="v">'+p[1]+'</div></div>').join("")+'</div>';
+}
+function workHTML(rows){
+  return '<div class="work">'+rows.map(r=>'<div class="row"><div class="lbl">'+r[0]+'</div><div class="num">'+r[1]+'</div></div>').join("")+'</div>';
+}
+
+/* ============================================================
+   5. QUESTION BUILDERS
+   Each returns: {kicker, chip, prompt, sub, body, options[], answer,
+                  layout, explain(chosen)->html}
+   ============================================================ */
+const Q={};
+
+/* ---- 5.0 Spot generation: two opponent modes ----------------
+   "unknown" (default) — you see only your cards and the board.
+       Outs = the cards that complete your draw (straight or better).
+       Equity = the textbook chance of hitting, from 47/46 unseen cards.
+   "shown" — villain's hand is face-up from the start.
+       Outs = the cards that actually beat them, so dead outs get
+       stripped and explained. Switch to this once counting is easy.
+   ------------------------------------------------------------- */
+let oppMode="unknown";
+const hitEq=(n,street)=>street==="flop"?trueTwoCard(n):trueOneCard(n);
+// cards that take you from "drawing" to a made straight or better
+function drawOutsList(hero,board){
+  const cur=Math.floor(best7([...hero,...board])/759375);
+  const list=[];
+  for(const c of rest([...hero,...board])){
+    const nb=[...board,c];
+    const mine=best7([...hero,...nb]);
+    if(Math.floor(mine/759375)<4)continue;        // must reach a straight or better
+    if(Math.floor(mine/759375)<=cur)continue;     // and must be an improvement
+    // and your hole cards must actually be used — a flush or straight sitting on the
+    // board alone is shared by everyone, so it is not an out for anybody
+    if(nb.length===5&&mine<=score5(nb[0],nb[1],nb[2],nb[3],nb[4]))continue;
+    list.push(c);
+  }
+  return list;
+}
+const withArticle=d=>(/^[aeiou]/i.test(d)?'an ':'a ')+d;
+const coreDraws=dd=>dd.split(" + ").filter(t=>/flush draw|straight draw|gutshot/.test(t));
+// canonical draws and the out count each one must have. In the beginner mode we only
+// deal spots where the named draw and the true out count agree, so the label is never
+// misleading. Boards where a "straight card" would make a board straight, or where a
+// flush card is blocked, get rejected here and turn up in the face-up mode instead.
+const DRAWOUTS={"gutshot":4,"open-ended straight draw":8,"double gutshot":8,"flush draw":9,
+  "flush draw + gutshot":12,"flush draw + open-ended straight draw":15,
+  "flush draw + double gutshot":15};
+// deal a hero hand + board with a genuine draw, no villain involved
+function drawSpot(lvl,street,loose){
+  const nB=street==="flop"?3:4;
+  const rng=lvl===1?[4,9]:lvl===2?[4,12]:[3,15];
+  for(let t=0;t<6000;t++){
+    const d=shuffle(deck());
+    const hero=[d[0],d[1]], board=d.slice(2,2+nB);
+    if(!loose&&!plausibleHand(hero))continue;
+    // keep the count honest: an unpaired board with no pocket pair means the only
+    // way a single card reaches "straight or better" is by completing your draw.
+    // (Paired boards and full-house outs live in the face-up mode.)
+    if(new Set(board.map(rankOf)).size!==nB)continue;
+    if(rankOf(hero[0])===rankOf(hero[1]))continue;
+    const cur=Math.floor(best7([...hero,...board])/759375);
+    if(cur>1)continue;                                   // drawing, not already made
+    const outs=drawOutsList(hero,board);
+    if(!loose&&(outs.length<rng[0]||outs.length>rng[1]))continue;
+    const dd=describeDraw(hero,board), core=coreDraws(dd), label=core.join(" + ");
+    if(!core.length)continue;
+    if(DRAWOUTS[label]!==outs.length)continue;           // label must match reality
+    // gutshots dominate random deals — thin them so you get a realistic spread of
+    // flush draws, open-enders and combo draws to practise on
+    if(!loose&&label==="gutshot"&&Math.random()>0.4)continue;
+    if(!loose&&lvl===1&&core.length>1)continue;          // level 1: one draw at a time
+    return {hero:hero,board:board,street:street,outs:outs.length,outCards:outs,
+            draw:label,unseen:50-nB,eq:hitEq(outs.length,street)};
+  }
+  return loose?null:drawSpot(lvl,street,true);
+}
+function makeSpot(lvl,street){
+  street=street||"flop";
+  if(oppMode==="shown"){
+    const sp=spotForLevel(lvl,street);
+    sp.outCards=outsExact(sp.hero,sp.vill,sp.board).clean;
+    sp.eq=equityExact(sp.hero,sp.vill,sp.board).eq;
+    sp.unseen=52-4-sp.board.length;
+    return sp;
+  }
+  return drawSpot(lvl,street);
+}
+const outsWord=()=>oppMode==="shown"
+  ? "Count only the cards that actually beat them — a card that completes your draw but improves their hand more is not an out."
+  : "Count the cards that complete your draw: the ones that give you a straight, a flush, or better.";
+
+/* ---- 5.1 Count your outs ---- */
+Q.outs=function(lvl){
+  const street = lvl>=2 && Math.random()<0.4 ? "turn":"flop";
+  const sp=makeSpot(lvl,street);
+  const n=sp.outs;
+  const cand=uniqNums([n-1,n+1,n-2,n+2,n+3,n-3,n+6,Math.max(1,n-4)])
+      .filter(v=>v>=1&&v<=20&&v!==n);
+  const opts=shuffle([n,...shuffle(cand).slice(0,3)]);
+  return {
+    kicker:"Counting outs", chip:sp.street==="flop"?"Flop":"Turn",
+    prompt:"How many outs do you have?",
+    sub:outsWord(),
+    body:feltHTML(sp,true)+'<div class="sub" style="text-align:center;margin:6px 0 0">You have <b>'+
+      withArticle(sp.draw)+'</b>.</div>',
+    options:opts.map(v=>({label:v+" out"+(v===1?"":"s"),value:v})),
+    answer:n, layout:"grid3",
+    explain:()=>workHTML([
+        ["Your draw",sp.draw],
+        ["Unseen cards",sp.unseen],
+        ["Outs",n],
+        [sp.street==="flop"?"Chance of hitting by the river":"Chance of hitting on the river",pct(sp.eq)]
+      ])+'<div class="note"><b>Your outs:</b> '+outsBreakdown(sp.outCards)+'</div>'+
+      (oppMode==="shown"?deadOutsHTML(sp)
+        :'<div class="note warnl"><b>Next step, when you are ready.</b> These are the cards that complete your draw. Against a real hand some of them can be <i>dead</i> — a card that makes your flush can pair the board and give them a full house. Flip <b>Opponent</b> in the header to face-up and the drills will start stripping those out and showing you which ones.</div>')
+  };
+};
+
+/* ---- 5.2 Rule of 2 and 4 ---- */
+Q.rule24=function(lvl){
+  const street = Math.random()<0.5?"flop":"turn";
+  const sp=makeSpot(lvl,street);
+  const n=sp.outs;
+  const est = street==="flop" ? 4*n : 2*n;
+  const opts=buildOpts(est,[street==="flop"?2*n:4*n,est+(street==="flop"?8:4),
+      Math.max(1,est-(street==="flop"?8:4)),n,est+(street==="flop"?12:6),Math.max(1,est-4)]
+      .filter(v=>v>0&&v<=100),4);
+  return {
+    kicker:"Rule of 2 and 4", chip:street==="flop"?"Two cards to come":"One card to come",
+    prompt:"You have "+n+" out"+(n===1?"":"s")+". What does the Rule of 2 and 4 give you?",
+    sub:street==="flop"
+      ? "Two cards still to come (turn and river), so use the ×4 side of the rule."
+      : "One card still to come (river only), so use the ×2 side of the rule.",
+    body:feltHTML(sp,true)+'<div class="sub" style="text-align:center;margin:6px 0 0">You have <b>'+
+      withArticle(sp.draw)+'</b>.</div>',
+    options:opts.map(v=>({label:"≈"+v+"%",value:v})),
+    answer:est, layout:"grid3",
+    explain:()=>{
+      const tr=street==="flop"?trueTwoCard(n):trueOneCard(n);
+      const err=est/100-tr;
+      return workHTML([
+        ["Outs",n],
+        ["Rule applied",street==="flop"?("outs × 4 = "+n+" × 4"):("outs × 2 = "+n+" × 2")],
+        ["Rule estimate",est+"%"],
+        ["True chance of hitting",pct(tr)],
+        ["Estimate error",(err>=0?"+":"−")+Math.abs(err*100).toFixed(1)+" pts"]
+      ])+(street==="flop"&&n>8
+        ? '<div class="note warnl"><b>The ×4 rule drifts high above 8 outs.</b> With '+n+' outs it claims '+est+'% but the real chance of hitting is '+pct(tr)+'. Fix: subtract 1 point for every out above 8 — '+(4*n)+' − '+(n-8)+' = '+(4*n-(n-8))+'%.</div>'
+        : street==="flop"
+        ? '<div class="note">×4 assumes you actually get to see <i>both</i> cards — that only holds when you’re all-in. If more betting is coming you will often pay again on the turn, so price this street with ×2 instead.</div>'
+        : '<div class="note">One card to come, so ×2 is the right side of the rule. The most common error is reaching for ×4 here because it makes the call look better than it is.</div>');
+    }
+  };
+};
+
+/* ---- 5.3 Pot odds ---- */
+Q.potodds=function(lvl){
+  let potBefore,bet,extra=null;
+  if(lvl===1){ potBefore=pick([60,80,100,120,200]); bet=roundTo(potBefore*pick([0.5,1,0.75]),5); }
+  else if(lvl===2){ potBefore=pick([65,85,110,135,175,240]); bet=roundTo(potBefore*pick([0.33,0.5,0.66,0.75,1,1.25]),5); }
+  else { potBefore=pick([73,118,146,214,325]); bet=roundTo(potBefore*pick([0.4,0.6,0.85,1.1,1.5]),1);
+         if(Math.random()<0.5)extra=roundTo(bet*pick([0.2,0.3]),1); }
+  const pot=potBefore+bet+(extra||0);
+  const call=bet-(extra||0);
+  const req=reqEquity(pot,call);
+  const target=+(req*100).toFixed(1);
+  const opts=buildOpts(target,[+(call/pot*100).toFixed(1),+(call/(pot+2*call)*100).toFixed(1),
+      +(target+8).toFixed(1),+(target-6).toFixed(1),+(100*bet/(potBefore+2*bet)).toFixed(1),
+      +(100*pot/(pot+call)).toFixed(1)].filter(v=>v>0&&v<70&&Math.abs(v-target)>1.2),4,1.2);
+  return {
+    kicker:"Pot odds", chip:extra?"Facing a raise":"Facing a bet",
+    prompt:"What equity do you need to break even on a call?",
+    sub:extra?("You bet "+money(extra)+", villain raised to "+money(bet)+". Your "+money(extra)+" is already in the pot — it costs you "+money(call)+" more to call.")
+             :("Villain bets "+money(bet)+" into a "+money(potBefore)+" pot."),
+    body:pillsHTML([["Pot before bet",money(potBefore)],["Villain bets",money(bet)],
+        ["Pot now",money(pot)],["To call",money(call)]]),
+    options:opts.map(v=>({label:v.toFixed(1)+"%",value:v})),
+    answer:target, layout:"grid3",
+    explain:()=>workHTML([
+      ["Total pot after their bet",money(pot)],
+      ["Cost to call",money(call)],
+      ["Required equity = call ÷ (pot + call)",money(call)+" ÷ "+money(pot+call)+" = "+target.toFixed(1)+"%"],
+      ["Same thing as odds",oddsStr(req)]
+    ])+'<div class="note"><b>The one line to memorise:</b> required equity = <b>call ÷ (pot&nbsp;+&nbsp;call)</b>, where "pot" already includes the bet you are facing. If you win more often than that number, calling makes money.</div>'
+    +(extra?'<div class="note warnl"><b>Classic OMC leak:</b> money you already put in is not yours any more. Do not add your '+money(extra)+' to the cost of calling — it is dead money in the pot and it actually <i>improves</i> your price.</div>':'')
+  };
+};
+
+/* ---- 5.4 Call or fold ---- */
+Q.decision=function(lvl){
+  const street=Math.random()<0.5?"flop":"turn";
+  const sp=makeSpot(lvl,street);
+  const eq=sp.eq;
+  const potBefore=pick([60,80,100,120,150,200]);
+  let frac;
+  const close=Math.random()<0.6;
+  if(close){
+    const r=Math.min(0.45,Math.max(0.05,eq+(Math.random()-0.5)*0.06));
+    frac=r/(1-2*r);
+  } else frac=pick([0.33,0.5,0.75,1,1.5]);
+  frac=Math.min(2,Math.max(0.2,frac));
+  const bet=Math.max(5,roundTo(potBefore*frac,5));
+  const pot=potBefore+bet, call=bet, req=reqEquity(pot,call);
+  const correct = eq>=req ? "call":"fold";
+  const ev=evCall(eq,pot,call);
+  return {
+    kicker:"Call or fold", chip:street==="flop"?"Flop":"Turn",
+    prompt:"Villain bets "+money(bet)+" into "+money(potBefore)+". Call or fold?",
+    sub:"Count your outs, turn them into equity with the rule of 2 and 4, then compare that to the price. Assume this is the last bet — no more betting, cards run out.",
+    body:feltHTML(sp,true)+pillsHTML([["Pot now",money(pot)],["To call",money(call)],
+        ["Bet size",Math.round(frac*100)+"% pot"]]),
+    options:[{label:"Call",value:"call"},{label:"Fold",value:"fold"}],
+    answer:correct, layout:"two",
+    explain:()=>workHTML([
+      ["Your draw",sp.draw],
+      ["Outs — "+outsBreakdown(sp.outCards),sp.outs],
+      ["Rule of "+(street==="flop"?"4":"2")+" estimate",(street==="flop"?4*sp.outs:2*sp.outs)+"%"],
+      [oppMode==="shown"?"Exact equity vs their hand":"Chance of hitting",pct(eq)],
+      ["Required equity ("+money(call)+" ÷ "+money(pot+call)+")",pct(req)],
+      ["Margin",(eq>=req?"+":"−")+Math.abs((eq-req)*100).toFixed(1)+" pts"],
+      ["EV of calling",(ev>=0?"+":"−")+money(Math.abs(ev))]
+    ])+'<div class="note">'+(correct==="call"
+      ? 'Your '+pct(eq)+' clears the '+pct(req)+' you need, so calling wins about '+money(Math.abs(ev))+' every time you take this line.'
+      : 'You need '+pct(req)+' and only have '+pct(eq)+'. Calling burns about '+money(Math.abs(ev))+' each time. Folding is not weak — it is the profitable play.')
+    +'</div>'+(oppMode==="shown"?deadOutsHTML(sp):'')
+    +'<div class="note warnl">This question deliberately strips out implied odds. In a real hand, extra money you could win later can turn a marginal fold into a call — and reverse implied odds can turn a marginal call into a fold.</div>'
+  };
+};
+
+/* ---- 5.5 Implied odds ---- */
+Q.implied=function(lvl){
+  const mode = Math.random()<0.62 ? "math":"concept";
+  if(mode==="math"){
+    const sp=makeSpot(lvl,"turn");
+    const eq=sp.eq;
+    const potBefore=pick([80,100,120,160,200]);
+    let bet=roundTo(potBefore*pick([0.75,1,1.25,1.5]),5);
+    if(impliedNeeded(eq,potBefore+bet,bet)<=0)bet=roundTo(potBefore*1.75,5);
+    const P2=potBefore+bet, C2=bet;
+    const need=impliedNeeded(eq,P2,C2);
+    const target=Math.max(5,roundTo(need,5));
+    const opts=buildOpts(target,[roundTo(need*0.5,5),roundTo(need*1.8,5),roundTo(need*0.25,5),
+      C2,roundTo(need*1.35,5)].filter(v=>v>0),4,4);
+    return {
+      kicker:"Implied odds", chip:"Turn",
+      prompt:"How much more must you win on the river to make this call break even?",
+      sub:"Villain bets "+money(bet)+" into "+money(potBefore)+". Your direct pot odds are not enough — so you are calling on implied odds.",
+      body:feltHTML(sp,true)+pillsHTML([["Pot now",money(P2)],["To call",money(C2)],
+        ["Your equity",pct(eq)],["Need directly",pct(reqEquity(P2,C2))]]),
+      options:opts.map(v=>({label:money(v),value:v})),
+      answer:target, layout:"grid3",
+      explain:()=>workHTML([
+        ["Your draw",sp.draw],
+        ["Your equity",pct(eq)+"  ("+sp.outs+" outs, one card to come)"],
+        ["Required by pot odds",pct(reqEquity(P2,C2))],
+        ["Shortfall",((reqEquity(P2,C2)-eq)*100).toFixed(1)+" pts — direct call is losing"],
+        ["Extra needed = (call×(1−eq) − eq×pot) ÷ eq",
+          "("+money(C2)+"×"+(1-eq).toFixed(2)+" − "+eq.toFixed(2)+"×"+money(P2)+") ÷ "+eq.toFixed(2)],
+        ["Break-even implied win",money(need)+"  (≈ "+money(target)+")"]
+      ])+'<div class="note"><b>Implied odds</b> = the money you expect to win on later streets <i>when you hit</i>. This call is only break-even if, on average across all the times you hit, you collect about '+money(target)+' more. Ask two questions before you count on it: does villain have that much left, and will they actually pay you off?</div>'
+      +'<div class="note warnl"><b>Reverse implied odds</b> are the mirror image — money you lose <i>after</i> you hit. A non-nut draw (second-best flush, low end of a straight) can hit and still pay off a bigger hand. Discount your implied odds hard when your draw isn’t to the nuts.</div>'
+    };
+  }
+  const bank=[
+    {q:"You have a gutshot to the idiot end of a straight on a two-flush board. Deep stacks. How should you treat implied odds?",
+     opts:["Discount them heavily — reverse implied odds are large","Increase them — deep stacks always mean big implied odds","They don’t apply to straights, only flushes","Ignore them; only direct pot odds matter"],a:0,
+     e:"Hitting the low end of a straight on a board where a flush and a bigger straight are both live is exactly when you win a small pot and lose a big one. Deep stacks amplify reverse implied odds too, not just implied odds."},
+    {q:"Villain is all-in on the flop. How much are your implied odds worth?",
+     opts:["Zero — there is no more money to win","Double, because two cards are coming","The same as any other flop call","Half of villain’s stack"],a:0,
+     e:"No more betting can happen, so there is no future money. Facing an all-in you price the call on direct pot odds alone — and this is the one spot where the ×4 rule is fully valid, because you are guaranteed to see both cards."},
+    {q:"You hold the nut flush draw against a short stack with 1/3 of a pot-sized bet left behind. You need 28% to call and you have 19%.",
+     opts:["Fold — there isn’t enough money left to bridge the gap","Call — nut draws always have implied odds","Call — you can bluff the river when you miss","Raise — fold equity replaces implied odds"],a:0,
+     e:"Implied odds are capped by the money actually behind. A short stack cannot pay you enough to close a 9-point equity gap, no matter how good your draw is."},
+    {q:"Which draw has the best implied odds against a tight opponent who only pays off with strong hands?",
+     opts:["A well-disguised gutshot","A four-flush on a monotone board","Top pair with a weak kicker","An open-ender on a paired board"],a:0,
+     e:"Implied odds depend on your hand being invisible when you hit. Obvious draws — a third suit landing, a fourth straight card — shut down the action. A hidden straight gets paid; an obvious flush does not."},
+    {q:"You call a turn bet purely on implied odds, hit your card, and villain checks the river. What did you get wrong?",
+     opts:["You overestimated how often the implied money actually materialises","Nothing — you won the pot anyway","You should have raised the turn","Implied odds only apply to the flop"],a:0,
+     e:"Implied odds are an average over all the times you hit — including the times villain shuts down or your hand is obvious. If you assumed a full stack every time, you were pricing the call with money that never shows up."},
+    {q:"What actually is your ‘equity’ in a pot?",
+     opts:["The share of the pot that belongs to you right now, based on how often you win","The amount of money you have invested","The chance villain folds","The size of the pot divided by the bet"],a:0,
+     e:"Equity is your fair share of the pot. With 30% equity in a $200 pot, $60 of it is yours — that is the number every other calculation is built on."}
+  ];
+  const item=pick(bank);
+  const opts=item.opts.map((t,i)=>({label:t,value:i}));
+  return {kicker:"Implied / reverse implied odds",chip:"Concept",prompt:item.q,sub:"",
+    body:"",options:shuffle(opts),answer:item.a,layout:"one",
+    explain:()=>'<div class="note">'+item.e+'</div>'};
+};
+
+/* ---- 5.6 Expected value ---- */
+Q.ev=function(lvl){
+  const kind=Math.random()<0.55?"call":"shove";
+  if(kind==="call"){
+    const potBefore=lvl===1?pick([80,100,120]):pick([95,140,165,220]);
+    const bet=roundTo(potBefore*pick([0.5,0.75,1]),5);
+    const pot=potBefore+bet, call=bet;
+    const e=+(pick(lvl===1?[0.2,0.25,0.3,0.35,0.4]:[0.18,0.22,0.27,0.31,0.38,0.44])).toFixed(2);
+    const ev=evCall(e,pot,call);
+    const target=+ev.toFixed(1);
+    const opts=buildOpts(target,[+(e*pot).toFixed(1),+(e*(pot+call)-(1-e)*call).toFixed(1),
+      +(-target).toFixed(1),+(e*pot-call).toFixed(1),+(e*(pot+call)).toFixed(1)]
+      .filter(v=>Math.abs(v-target)>1.5),4,1.5);
+    return {
+      kicker:"Expected value", chip:"EV of a call",
+      prompt:"What is the EV of calling?",
+      sub:"You win the pot "+(e*100).toFixed(0)+"% of the time. Work out what this call is worth on average.",
+      body:pillsHTML([["Pot now",money(pot)],["To call",money(call)],["Your equity",(e*100).toFixed(0)+"%"]]),
+      options:opts.map(v=>({label:(v>=0?"+":"−")+money(Math.abs(v)),value:v})),
+      answer:target, layout:"grid3",
+      explain:()=>workHTML([
+        ["When you win ("+(e*100).toFixed(0)+"%)","you gain "+money(pot)],
+        ["When you lose ("+((1-e)*100).toFixed(0)+"%)","you lose "+money(call)],
+        ["EV = "+e.toFixed(2)+" × "+money(pot)+" − "+(1-e).toFixed(2)+" × "+money(call),
+          money(e*pot)+" − "+money((1-e)*call)+" = "+(ev>=0?"+":"−")+money(Math.abs(ev))],
+        ["Break-even equity here",pct(reqEquity(pot,call))]
+      ])+'<div class="note"><b>EV in one sentence:</b> what you win times how often you win it, minus what you lose times how often you lose it. Everything else in poker math is a special case of this.</div>'
+      +'<div class="note warnl">A losing call is not a mistake because you lost the hand — it is a mistake because the average is negative. '+(ev>=0?'This one averages +'+money(ev)+', so make it every single time, including the many times it loses.':'This one averages −'+money(Math.abs(ev))+', so it is a leak even on the occasions it wins.')+'</div>'
+    };
+  }
+  // shove / fold-equity EV
+  const pot=pick([60,80,100,140]);
+  const bet=roundTo(pot*pick([0.5,0.75,1]),5);
+  const fold=pick([0.4,0.5,0.55,0.6,0.65]);
+  const eqWhenCalled=+(pick([0.2,0.25,0.3,0.35])).toFixed(2);
+  const potIfCalled=pot+2*bet;
+  const ev=fold*pot+(1-fold)*(eqWhenCalled*(pot+bet)-(1-eqWhenCalled)*bet);
+  const target=+ev.toFixed(1);
+  const opts=buildOpts(target,[+(fold*pot).toFixed(1),+(-bet).toFixed(1),+(fold*pot-(1-fold)*bet).toFixed(1),
+    +(target*1.9).toFixed(1),+(fold*pot+(1-fold)*eqWhenCalled*potIfCalled).toFixed(1)]
+    .filter(v=>Math.abs(v-target)>1.5),4,1.5);
+  return {
+    kicker:"Expected value", chip:"Semi-bluff with fold equity",
+    prompt:"What is the EV of betting "+money(bet)+" into "+money(pot)+"?",
+    sub:"Villain folds "+(fold*100).toFixed(0)+"% of the time. When they call, you win the hand "+(eqWhenCalled*100).toFixed(0)+"% of the time.",
+    body:pillsHTML([["Pot",money(pot)],["Your bet",money(bet)],["Fold %",(fold*100).toFixed(0)+"%"],
+      ["Equity when called",(eqWhenCalled*100).toFixed(0)+"%"]]),
+    options:opts.map(v=>({label:(v>=0?"+":"−")+money(Math.abs(v)),value:v})),
+    answer:target, layout:"grid3",
+    explain:()=>workHTML([
+      ["They fold ("+(fold*100).toFixed(0)+"%)","you win "+money(pot)+"  →  "+money(fold*pot)],
+      ["They call ("+((1-fold)*100).toFixed(0)+"%) and you win ("+(eqWhenCalled*100).toFixed(0)+"%)","+"+money(pot+bet)],
+      ["They call and you lose","−"+money(bet)],
+      ["Called branch average",(( eqWhenCalled*(pot+bet)-(1-eqWhenCalled)*bet)>=0?"+":"−")+money(Math.abs(eqWhenCalled*(pot+bet)-(1-eqWhenCalled)*bet))],
+      ["Total EV",(ev>=0?"+":"−")+money(Math.abs(ev))]
+    ])+'<div class="note"><b>This is why semi-bluffing beats calling.</b> You get two ways to win: they fold now, or you hit later. A pure call only has the second one.</div>'
+  };
+};
+
+/* ---- 5.7 Bluff math ---- */
+Q.bluff=function(lvl){
+  const kind=pick(["be","be","mdf","size"]);
+  const pot=lvl===1?pick([60,80,100,120]):pick([75,95,130,185,240]);
+  const frac=pick(lvl===1?[0.5,0.75,1]:[0.33,0.5,0.66,0.75,1,1.5,2]);
+  const bet=roundTo(pot*frac,5)||5;
+  if(kind==="be"){
+    const be=bluffBE(pot,bet), target=+(be*100).toFixed(1);
+    const opts=buildOpts(target,[+(bet/pot*100).toFixed(1),+(100*pot/(pot+bet)).toFixed(1),
+      +(100*bet/(pot+2*bet)).toFixed(1),+(target+11).toFixed(1),+(target-9).toFixed(1)]
+      .filter(v=>v>0&&v<100&&Math.abs(v-target)>1.2),4,1.2);
+    return {
+      kicker:"Bluff math", chip:"Break-even bluff",
+      prompt:"How often must villain fold for this pure bluff to break even?",
+      sub:"You have no equity if called — this bet only wins when they fold.",
+      body:pillsHTML([["Pot",money(pot)],["Your bluff",money(bet)],["Bet size",Math.round(frac*100)+"% pot"]]),
+      options:opts.map(v=>({label:v.toFixed(1)+"%",value:v})),
+      answer:target, layout:"grid3",
+      explain:()=>workHTML([
+        ["Risk",money(bet)],["Reward",money(pot)],
+        ["Break-even folds = bet ÷ (pot + bet)",money(bet)+" ÷ "+money(pot+bet)+" = "+target.toFixed(1)+"%"]
+      ])+'<div class="note">Note the shape of the formula: <b>risk ÷ (risk + reward)</b>. A half-pot bluff needs 33% folds, a pot-sized bluff needs 50%, a 2× pot bluff needs 67%. Bigger bluffs must work more often.</div>'
+      +'<div class="note warnl"><b>OMC leak:</b> "I only bluff when I’m sure they fold." If you literally never get called, you are bluffing too little — you are leaving the '+target.toFixed(0)+'% threshold far behind and giving up pots you could have taken.</div>'
+    };
+  }
+  if(kind==="mdf"){
+    const m=mdf(pot,bet), target=+(m*100).toFixed(1);
+    const opts=buildOpts(target,[+(100*bet/(pot+bet)).toFixed(1),+(100*bet/(pot+2*bet)).toFixed(1),
+      +(target-14).toFixed(1),+(target-25).toFixed(1)]
+      .filter(v=>v>0&&v<100&&Math.abs(v-target)>1.2),4,1.2);
+    return {
+      kicker:"Bluff math", chip:"Defending",
+      prompt:"What share of your range must you continue with to stop villain bluffing profitably?",
+      sub:"Villain bets "+money(bet)+" into "+money(pot)+". This is minimum defence frequency (MDF).",
+      body:pillsHTML([["Pot",money(pot)],["Their bet",money(bet)],["Bet size",Math.round(frac*100)+"% pot"]]),
+      options:opts.map(v=>({label:v.toFixed(1)+"%",value:v})),
+      answer:target, layout:"grid3",
+      explain:()=>workHTML([
+        ["MDF = pot ÷ (pot + bet)",money(pot)+" ÷ "+money(pot+bet)+" = "+target.toFixed(1)+"%"],
+        ["So you may fold at most",(100-target).toFixed(1)+"%"],
+        ["Their break-even bluff rate",pct(bluffBE(pot,bet))]
+      ])+'<div class="note">MDF is the bluffer’s break-even read backwards. Their bluff needs '+pct(bluffBE(pot,bet))+' folds to profit, so the moment you fold more than '+(100-target).toFixed(0)+'% of your range they can bluff you with anything. <b>The bigger they bet, the more you are allowed to fold.</b></div>'
+      +'<div class="note warnl">MDF is a defence against a balanced, bluff-heavy opponent. Against the typical live player who never bluffs, over-folding is correct — exploit first, MDF second.</div>'
+    };
+  }
+  // size question
+  const need=pick([0.33,0.4,0.5,0.6,0.67]);
+  const size=need/(1-need); // bet/pot ratio that needs `need` folds
+  const target=+(size*100).toFixed(0);
+  const opts=buildOpts(target,[+(need*100).toFixed(0),+((1-need)*100).toFixed(0),
+    +(target*1.6).toFixed(0),+(target*0.55).toFixed(0)].filter(v=>v>0&&Math.abs(v-target)>4),4,4);
+  return {
+    kicker:"Bluff math", chip:"Choosing a size",
+    prompt:"You think villain folds exactly "+(need*100).toFixed(0)+"% here. What bet size is break-even?",
+    sub:"Express it as a percentage of the pot.",
+    body:pillsHTML([["Pot",money(pot)],["Villain folds",(need*100).toFixed(0)+"%"]]),
+    options:opts.map(v=>({label:Math.round(v)+"% pot  ("+money(roundTo(pot*v/100,1))+")",value:v})),
+    answer:target, layout:"grid3",
+    explain:()=>workHTML([
+      ["Break-even condition","bet ÷ (pot + bet) = "+(need*100).toFixed(0)+"%"],
+      ["Rearranged","bet = pot × f ÷ (1 − f)"],
+      ["= "+money(pot)+" × "+need.toFixed(2)+" ÷ "+(1-need).toFixed(2),money(pot*size)+"  ("+target+"% pot)"]
+    ])+'<div class="note">Rule of thumb worth owning: <b>1/3 pot needs 25% folds, 1/2 pot needs 33%, 3/4 pot needs 43%, pot needs 50%.</b> Pick the smallest size that gets the job done — you risk less for the same pot.</div>'
+  };
+};
+
+/* ---- 5.8 Common mistakes / concepts ---- */
+const CONCEPTS=[
+  {q:"You flop a flush draw and villain shoves all-in. Which rule applies?",
+   o:["Rule of 4 — you’ll see both cards","Rule of 2 — one card at a time","Neither; use 3× outs","Rule of 4, then halve it"],a:0,
+   e:"All-in means both cards come with no further betting, so the ×4 estimate is the honest one. The mistake is using ×4 when there is still betting to come — then you often only get to see the turn, and should price with ×2."},
+  {q:"The pot is $100 and villain bets $50. An OMC says “I’m getting 2 to 1, easy call.” What’s wrong?",
+   o:["Nothing about the odds — but 2:1 means he needs 33%, not that any hand calls","He’s getting 3 to 1, not 2 to 1","Pot odds don’t apply on the flop","He should count the rake first"],a:0,
+   e:"$150 to win for $50 is 3:1 — he’s misquoting. Either way, odds are only half the equation: the price tells you the equity threshold (25% here), and you still have to know whether your hand clears it."},
+  {q:"You hold 8♠8♣ on A♥K♠7♦. You count “2 outs to a set plus 2 eights already gone — call’s fine.” The error is:",
+   o:["Counting outs that don’t exist and ignoring how small 2 outs is","Eights are always live","You should count 4 outs for a pair","Two outs is enough at 3:1"],a:0,
+   e:"Two outs is about 8% to the river — you need roughly 11:1 to call. Wishful out-counting is the single most common live-poker math leak."},
+  {q:"Which of these is NOT a real out when you hold J♥T♥ on Q♥9♥2♠ against A♥K♠?",
+   o:["The K♥","The 8♠","The J♠","The T♦"],a:0,
+   e:"The K♥ completes your flush but also gives villain Broadway (AKQJT). Cards that improve you and improve them more are dead outs — always sanity-check your outs against villain’s likely hand."},
+  {q:"What does ‘equity’ mean in poker?",
+   o:["Your percentage share of the pot given how often you’ll win it","The money you’ve invested in the hand","How much you can win on later streets","Your chip stack relative to the blinds"],a:0,
+   e:"Equity is your ownership share. In a $200 pot with 35% equity, $70 of that pot is already yours in the long run — every decision compares that against what it costs to keep playing."},
+  {q:"Why does the Rule of 4 overstate your equity with a big draw like 15 outs?",
+   o:["It double-counts runouts where you’d have hit on both cards","It ignores villain’s outs","Because 15 outs is impossible","It assumes you always see the river"],a:0,
+   e:"Multiplying by 4 treats the turn and river as independent additive chances. The overlap — hitting on both — gets counted twice. 15 outs is really about 54%, not 60%. Fix: subtract one point per out above 8."},
+  {q:"You call a river bet and lose. Was the call a mistake?",
+   o:["Can’t tell from the result — only from whether your equity beat the price","Yes, you lost money","No, because you had a good read","Yes, you should never call rivers"],a:0,
+   e:"Results tell you nothing about a single decision. A +EV call loses plenty of the time; that’s what ‘70% to lose’ means. Judge the decision by the price and your equity, not the card."},
+  {q:"You have the second-nut flush draw against an opponent who has never bluffed. What should you adjust?",
+   o:["Discount implied odds for reverse implied odds","Increase implied odds — they always pay","Nothing — a flush is a flush","Fold all flush draws to nits"],a:0,
+   e:"When you hit and they keep betting, you may be drawing to the losing end of the pot. Against a player who only bets strong hands, the times you get paid are exactly the times you’re beaten."},
+  {q:"An OMC folds every turn to a big bet, saying “I can’t call without the nuts.” Which concept says this is exploitable?",
+   o:["Minimum defence frequency","Implied odds","The rule of 2 and 4","Reverse implied odds"],a:0,
+   e:"MDF says against a pot-sized bet you must continue with about half your range, or a bettor can profitably bluff with any two cards. Folding far more than that hands out free pots."},
+  {q:"Pot is $120 after villain bets $40. You have 9 outs on the turn. Call or fold?",
+   o:["Call — you need 25% and have about 20%... which is a fold","Call — 9 outs is always enough","Fold — you need 25% and have about 20%","Raise — 9 outs plus fold equity"],a:2,
+   e:"Nine outs with one card to come is 9×2 ≈ 18–20%. The price demands $40 ÷ $160 = 25%. Without implied odds this is a clear fold — the classic ‘but I have a flush draw!’ trap."},
+  {q:"Which bet size needs the fewest folds to break even as a bluff?",
+   o:["1/3 pot","1/2 pot","3/4 pot","Pot"],a:0,
+   e:"Risk ÷ (risk + reward): 1/3 pot needs 25%, 1/2 needs 33%, 3/4 needs 43%, pot needs 50%. Small bluffs need to work least often — which is why they can be run with a much wider range."},
+  {q:"You’re on the flop with an open-ender and there is a lot of money left behind. What’s the biggest math error you can make?",
+   o:["Using ×4 to justify a call when you’ll likely face another bet on the turn","Using ×2 instead of ×4","Counting 8 outs instead of 4","Adding your implied odds"],a:0,
+   e:"×4 assumes you see both cards for free. If villain will bet the turn too, you’re really paying for one card now — price it with ×2 and factor in what the turn will cost you."},
+  {q:"What makes a call ‘break-even’?",
+   o:["Your equity exactly equals call ÷ (pot + call)","You win exactly half the time","The pot is twice the bet","Your outs times 2 equals the bet size"],a:0,
+   e:"That single identity ties pot odds, equity and EV together. Above the threshold you print; below it you leak."},
+  {q:"Villain bets $50 into $100 and you have $50 left behind. How much are your implied odds worth?",
+   o:["Nothing — calling puts you all-in","$50","$150","Twice the pot"],a:0,
+   e:"Implied odds require money to still be behind after the call. Once you’re all-in there are no future streets to collect on — price it on direct pot odds only."},
+  {q:"You have 12 outs on the flop and are all-in. Rule of 4 says 48%. What is the honest number?",
+   o:["About 45%","Exactly 48%","About 55%","About 38%"],a:0,
+   e:"The correction — subtract one point per out above 8 — gives 48 − 4 = 44%, and the exact figure is 45%. Close enough at the table, and it stops you talking yourself into a coinflip you’re losing."}
+];
+Q.concepts=function(lvl){
+  const it=pick(CONCEPTS);
+  const opts=shuffle(it.o.map((t,i)=>({label:t,value:i})));
+  return {kicker:"Common OMC math mistakes",chip:"Concept",prompt:it.q,sub:"",body:"",
+    options:opts,answer:it.a,layout:"one",
+    explain:()=>'<div class="note">'+it.e+'</div>'};
+};
+
+/* ============================================================
+   5.9 PREFLOP RANGE CHARTS  (GTO-Wizard-style grid)
+   These are standard 6-max, 100bb, 2.5bb-open reference ranges —
+   solver-shaped approximations, not solver output. Frequencies
+   between 0 and 1 mean the hand is played as a mix.
+   ============================================================ */
+const PFR=["A","K","Q","J","T","9","8","7","6","5","4","3","2"];
+const RVAL={A:14,K:13,Q:12,J:11,T:10,"9":9,"8":8,"7":7,"6":6,"5":5,"4":4,"3":3,"2":2};
+function handAt(i,j){
+  if(i===j)return PFR[i]+PFR[i];
+  return i<j ? PFR[i]+PFR[j]+"s" : PFR[j]+PFR[i]+"o";
+}
+function parseHand(h){
+  const hi=RVAL[h[0]],lo=RVAL[h[1]];
+  return {hi,lo,kind:h.length===2?"p":h[2]};
+}
+function combosOf(h){return h.length===2?6:(h[2]==="s"?4:12);}
+function specFreq(spec,h){
+  if(!spec)return 0;
+  if(spec.mix&&spec.mix[h]!=null)return spec.mix[h];
+  const {hi,lo,kind}=parseHand(h);
+  if(kind==="p")return spec.pairsFrom!=null&&hi>=spec.pairsFrom?1:0;
+  const tbl=kind==="s"?spec.suited:spec.offsuit;
+  if(!tbl)return 0;
+  const min=tbl[PFR[14-hi]];
+  return min!=null&&lo>=min?1:0;
+}
+// returns {r, c, f} frequencies summing to 1
+function cellFreq(sc,h){
+  let r=specFreq(sc.r,h);
+  let c=sc.c?specFreq(sc.c,h):0;
+  if(r+c>1)c=Math.max(0,1-r);
+  return {r:r,c:c,f:Math.max(0,1-r-c)};
+}
+function rangePct(sc,key){
+  let n=0;
+  for(let i=0;i<13;i++)for(let j=0;j<13;j++){
+    const h=handAt(i,j);n+=cellFreq(sc,h)[key]*combosOf(h);
+  }
+  return n/1326*100;
+}
+const SCEN=[
+ {id:"utg",name:"UTG open",desc:"First in from under the gun, 6-max, 100bb.",
+  acts:[["r","Raise"],["f","Fold"]],
+  r:{pairsFrom:5,suited:{A:2,K:9,Q:9,J:9,T:8,"9":7,"8":7},offsuit:{A:11,K:12},
+     mix:{"44":.5,"33":.5,"22":.5,"ATo":.5,"76s":.4,"A2s":.6,"A3s":.6}}},
+ {id:"hj",name:"HJ open",desc:"First in from the hijack.",
+  acts:[["r","Raise"],["f","Fold"]],
+  r:{pairsFrom:3,suited:{A:2,K:8,Q:8,J:8,T:7,"9":6,"8":6,"7":5,"6":5},
+     offsuit:{A:10,K:11,Q:11},mix:{"22":.5,"65s":.6,"A9o":.4}}},
+ {id:"co",name:"CO open",desc:"First in from the cutoff.",
+  acts:[["r","Raise"],["f","Fold"]],
+  r:{pairsFrom:2,suited:{A:2,K:5,Q:7,J:7,T:6,"9":5,"8":5,"7":5,"6":4,"5":4},
+     offsuit:{A:9,K:10,Q:10,J:10},mix:{"54s":.6,"A8o":.5,"J9o":.4}}},
+ {id:"btn",name:"BTN open",desc:"First in on the button — the widest opening range in the game.",
+  acts:[["r","Raise"],["f","Fold"]],
+  r:{pairsFrom:2,suited:{A:2,K:2,Q:2,J:4,T:5,"9":4,"8":4,"7":4,"6":3,"5":3,"4":3},
+     offsuit:{A:2,K:7,Q:9,J:9,T:9},
+     mix:{"A2o":.6,"A3o":.6,"A4o":.6,"98o":.5,"K7o":.5,"Q9o":.6,"43s":.5}}},
+ {id:"sb",name:"SB open",desc:"Small blind, raise-or-fold (no limping).",
+  acts:[["r","Raise"],["f","Fold"]],
+  r:{pairsFrom:2,suited:{A:2,K:2,Q:4,J:5,T:6,"9":5,"8":5,"7":5,"6":4,"5":4},
+     offsuit:{A:2,K:9,Q:9,J:9,T:9},mix:{"A2o":.5,"A3o":.5,"A4o":.5,"A5o":.5,"T9o":.5}}},
+ {id:"bb-btn",name:"BB vs BTN open",desc:"Defending the big blind against a button steal. You are getting a great price, so you defend very wide.",
+  acts:[["r","3-bet"],["c","Call"],["f","Fold"]],
+  r:{pairsFrom:9,suited:{A:10,K:11,Q:11},offsuit:{A:11,K:12},
+     mix:{"88":.5,"77":.4,"A5s":.8,"A4s":.7,"A3s":.6,"A2s":.5,"K9s":.4,"K8s":.3,"Q9s":.3,
+          "J9s":.35,"JTs":.3,"QTs":.3,"T9s":.4,"98s":.35,"87s":.35,"76s":.35,"65s":.35,
+          "54s":.3,"KJo":.3,"QJo":.2,"ATo":.3,"KQo":.45,"AJo":.6}},
+  c:{pairsFrom:2,suited:{A:2,K:2,Q:2,J:2,T:4,"9":4,"8":4,"7":3,"6":3,"5":3,"4":2,"3":2},
+     offsuit:{A:2,K:5,Q:7,J:8,T:7,"9":6,"8":6,"7":6,"6":5}}},
+ {id:"bb-utg",name:"BB vs UTG open",desc:"Defending against the tightest opening range — fold far more than you do against the button.",
+  acts:[["r","3-bet"],["c","Call"],["f","Fold"]],
+  r:{pairsFrom:10,suited:{A:12,K:12},offsuit:{A:13},
+     mix:{"99":.5,"88":.25,"A5s":.6,"A4s":.4,"KJs":.3,"AQo":.4}},
+  c:{pairsFrom:2,suited:{A:5,K:8,Q:8,J:8,T:7,"9":7,"8":6,"7":6,"6":5},
+     offsuit:{A:10,K:10,Q:11,J:11}}},
+ {id:"btn-co",name:"BTN vs CO open",desc:"In position against a cutoff open. You can call wide because you have position all hand.",
+  acts:[["r","3-bet"],["c","Call"],["f","Fold"]],
+  r:{pairsFrom:12,suited:{A:12,K:12},offsuit:{A:13},
+     mix:{"JJ":.6,"TT":.4,"AJs":.5,"KJs":.4,"QJs":.3,"KTs":.3,"A5s":.7,"A4s":.6,"A3s":.5,"A2s":.4,
+          "K9s":.4,"KQs":.5,"QTs":.3,"JTs":.3,"T9s":.35,"98s":.3,"87s":.35,"76s":.35,
+          "65s":.3,"54s":.25,"AQo":.4,"KQo":.2}},
+  c:{pairsFrom:2,suited:{A:4,K:7,Q:7,J:7,T:6,"9":6,"8":5,"7":5,"6":5},
+     offsuit:{A:9,K:10,Q:10,J:10,T:9}}}
+];
+const ACTCOL={r:"var(--orange)",c:"var(--aqua)",f:"var(--surface-3)"};
+const ACTNAME={r:"Raise",c:"Call",f:"Fold"};
+
+function gridHTML(sc,hi){
+  let h='<div class="grid13">';
+  for(let i=0;i<13;i++)for(let j=0;j<13;j++){
+    const hand=handAt(i,j), f=cellFreq(sc,hand);
+    const rp=f.r*100, cp=(f.r+f.c)*100;
+    const bg=f.r>=0.999?"var(--orange)":f.c>=0.999?"var(--aqua)":f.f>=0.999?"var(--surface-3)"
+      :'linear-gradient(to top,'+ACTCOL.r+' 0 '+rp.toFixed(1)+'%,'+ACTCOL.c+' '+rp.toFixed(1)+'% '+cp.toFixed(1)+'%,'+ACTCOL.f+' '+cp.toFixed(1)+'% 100%)';
+    const dim=f.f>=0.999?" dim":"";
+    const tip=hand+' — '+Math.round(f.r*100)+'% '+(sc.c?'3-bet':'raise')+
+      (sc.c?', '+Math.round(f.c*100)+'% call':'')+', '+Math.round(f.f*100)+'% fold';
+    h+='<div class="gc'+dim+(hand===hi?" pick":"")+'" style="background:'+bg+'" title="'+tip+'">'+hand+'</div>';
+  }
+  return h+'</div>';
+}
+function legendHTML(sc){
+  const parts=sc.acts.map(a=>'<span class="lg"><i style="background:'+ACTCOL[a[0]]+'"></i>'+a[1]+
+    (a[0]!=="f"?' <b>'+rangePct(sc,a[0]).toFixed(1)+'%</b>':'')+'</span>').join("");
+  return '<div class="legend">'+parts+'<span class="lg" style="color:var(--muted)">Total played <b>'+
+    (rangePct(sc,"r")+rangePct(sc,"c")).toFixed(1)+'%</b></span></div>';
+}
+// pick actual suited cards to display a grid hand
+function dealPFHand(h){
+  const {hi,lo,kind}=parseHand(h), s=shuffle([0,1,2,3]);
+  if(kind==="p")return [(hi-2)*4+s[0],(hi-2)*4+s[1]];
+  if(kind==="s")return [(hi-2)*4+s[0],(lo-2)*4+s[0]];
+  return [(hi-2)*4+s[0],(lo-2)*4+s[1]];
+}
+Q.preflop=function(lvl){
+  // weight toward borderline hands at higher levels — the ones that actually cost money
+  const sc=pick(lvl===1?SCEN.slice(0,5):SCEN);
+  let hand,f,guard=0;
+  do{
+    hand=handAt(rnd(13),rnd(13)); f=cellFreq(sc,hand);
+    guard++;
+  } while(guard<40 && (lvl>=2 ? f.f>=0.999&&Math.random()<0.75 : false));
+  const cards=dealPFHand(hand);
+  const best=sc.acts.map(a=>a[0]).sort((a,b)=>f[b]-f[a])[0];
+  const mixed=sc.acts.filter(a=>f[a[0]]>=0.2).length>1;
+  return {
+    kicker:"Preflop ranges", chip:sc.name,
+    prompt:"You have "+hand+". What is your action?",
+    sub:sc.desc,
+    body:'<div class="felt"><div class="seat"><div class="who">Your hand</div>'+handHTML(cards)+'</div></div>',
+    options:sc.acts.map(a=>({label:a[1],value:a[0]})),
+    answer:best, layout:sc.acts.length===2?"two":"grid3",
+    isCorrect:v=>f[v]>=0.2,
+    explain:(chosen)=>{
+      const rows=sc.acts.map(a=>[ACTNAME[a[0]]===a[1]?a[1]:a[1],(f[a[0]]*100).toFixed(0)+"%"]);
+      return workHTML(rows.concat([["Hand",hand+"  ("+combosOf(hand)+" combos)"],
+        ["Scenario",sc.name]]))+
+      (mixed?'<div class="note"><b>This one is a mix.</b> Solvers split it — at the table that means pick either, but keep the split roughly honest across sessions rather than always defaulting to the same side.</div>'
+            :'<div class="note">This hand is a pure '+sc.acts.find(a=>a[0]===best)[1].toLowerCase()+' — no mixing.</div>')+
+      '<div class="pfgrid">'+legendHTML(sc)+gridHTML(sc,hand)+'</div>';
+    }
+  };
+};
+let pfScen=SCEN[3].id;
+function preflopTabHTML(){
+  const sc=SCEN.find(x=>x.id===pfScen)||SCEN[0];
+  let h='<div class="qhead"><span class="kicker">Preflop ranges</span>'+
+    '<span class="chip">6-max · 100bb · 2.5bb opens</span></div>'+
+    '<div class="prompt">'+sc.name+'</div><div class="sub">'+sc.desc+'</div>'+
+    '<div class="scenrow">'+SCEN.map(x=>'<button class="scen'+(x.id===sc.id?" on":"")+'" data-sc="'+x.id+'">'+x.name+'</button>').join("")+'</div>'+
+    '<div class="pfgrid">'+legendHTML(sc)+gridHTML(sc)+'</div>'+
+    '<div class="note">Suited hands sit above the diagonal, offsuit below, pairs down the middle — the standard chart layout. A cell split between two colours is a <b>mixed</b> hand: the bar height is how often each action is taken.</div>'+
+    '<div class="note warnl"><b>What these are.</b> Standard 6-max reference ranges in the shape solvers produce — good enough to build correct instincts and to drill against. They are not live solver output, and real solutions shift with rake, stack depth, open size and how the table is playing. Use the <b>Preflop drill</b> in the tab list to be tested on them.</div>';
+  return h;
+}
+
+/* ============================================================
+   6. MODULE REGISTRY + STATE
+   ============================================================ */
+const MODULES=[
+  {id:"mixed",  name:"Mixed drill",   gen:null},
+  {id:"outs",   name:"Count outs",    gen:Q.outs},
+  {id:"rule24", name:"Rule of 2 & 4", gen:Q.rule24},
+  {id:"potodds",name:"Pot odds",      gen:Q.potodds},
+  {id:"decision",name:"Call or fold", gen:Q.decision},
+  {id:"implied",name:"Implied odds",  gen:Q.implied},
+  {id:"ev",     name:"Expected value",gen:Q.ev},
+  {id:"bluff",  name:"Bluff math",    gen:Q.bluff},
+  {id:"concepts",name:"OMC mistakes", gen:Q.concepts},
+  {id:"preflop",name:"Preflop drill", gen:Q.preflop},
+  {id:"charts", name:"Range charts",  gen:null},
+  {id:"ref",    name:"Reference",     gen:null}
+];
+const S={
+  tab:"mixed", score:0, streak:0, best:0, right:0, total:0, level:1,
+  recent:[], per:{}, q:null, answered:false
+};
+MODULES.forEach(m=>{ if(m.gen||m.id==="mixed") S.per[m.id]={r:0,t:0}; });
+
+function levelFrom(){
+  const w=S.recent.slice(-10);
+  if(w.length<6)return S.level;
+  const a=w.filter(Boolean).length/w.length;
+  if(a>=0.8)return Math.min(3,S.level+1);
+  if(a<0.5)return Math.max(1,S.level-1);
+  return S.level;
+}
+
+/* ============================================================
+   7. UI
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const panel=$("panel");
+
+function renderStats(){
+  $("sScore").textContent=S.score;
+  $("sScoreSub").textContent=S.total?(S.right+" of "+S.total+" correct"):"answer to earn points";
+  const acc=S.total?S.right/S.total:0;
+  $("sAcc").textContent=S.total?Math.round(acc*100)+"%":"—";
+  $("sAccBar").style.width=(S.total?acc*100:0)+"%";
+  $("sStreak").textContent=S.streak;
+  $("sStreakSub").textContent="best "+S.best;
+  $("sLvl").textContent=S.level;
+  document.querySelectorAll(".lvlpips span").forEach((el,i)=>el.classList.toggle("on",i<S.level));
+}
+function renderTabs(){
+  $("tabs").innerHTML=MODULES.map(m=>{
+    const p=S.per[m.id];
+    let dot="";
+    if(p&&p.t>0){const a=p.r/p.t;dot=' <span class="dot '+(a>=.75?"g":a>=.5?"w":"c")+'"></span>';}
+    else if(p)dot=' <span class="dot"></span>';
+    return '<button class="tab'+(S.tab===m.id?" active":"")+'" data-id="'+m.id+'">'+m.name+dot+'</button>';
+  }).join("");
+  $("tabs").querySelectorAll(".tab").forEach(b=>b.onclick=()=>{S.tab=b.dataset.id;S.q=null;render();});
+}
+
+function newQuestion(){
+  const mod = S.tab==="mixed"
+    ? pick(MODULES.filter(m=>m.gen))
+    : MODULES.find(m=>m.id===S.tab);
+  S.level=levelFrom();
+  let q=null,guard=0;
+  while(!q&&guard++<5){ try{ q=mod.gen(S.level); }catch(e){ console.error(e); q=null; } }
+  if(!q){ q=Q.concepts(S.level); q._mod="concepts"; }
+  else q._mod=mod.id;
+  q._modName=(MODULES.find(m=>m.id===q._mod)||{}).name||"";
+  S.q=q; S.answered=false;
+}
+
+function render(){
+  renderStats(); renderTabs();
+  if(S.tab==="ref"){ panel.innerHTML=REF; return; }
+  if(S.tab==="charts"){
+    panel.innerHTML=preflopTabHTML();
+    panel.querySelectorAll(".scen").forEach(b=>b.onclick=()=>{pfScen=b.dataset.sc;render();});
+    return;
+  }
+  if(!S.q||S.q._mod===undefined)newQuestion();
+  if(S.tab!=="mixed"&&S.q._mod!==S.tab)newQuestion();
+  drawQuestion();
+}
+
+function drawQuestion(){
+  const q=S.q;
+  const layout=q.layout==="two"?"opts two":q.layout==="grid3"?"opts grid3":"opts";
+  const keys="ABCDEFGH";
+  let h='<div class="qhead"><span class="kicker">'+q.kicker+'</span>';
+  if(q.chip)h+='<span class="chip">'+q.chip+'</span>';
+  h+='<span class="chip">Level '+S.level+'</span>';
+  if(S.tab==="mixed")h+='<span class="chip">'+q._modName+'</span>';
+  h+='</div>';
+  h+='<div class="prompt">'+q.prompt+'</div>';
+  if(q.sub)h+='<div class="sub">'+q.sub+'</div>';
+  h+=q.body||"";
+  h+='<div class="'+layout+'" id="opts">'+q.options.map((o,i)=>
+      '<button class="opt" data-i="'+i+'"><span class="key">'+keys[i]+'</span><span>'+o.label+'</span></button>').join("")+'</div>';
+  h+='<div class="fb" id="fb"></div>';
+  h+='<div class="actions" id="acts"></div>';
+  panel.innerHTML=h;
+  panel.querySelectorAll(".opt").forEach(b=>b.onclick=()=>answer(+b.dataset.i));
+}
+
+function answer(i){
+  if(S.answered)return;
+  S.answered=true;
+  const q=S.q, chosen=q.options[i].value;
+  const good = v => q.isCorrect ? q.isCorrect(v) : v===q.answer;
+  const ok = good(chosen);
+  const btns=panel.querySelectorAll(".opt");
+  btns.forEach((b,j)=>{
+    b.disabled=true;
+    const v=q.options[j].value;
+    if(good(v)){b.classList.add("correct");
+      b.insertAdjacentHTML("beforeend",'<span class="mark">'+(j===i?"correct":(q.isCorrect?"also fine":"correct"))+'</span>');}
+    else if(j===i){b.classList.add("wrong");b.insertAdjacentHTML("beforeend",'<span class="mark">your pick</span>');}
+  });
+  S.total++; S.recent.push(ok);
+  const p=S.per[q._mod]; if(p){p.t++; if(ok)p.r++;}
+  if(ok){
+    S.right++; S.streak++; S.best=Math.max(S.best,S.streak);
+    const base=10*S.level, bonus=Math.min(20,(S.streak-1)*2);
+    S.score+=base+bonus;
+  } else S.streak=0;
+  const fb=$("fb");
+  fb.className="fb show "+(ok?"ok":"no");
+  fb.innerHTML='<div class="bar">'+(ok?"✓ Correct":"✗ Not quite")+'</div><div class="body">'+q.explain(chosen)+'</div>';
+  $("acts").innerHTML='<button class="btn" id="next">Next hand →</button>'+
+    '<span class="hint">or press <b>N</b> / Enter</span>';
+  $("next").onclick=()=>{newQuestion();drawQuestion();renderStats();renderTabs();};
+  renderStats(); renderTabs();
+  fb.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+document.addEventListener("keydown",e=>{
+  if(S.tab==="ref"||S.tab==="charts")return;
+  const k=e.key.toUpperCase();
+  if(!S.answered){
+    const idx="ABCDEFGH".indexOf(k);
+    if(idx>=0&&S.q&&idx<S.q.options.length){answer(idx);e.preventDefault();return;}
+    const n=parseInt(k,10);
+    if(n>=1&&S.q&&n<=S.q.options.length){answer(n-1);e.preventDefault();}
+  } else if(k==="N"||e.key==="Enter"){
+    newQuestion();drawQuestion();renderStats();renderTabs();e.preventDefault();
+  }
+});
+
+$("themeBtn").onclick=()=>{
+  const d=document.documentElement.getAttribute("data-theme")==="dark";
+  document.documentElement.setAttribute("data-theme",d?"light":"dark");
+  $("themeBtn").textContent=d?"Dark mode":"Light mode";
+};
+$("villBtn").onclick=()=>{
+  oppMode = oppMode==="unknown" ? "shown" : "unknown";
+  $("villBtn").textContent="Opponent: "+(oppMode==="shown"?"face-up":"unknown");
+  S.q=null; render();
+};
+$("colorBtn").onclick=()=>{
+  fourColor=!fourColor;
+  $("colorBtn").textContent="4-color deck: "+(fourColor?"on":"off");
+  if(S.tab!=="ref"&&S.tab!=="charts"&&S.q){ const wasAnswered=S.answered; drawQuestion(); if(wasAnswered)S.answered=false; }
+};
+$("resetBtn").onclick=()=>{
+  S.score=0;S.streak=0;S.best=0;S.right=0;S.total=0;S.level=1;S.recent=[];
+  Object.keys(S.per).forEach(k=>S.per[k]={r:0,t:0});
+  S.q=null;render();
+};
+
+/* ============================================================
+   8. REFERENCE TAB
+   ============================================================ */
+let rows="";
+for(let n=1;n<=15;n++){
+  const two=trueTwoCard(n)*100, one=trueOneCard(n)*100;
+  const r4=4*n, r2=2*n, corr=n>8?4*n-(n-8):4*n;
+  rows+='<tr><td>'+n+'</td><td>'+two.toFixed(0)+'%</td><td'+(n>8?' class="hi"':'')+'>'+r4+'%</td><td>'+corr+'%</td><td>'+one.toFixed(0)+'%</td><td>'+r2+'%</td></tr>';
+}
+const REF='<div class="ref">'+
+'<h3>The five formulas<span class="tag">memorise these</span></h3>'+
+'<div class="formula"><b>Pot odds</b> — equity you need to call = <b>call ÷ (pot + call)</b><br><span style="color:var(--muted);font-size:13px">"pot" = the pot after villain’s bet, i.e. what you win. Half-pot bet → 25%. Pot-sized bet → 33%.</span></div>'+
+'<div class="formula"><b>Rule of 2 and 4</b> — equity ≈ outs × 4 with two cards to come, outs × 2 with one.<br><span style="color:var(--muted);font-size:13px">Above 8 outs, subtract one point per extra out. Only use ×4 when you’re all-in.</span></div>'+
+'<div class="formula"><b>EV of a call</b> = equity × pot − (1 − equity) × call</div>'+
+'<div class="formula"><b>Break-even bluff</b> — folds needed = <b>bet ÷ (pot + bet)</b><br><span style="color:var(--muted);font-size:13px">Risk ÷ (risk + reward). ⅓ pot → 25%, ½ pot → 33%, ¾ pot → 43%, pot → 50%, 2× pot → 67%.</span></div>'+
+'<div class="formula"><b>MDF</b> — how much you must defend = <b>pot ÷ (pot + bet)</b><br><span style="color:var(--muted);font-size:13px">The bigger they bet, the more you’re allowed to fold.</span></div>'+
+'<div class="formula"><b>Implied odds</b> — extra you must win later = <b>(call × (1 − eq) − eq × pot) ÷ eq</b><br><span style="color:var(--muted);font-size:13px">Capped by the stack behind. Zero when someone is all-in.</span></div>'+
+
+'<h3>Outs → equity</h3>'+
+'<p>Exact percentages against the rule-of-thumb estimates. Highlighted cells are where the ×4 rule starts lying to you.</p>'+
+'<table class="t"><thead><tr><th>Outs</th><th>True (2 cards)</th><th>×4 rule</th><th>Corrected</th><th>True (1 card)</th><th>×2 rule</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+
+'<h3>Outs you should know cold</h3>'+
+'<table class="t"><thead><tr><th>Draw</th><th>Outs</th><th>Flop → river</th><th>One card</th></tr></thead><tbody>'+
+[["Flush draw + open-ender",15],["Flush draw + gutshot",12],["Flush draw + two overcards",15],
+ ["Flush draw",9],["Open-ended straight draw",8],["Two overcards",6],
+ ["Bottom pair → trips or two pair",5],["Gutshot",4],["Two pair → full house",4],
+ ["Pocket pair → set",2],["One overcard",3]]
+ .map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td>'+(trueTwoCard(r[1])*100).toFixed(0)+'%</td><td>'+(trueOneCard(r[1])*100).toFixed(0)+'%</td></tr>').join("")+
+'</tbody></table>'+
+
+'<h3>Bet size ↔ the numbers it implies</h3>'+
+'<table class="t"><thead><tr><th>Bet</th><th>Caller needs</th><th>Bluff needs folds</th><th>MDF</th></tr></thead><tbody>'+
+[0.25,0.33,0.5,0.66,0.75,1,1.5,2].map(f=>{
+  const pot=100,bet=pot*f, potAfter=pot+bet;
+  return '<tr><td>'+Math.round(f*100)+'% pot</td><td>'+(reqEquity(potAfter,bet)*100).toFixed(0)+'%</td><td>'+
+    (bluffBE(pot,bet)*100).toFixed(0)+'%</td><td>'+(mdf(pot,bet)*100).toFixed(0)+'%</td></tr>';
+}).join("")+'</tbody></table>'+
+
+'<h3>The seven leaks this trainer targets</h3>'+
+'<p>1. <b>Counting outs that are dead</b> — the card completes your draw but makes villain a better hand.<br>'+
+'2. <b>Using ×4 when more betting is coming</b> — ×4 only holds if you’re all-in and guaranteed both cards.<br>'+
+'3. <b>Adding your own dead money to the cost of calling</b> — chips in the pot are not yours; they improve your price.<br>'+
+'4. <b>Counting implied odds that don’t exist</b> — no stack behind, or an opponent who never pays off.<br>'+
+'5. <b>Ignoring reverse implied odds</b> — non-nut draws hit and still lose the maximum.<br>'+
+'6. <b>Judging a decision by the result</b> — a +EV call is right on the many occasions it loses.<br>'+
+'7. <b>Never bluffing</b> — if you’re never called, you’re folding away pots the math says are yours.</p>'+
+'<h3>Dead outs — the one to internalise</h3>'+
+'<p>An out is only an out if it wins. A card that completes your flush but pairs the board can hand villain a full house; a card that makes your straight can make them a bigger one. Every drill here counts outs with a real hand evaluator, so dead outs are stripped automatically and listed back to you in the feedback. Count your outs, then subtract the ones that help them more than they help you.</p>'+
+'<h3>Using the trainer</h3>'+
+'<p>The <b>Opponent</b> button in the header sets how hard the counting itself is.</p>'+
+'<p><b>Unknown</b> (the default) — you see only your two cards and the board, and an out is any card that completes your draw. Boards are kept clean: never paired, never four to a flush, and a named draw always has the number of outs it is supposed to have. This is the mode for building the count.</p>'+
+'<p><b>Face-up</b> — villain’s hand is shown, and an out is only a card that actually beats them. Dead outs get stripped and listed back with the reason, and awkward boards come back in. Switch to this once counting your own draw is automatic.</p>'+
+'<p><b>Range charts</b> holds standard 6-max preflop ranges; <b>Preflop drill</b> tests you on them. Those are reference ranges in the shape solvers produce, not live solver output.</p>'+
+'<h3>Shortcuts</h3><p>Press <b>A–D</b> or <b>1–4</b> to answer, <b>N</b> or <b>Enter</b> for the next hand.</p>'+
+'</div>';
+
+/* boot */
+render();
+</script>
+</body>
+</html>
