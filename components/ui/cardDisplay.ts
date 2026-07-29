@@ -2,7 +2,7 @@
  * Pure presentation-logic helper for PlayingCard. Extracted so it can be
  * unit-tested with the node test runner without a DOM.
  */
-import { cardStr, SUIT_GLYPH, type Card } from "../../lib/poker/engine.js";
+import { cardStr, SUIT_GLYPH, type Card } from "../../lib/poker/engine";
 
 export type CardColorClass = "" | "red" | "blu" | "grn";
 
