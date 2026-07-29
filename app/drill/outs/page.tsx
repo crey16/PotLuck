@@ -1,5 +1,4 @@
-import { Header } from "@/components/ui/Header";
-import { OutsDrill } from "@/components/drill/OutsDrill";
+import { DrillShell } from "@/components/drill/DrillShell";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseConfigured } from "@/lib/supabase/env";
 
@@ -41,13 +40,7 @@ export default async function OutsDrillPage() {
 
   return (
     <div className="wrap">
-      <Header
-        username={profile?.username}
-        xp={profile?.xp}
-        level={profile?.level}
-        streak={profile?.streak_count}
-      />
-      <OutsDrill level={profile?.level} />
+      <DrillShell profile={profile} />
     </div>
   );
 }
