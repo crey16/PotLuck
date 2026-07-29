@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/poker/*.test.ts lib/drill/*.test.ts components/ui/*.test.ts",
+    "test": "tsx --test lib/poker/*.test.ts lib/drill/*.test.ts lib/supabase/*.test.ts components/ui/*.test.ts",
     "api": "uvicorn api.index:app --port 8000 --reload",
     "dev:all": "concurrently \"npm:dev\" \"npm:api\""
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.109.0",
     "next": "16.2.12",
     "react": "19.2.4",
     "react-dom": "19.2.4"

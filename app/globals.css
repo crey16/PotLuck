@@ -154,6 +154,22 @@ nav.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
 .btn.ghost:hover { color: var(--ink); background: var(--surface-3); }
 .hint { color: var(--muted); font-size: 12.5px; }
 
+/* ---------- forms (login) ---------- */
+.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.field label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.field input {
+  background: var(--surface-2); border: 1px solid var(--ring); color: var(--ink);
+  border-radius: 10px; padding: 10px 12px; font-size: 14.5px; font-family: inherit;
+}
+.field input:focus { outline: none; border-color: var(--blue); }
+.formrow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.error { color: var(--crit); font-size: 13px; margin-top: 10px; }
+.dividertext {
+  display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px;
+  margin: 18px 0; text-transform: uppercase; letter-spacing: .06em;
+}
+.dividertext::before, .dividertext::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
 /* ---------- preflop range grid ---------- */
 .scenrow { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 4px; }
 .scen {

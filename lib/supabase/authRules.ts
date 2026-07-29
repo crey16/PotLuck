@@ -1,0 +1,43 @@
+/**
+ * Pure redirect-decision logic for the auth middleware and the OAuth
+ * callback route. Kept dependency-free (no next/headers, no cookies) so it
+ * is unit-testable with plain node:test — see authRules.test.ts.
+ */
+
+/** Where an unauthenticated user lands, and where signed-in users bounce from. */
+export const LOGIN_PATH = "/login";
+
+/** Default landing page once signed in — also safeNext's fallback. */
+export const DEFAULT_NEXT = "/drill/outs";
+
+/** Paths that are always allowed through, signed in or not. */
+const PUBLIC_PREFIXES = [LOGIN_PATH, "/auth", "/api"];
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+/**
+ * Should middleware redirect this request to /login?
+ * - Never redirects /login, /auth/*, or /api/* (FastAPI owns /api; the
+ *   callback route needs /auth/callback reachable while signed out).
+ * - Otherwise redirects whenever there is no signed-in user.
+ */
+export function shouldRedirectToLogin(pathname: string, hasUser: boolean): boolean {
+  if (isPublicPath(pathname)) return false;
+  return !hasUser;
+}
+
+/**
+ * Sanitize the `next` query param used by /login and /auth/callback so it
+ * can only ever send the browser to a same-origin relative path. Rejects
+ * absolute URLs (https://evil.com), protocol-relative URLs (//evil.com),
+ * and anything else that doesn't start with a single leading slash.
+ */
+export function safeNext(raw: string | null): string {
+  if (!raw) return DEFAULT_NEXT;
+  // Reject protocol-relative ("//evil.com") and anything not starting with
+  // exactly one leading slash (absolute URLs, javascript:, bare hostnames).
+  if (!raw.startsWith("/") || raw.startsWith("//")) return DEFAULT_NEXT;
+  return raw;
+}
