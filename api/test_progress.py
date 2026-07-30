@@ -8,7 +8,9 @@ verbatim from StackSchool's `routes/progress.py::_update_streak` /
 import datetime
 
 import pytest
+from pydantic import ValidationError
 
+from api.index import AttemptIn, DRILL_STATE_SQL, SKILL_STATS_SQL
 from api.progress import next_streak, recalc_level, today_et
 
 
@@ -100,3 +102,38 @@ class TestTodayEt:
     def test_today_et_with_no_argument_returns_a_date(self) -> None:
         result = today_et()
         assert isinstance(result, datetime.date)
+
+
+def test_attempt_in_rejects_an_unknown_drill_kind():
+    with pytest.raises(ValidationError):
+        AttemptIn(drill_kind="nonsense", drill_payload={}, answer="9", is_correct=True)
+
+
+def test_attempt_in_accepts_every_real_drill_kind():
+    from api.skills import DRILL_KINDS
+    for kind in DRILL_KINDS:
+        got = AttemptIn(drill_kind=kind, drill_payload={}, answer="9", is_correct=True)
+        assert got.drill_kind == kind
+
+
+def test_attempt_in_caps_the_answer_length():
+    with pytest.raises(ValidationError):
+        AttemptIn(drill_kind="outs", drill_payload={}, answer="x" * 300, is_correct=True)
+
+
+def test_skill_stats_sql_increments_rather_than_overwriting():
+    sql = " ".join(SKILL_STATS_SQL.split())
+    assert "on conflict (user_id, skill_tag) do update" in sql.lower()
+    # the increment must come from the existing row, never a read-modify-write
+    assert "skill_stats.total_attempts + 1" in sql
+    assert "skill_stats.correct_attempts + excluded.correct_attempts" in sql
+
+
+def test_drill_state_sql_windows_the_last_ten_per_kind():
+    sql = " ".join(DRILL_STATE_SQL.split()).lower()
+    assert "row_number() over (partition by drill_kind" in sql
+    assert "order by created_at desc" in sql
+    assert "rn <= 10" in sql
+    assert "drill_kind is not null" in sql
+    # RLS is belt; the explicit predicate is braces
+    assert "user_id = %s" in sql

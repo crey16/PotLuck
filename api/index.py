@@ -6,16 +6,17 @@ prod (Vercel's native routing to this function) hit the same paths.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
 from psycopg.types.json import Json
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.db import get_connection
 from api.deps import current_user_id
 from api.progress import next_streak, recalc_level, today_et
+from api.skills import DRILL_KINDS, skill_tag_for
 
 app = FastAPI()
 
@@ -43,10 +44,42 @@ def health(db: int = 0) -> Any:
 
 
 class AttemptIn(BaseModel):
-    drill_kind: str
+    drill_kind: Literal[
+        "outs", "rule24", "potodds", "decision", "implied",
+        "ev", "bluff", "concepts", "preflop",
+    ]
     drill_payload: dict
-    answer: str
+    answer: str = Field(max_length=256)
     is_correct: bool
+
+
+SKILL_STATS_SQL = """
+    insert into skill_stats (user_id, skill_tag, total_attempts, correct_attempts)
+    values (%s, %s, 1, %s)
+    on conflict (user_id, skill_tag) do update
+    set total_attempts   = skill_stats.total_attempts + 1,
+        correct_attempts = skill_stats.correct_attempts + excluded.correct_attempts
+"""
+
+DRILL_STATE_SQL = """
+    select drill_kind, is_correct
+    from (
+      select drill_kind, is_correct,
+             row_number() over (partition by drill_kind
+                                order by created_at desc, id desc) as rn
+      from attempts
+      where user_id = %s and drill_kind is not null
+    ) t
+    where rn <= 10
+    order by drill_kind, rn desc
+"""
+
+DRILL_TOTALS_SQL = """
+    select drill_kind, count(*), count(*) filter (where is_correct)
+    from attempts
+    where user_id = %s and drill_kind is not null
+    group by drill_kind
+"""
 
 
 @app.post("/api/progress/attempts")
@@ -97,6 +130,13 @@ def record_attempt(
                         body.is_correct,
                         body.answer,
                     ),
+                )
+
+                # 1b. Skill stats. The tag is derived server-side from
+                # drill_kind so the client cannot report the wrong one.
+                cur.execute(
+                    SKILL_STATS_SQL,
+                    (user_id, skill_tag_for(body.drill_kind), 1 if body.is_correct else 0),
                 )
 
                 # 2. XP + level (recalc_level is the one consolidated place
@@ -163,3 +203,29 @@ def record_attempt(
         ),
         "xp_earned": xp_earned,
     }
+
+
+@app.get("/api/progress/drill-state")
+def drill_state(user_id: str = Depends(current_user_id)) -> Any:
+    """Per-drill rolling windows so adaptive difficulty survives a reload.
+
+    Read-only and fail-soft by design: the client treats any error as "no
+    history", which simply starts every drill at level 1.
+    """
+    windows: dict[str, list[bool]] = {kind: [] for kind in DRILL_KINDS}
+    totals: dict[str, dict[str, int]] = {}
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(DRILL_STATE_SQL, (user_id,))
+            for kind, is_correct in cur.fetchall():
+                if kind in windows:
+                    windows[kind].append(bool(is_correct))
+
+            cur.execute(DRILL_TOTALS_SQL, (user_id,))
+            for kind, total, correct in cur.fetchall():
+                if kind in windows:
+                    totals[kind] = {"total": int(total), "correct": int(correct)}
+        conn.commit()
+
+    return {"windows": windows, "totals": totals}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Header } from "@/components/ui/Header";
 import { StatTile } from "@/components/ui/StatTile";
 import { DrillTabs } from "@/components/drill/DrillTabs";
@@ -9,8 +9,10 @@ import { OpponentToggle, writeOppModeCookie } from "@/components/drill/OpponentT
 import { GENERATORS, pickMixedKind, type TabId } from "@/lib/drill/registry";
 import { emptyWindows, nextLevel, pushResult, type DrillWindows } from "@/lib/drill/difficulty";
 import { mulberry32 } from "@/lib/drill/rng";
-import type {
-  DrillKind, DrillLevel, DrillQuestion, OppMode, OptionValue,
+import { fetchDrillState } from "@/lib/drill/drillState";
+import {
+  DRILL_KINDS,
+  type DrillKind, type DrillLevel, type DrillQuestion, type OppMode, type OptionValue,
 } from "@/lib/drill/contract";
 import { recordAttempt } from "@/lib/drill/recordAttempt";
 
@@ -96,6 +98,32 @@ export function DrillShell({
 
   const latestRequestId = useRef(0);
   const nextDealCount = useRef(1);
+
+  // Seed difficulty from history. This is the one legitimate exception to
+  // "no useEffect that sets state" in this component: it reads from the
+  // network after mount (session + fetch), which cannot happen during
+  // render or in a state initialiser. Fails soft: no session, no network,
+  // no problem — every window just stays empty and difficulty starts at 1.
+  // (No eslint-disable needed: react-hooks/set-state-in-effect does not
+  // flag state set from inside an async callback/.then(), only synchronous
+  // sets in the effect body — confirmed by `npm run lint` passing clean.)
+  useEffect(() => {
+    let cancelled = false;
+    void fetchDrillState().then((seeded) => {
+      if (cancelled || !seeded) return;
+      setWindows(seeded);
+      setLevels((prev) => {
+        const next = { ...prev };
+        for (const kind of DRILL_KINDS) {
+          next[kind] = nextLevel(seeded[kind], prev[kind] ?? 1);
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /** Deal the next hand. Called only from event handlers. */
   const deal = useCallback(
