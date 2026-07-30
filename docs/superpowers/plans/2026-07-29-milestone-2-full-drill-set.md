@@ -712,7 +712,7 @@ git add lib/drill/contract.ts lib/drill/rng.ts lib/drill/grade.ts lib/drill/grad
 git commit -m "feat: freeze the M2 drill contract, grading, difficulty and helpers"
 ```
 
-**The contract is now frozen.** Any later change to `contract.ts` must be announced, because Tasks 5–12 are written against it in parallel.
+**The contract is now frozen.** Any later change to `contract.ts` must be announced, because Tasks 4–11 are written against it in parallel.
 
 ---
 
