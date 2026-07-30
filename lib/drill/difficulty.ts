@@ -76,3 +76,35 @@ export function mergeSeededWindows(
   }
   return merged;
 }
+
+/** The level each kind restores to, per `levelFromHistory`, ignoring session state. */
+export type Levels = Partial<Record<DrillKind, DrillLevel>>;
+
+/**
+ * The levels implied by a server snapshot, folded over the session's own.
+ *
+ * This is the levels counterpart of `mergeSeededWindows` and exists for a
+ * specific reason: it must be computable EAGERLY, outside a `setState`
+ * updater. The seeding effect both stores these levels and re-deals the hand
+ * on screen with them, and the re-deal reads them synchronously. Building them
+ * inside the updater instead — as the first version did — meant React had not
+ * run the updater yet when the re-deal fired, so it dealt from an empty object
+ * and the first hand of EVERY page load was a level-1 hand, however strong the
+ * user's history. The Difficulty tile then jumped to its real value on the
+ * first tab switch, which is what made the bug look cosmetic rather than a
+ * dead re-deal. Keep this pure and call it before touching state.
+ */
+export function seededLevels(
+  seeded: DrillWindows,
+  previous: Levels,
+  answeredKinds: Iterable<DrillKind>
+): Levels {
+  const keepLocal = new Set(answeredKinds);
+  const levels: Levels = {};
+  for (const kind of DRILL_KINDS) {
+    levels[kind] = keepLocal.has(kind)
+      ? (previous[kind] ?? 1)
+      : levelFromHistory(seeded[kind]);
+  }
+  return levels;
+}

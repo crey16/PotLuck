@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  nextLevel, pushResult, emptyWindows, levelFromHistory, mergeSeededWindows, WINDOW_SIZE,
+  nextLevel, pushResult, emptyWindows, levelFromHistory, mergeSeededWindows, seededLevels, WINDOW_SIZE,
 } from "./difficulty";
 import { DRILL_KINDS } from "./contract";
 import { mulberry32 } from "./rng";
@@ -147,4 +147,41 @@ test("mergeSeededWindows: covers every drill kind and mutates neither input", ()
   assert.deepEqual(Object.keys(merged).sort(), [...DRILL_KINDS].sort());
   assert.deepEqual(seeded.bluff, [], "seeded must not be mutated");
   assert.deepEqual(local.bluff, [true], "local must not be mutated");
+});
+
+test("seededLevels: restores each kind's level from its own window", () => {
+  const seeded = emptyWindows();
+  seeded.outs = rep(10, true);
+  seeded.potodds = rep(10, false);
+  const levels = seededLevels(seeded, {}, []);
+  assert.equal(levels.outs, 3, "ten correct answers restore to level 3");
+  assert.equal(levels.potodds, 1);
+  assert.equal(levels.bluff, 1, "an empty window starts at level 1");
+});
+
+test("seededLevels: a kind answered this session keeps its session level", () => {
+  const seeded = emptyWindows();
+  seeded.outs = rep(10, true);
+  seeded.ev = rep(10, true);
+  const levels = seededLevels(seeded, { ev: 2 }, ["ev"]);
+  assert.equal(levels.ev, 2, "the session's own level wins for an answered kind");
+  assert.equal(levels.outs, 3, "other kinds still restore from the snapshot");
+});
+
+/**
+ * The regression this function exists for. The seeding effect re-deals the
+ * hand on screen using these levels and reads them synchronously, so a
+ * partially-built object silently deals a level-1 hand. Before the fix the
+ * levels were assembled inside a `setLevels` updater that React had not yet
+ * run, so the re-deal saw `{}` — every page load opened at level 1 and only
+ * corrected itself on the first tab switch.
+ */
+test("seededLevels: returns a level for every kind, ready to deal from", () => {
+  const seeded = emptyWindows();
+  seeded.outs = rep(10, true);
+  const levels = seededLevels(seeded, {}, []);
+  assert.deepEqual(Object.keys(levels).sort(), [...DRILL_KINDS].sort());
+  for (const kind of DRILL_KINDS) {
+    assert.ok(levels[kind]! >= 1 && levels[kind]! <= 3, `${kind} has a usable level`);
+  }
 });

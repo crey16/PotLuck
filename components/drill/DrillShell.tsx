@@ -10,16 +10,16 @@ import { ReferenceTab } from "@/components/drill/ReferenceTab";
 import { GENERATORS, pickMixedKind, type TabId } from "@/lib/drill/registry";
 import {
   emptyWindows,
-  levelFromHistory,
   mergeSeededWindows,
   nextLevel,
   pushResult,
+  seededLevels,
   type DrillWindows,
+  type Levels,
 } from "@/lib/drill/difficulty";
 import { mulberry32 } from "@/lib/drill/rng";
 import { fetchDrillState } from "@/lib/drill/drillState";
 import {
-  DRILL_KINDS,
   type DrillKind, type DrillLevel, type DrillQuestion, type OppMode, type OptionValue,
 } from "@/lib/drill/contract";
 import { recordAttempt } from "@/lib/drill/recordAttempt";
@@ -45,8 +45,6 @@ export interface DrillShellProps {
    */
   seed: number;
 }
-
-type Levels = Partial<Record<DrillKind, DrillLevel>>;
 
 interface Live {
   question: DrillQuestion;
@@ -134,15 +132,17 @@ export function DrillShell({
       if (cancelled || !seeded) return;
       const answered = answeredKinds.current;
       setWindows((local) => mergeSeededWindows(seeded, local, answered));
-      const restored: Levels = {};
-      setLevels((prev) => {
-        for (const kind of DRILL_KINDS) {
-          restored[kind] = answered.has(kind)
-            ? (prev[kind] ?? 1)
-            : levelFromHistory(seeded[kind]);
-        }
-        return restored;
-      });
+      setLevels((prev) => seededLevels(seeded, prev, answered));
+      // Computed EAGERLY, outside the updater above, because the re-deal reads
+      // it synchronously. Assembling it inside the updater meant React had not
+      // run the updater yet when the re-deal fired, so it dealt from an empty
+      // object — every page load opened at level 1 regardless of history, and
+      // only corrected itself on the first tab switch.
+      //
+      // Passing `{}` as the previous levels is exact, not an approximation:
+      // the re-deal below only runs when nothing has been answered, and with
+      // no answered kinds `seededLevels` never consults them.
+      const restored = seededLevels(seeded, {}, answered);
       // The first hand was dealt in the state initialiser, before any history
       // existed, so it is always a level-1 hand and the Difficulty tile reads
       // 1 — even for a level-3 user. Re-deal once, so restored difficulty
