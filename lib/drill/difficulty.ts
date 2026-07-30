@@ -33,3 +33,19 @@ export function nextLevel(window: boolean[], current: DrillLevel): DrillLevel {
   if (accuracy < DEMOTE_BELOW) return Math.max(1, current - 1) as DrillLevel;
   return current;
 }
+
+/**
+ * The difficulty a rolling window implies, reconstructed from scratch.
+ *
+ * `nextLevel` deliberately moves at most one step per answer, so calling it
+ * once against a full window cannot express a level the user climbed to over
+ * several answers — a perfect last-10 would restore as 2, never 3. Replaying it
+ * over growing prefixes reproduces the climb the user actually made.
+ */
+export function levelFromHistory(window: boolean[]): DrillLevel {
+  let level: DrillLevel = 1;
+  for (let i = 1; i <= window.length; i++) {
+    level = nextLevel(window.slice(0, i), level);
+  }
+  return level;
+}

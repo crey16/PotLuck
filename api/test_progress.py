@@ -132,8 +132,15 @@ def test_skill_stats_sql_increments_rather_than_overwriting():
 def test_drill_state_sql_windows_the_last_ten_per_kind():
     sql = " ".join(DRILL_STATE_SQL.split()).lower()
     assert "row_number() over (partition by drill_kind" in sql
-    assert "order by created_at desc" in sql
+    assert "order by created_at desc, id desc" in sql
     assert "rn <= 10" in sql
     assert "drill_kind is not null" in sql
     # RLS is belt; the explicit predicate is braces
     assert "user_id = %s" in sql
+    # The outer order must be oldest-first (rn desc), not newest-first
+    # (rn asc). pushResult on the client appends new results at the end, so
+    # the client treats the returned array as oldest -> newest; reversing
+    # this order would silently corrupt every downstream
+    # pushResult/nextLevel call without changing anything else observable
+    # here (same rows, same set membership, just backwards).
+    assert "order by drill_kind, rn desc" in sql

@@ -7,7 +7,13 @@ import { DrillTabs } from "@/components/drill/DrillTabs";
 import { DrillPlayer } from "@/components/drill/DrillPlayer";
 import { OpponentToggle, writeOppModeCookie } from "@/components/drill/OpponentToggle";
 import { GENERATORS, pickMixedKind, type TabId } from "@/lib/drill/registry";
-import { emptyWindows, nextLevel, pushResult, type DrillWindows } from "@/lib/drill/difficulty";
+import {
+  emptyWindows,
+  levelFromHistory,
+  nextLevel,
+  pushResult,
+  type DrillWindows,
+} from "@/lib/drill/difficulty";
 import { mulberry32 } from "@/lib/drill/rng";
 import { fetchDrillState } from "@/lib/drill/drillState";
 import {
@@ -98,6 +104,13 @@ export function DrillShell({
 
   const latestRequestId = useRef(0);
   const nextDealCount = useRef(1);
+  // Seeding is a first-paint restoration only. Once the session has real
+  // progress (the user answered before the GET resolved), the server
+  // snapshot predates that answer and must not overwrite it — otherwise the
+  // answer's effect on adaptive difficulty silently vanishes while score/XP
+  // still reflect it. Set synchronously at the top of handleAnswered, so any
+  // seeding .then() that resolves afterward sees it and bails.
+  const hasAnswered = useRef(false);
 
   // Seed difficulty from history. This is the one legitimate exception to
   // "no useEffect that sets state" in this component: it reads from the
@@ -110,12 +123,12 @@ export function DrillShell({
   useEffect(() => {
     let cancelled = false;
     void fetchDrillState().then((seeded) => {
-      if (cancelled || !seeded) return;
+      if (cancelled || !seeded || hasAnswered.current) return;
       setWindows(seeded);
-      setLevels((prev) => {
-        const next = { ...prev };
+      setLevels(() => {
+        const next: Levels = {};
         for (const kind of DRILL_KINDS) {
-          next[kind] = nextLevel(seeded[kind], prev[kind] ?? 1);
+          next[kind] = levelFromHistory(seeded[kind]);
         }
         return next;
       });
@@ -157,6 +170,7 @@ export function DrillShell({
 
   const handleAnswered = useCallback(
     (chosen: OptionValue, ok: boolean) => {
+      hasAnswered.current = true;
       if (!live) return;
       const { kind, difficulty, question } = live;
 

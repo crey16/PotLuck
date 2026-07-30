@@ -215,6 +215,11 @@ def drill_state(user_id: str = Depends(current_user_id)) -> Any:
     windows: dict[str, list[bool]] = {kind: [] for kind in DRILL_KINDS}
     totals: dict[str, dict[str, int]] = {}
 
+    # No try/except + rollback here, unlike record_attempt above: this
+    # handler only reads (two selects, then a commit to close the
+    # transaction cleanly). Read-only means no partial-write risk, so there
+    # is nothing to roll back. If this function ever grows a write, add the
+    # same try/except + rollback guard record_attempt uses.
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(DRILL_STATE_SQL, (user_id,))

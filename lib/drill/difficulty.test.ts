@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nextLevel, pushResult, emptyWindows, WINDOW_SIZE } from "./difficulty";
+import { nextLevel, pushResult, emptyWindows, levelFromHistory, WINDOW_SIZE } from "./difficulty";
 import { DRILL_KINDS } from "./contract";
+import { mulberry32 } from "./rng";
 
 const rep = (n: number, v: boolean) => Array.from({ length: n }, () => v);
 
@@ -65,4 +66,39 @@ test("emptyWindows: one empty window per drill kind, and nothing else", () => {
   const w = emptyWindows();
   assert.deepEqual(Object.keys(w).sort(), [...DRILL_KINDS].sort());
   for (const k of DRILL_KINDS) assert.deepEqual(w[k], []);
+});
+
+test("levelFromHistory: an empty window restores level 1", () => {
+  assert.equal(levelFromHistory([]), 1);
+});
+
+test("levelFromHistory: ten correct answers restore level 3 (the regression this fixes)", () => {
+  // A single nextLevel() call against the full window can only move one step
+  // from the default (1 -> 2). Replaying over growing prefixes reproduces the
+  // climb: 1->2 at 6 correct, 2->3 at ~ the point accuracy holds at >=0.80.
+  assert.equal(levelFromHistory(rep(10, true)), 3);
+});
+
+test("levelFromHistory: ten wrong answers restore level 1", () => {
+  assert.equal(levelFromHistory(rep(10, false)), 1);
+});
+
+test("levelFromHistory: fewer than the 6-sample minimum restores 1 regardless of content", () => {
+  assert.equal(levelFromHistory(rep(5, true)), 1);
+  assert.equal(levelFromHistory(rep(3, false)), 1);
+});
+
+test("levelFromHistory: climbs before it slips restores a level >= 2", () => {
+  const window = [...rep(8, true), ...rep(2, false)];
+  assert.ok(levelFromHistory(window) >= 2, `expected >= 2, got ${levelFromHistory(window)}`);
+});
+
+test("levelFromHistory: never returns a value outside 1..3", () => {
+  const rng = mulberry32(12345);
+  for (let trial = 0; trial < 300; trial++) {
+    const len = Math.floor(rng() * 15);
+    const window = Array.from({ length: len }, () => rng() < 0.5);
+    const level = levelFromHistory(window);
+    assert.ok(level >= 1 && level <= 3, `level ${level} out of bounds for window ${JSON.stringify(window)}`);
+  }
 });
