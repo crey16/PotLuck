@@ -874,11 +874,9 @@ test("generateOuts: same seed gives the same question, different seeds differ", 
 Run: `npx tsx --test lib/drill/kinds/outs.test.ts`
 Expected: FAIL — `Cannot find module './outs.js'`.
 
-- [ ] **Step 3: Check the engine surface the generator needs**
+- [ ] **Step 3: Note the engine surface (already confirmed — no investigation needed)**
 
-Run: `grep -n "export function dealDrawSpot\|export function dealVsHandSpot\|export interface Spot\|export interface DrawSpotOptions" -A 12 lib/poker/engine.ts`
-
-Confirm `Spot` has `hero`, `board`, `street`, `outs`, `outCards`, `draw`, `unseen`, `equity`, and an optional `villain`. If `dealVsHandSpot` returns a field named other than `villain`, use the real name throughout and note it in the commit message — do not rename engine fields.
+`Spot` is `{ hero, board, villain?, street, outs, outCards, draw, unseen, equity }` (`lib/poker/engine.ts:322-332`). `DrawSpotOptions` is `{ street?, level?, rng?, gutshotKeepRate? }` (`:363-370`). Both `dealDrawSpot` and `dealVsHandSpot` take it and return a fully-populated `Spot`; `dealVsHandSpot` sets `villain` and throws `Error("dealVsHandSpot: no qualifying spot found")` if it exhausts 8000 attempts. Pass `ctx.rng` through as `rng`. Do not modify `lib/poker/`.
 
 - [ ] **Step 4: Implement the `outs` generator**
 
@@ -896,27 +894,29 @@ Create `lib/drill/kinds/outs.ts`. This ports `Q.outs` (reference lines 601–625
  * actually beat the villain's hand, so dead outs are stripped and named.
  */
 import {
-  dealDrawSpot, dealVsHandSpot, deadOuts, describeOuts, outsVsHand,
-  equityVsHand, cardStr, type Spot,
+  dealDrawSpot, dealVsHandSpot, deadOuts, describeOuts, cardStr,
+  type Spot, type Street,
 } from "../../poker/engine.js";
 import { intOptsInRange, pct, withArticle } from "../opts.js";
 import type { DrillContext, DrillQuestion, Generator, ViewBlock } from "../contract.js";
 
-/** The spot a question is built on, in whichever opponent mode is active. */
+/**
+ * The spot a question is built on, in whichever opponent mode is active.
+ *
+ * Both engine dealers already return a fully-populated Spot — `dealVsHandSpot`
+ * derives outs/outCards/unseen/equity from `outsVsHand` and `equityVsHand`
+ * itself (engine.ts:419-447), so face-up mode needs no post-processing here.
+ * Recomputing them would duplicate engine math for identical results.
+ */
+export function dealSpotOnStreet(ctx: DrillContext, street: Street): Spot {
+  const opts = { street, level: ctx.level, rng: ctx.rng };
+  return ctx.oppMode === "shown" ? dealVsHandSpot(opts) : dealDrawSpot(opts);
+}
+
+/** Street choice for the outs drill: turns appear from level 2 upward. */
 export function dealOutsSpot(ctx: DrillContext): Spot {
   const street = ctx.level >= 2 && ctx.rng() < 0.4 ? "turn" : "flop";
-  if (ctx.oppMode === "shown") {
-    const spot = dealVsHandSpot({ street, level: ctx.level, rng: ctx.rng });
-    const clean = outsVsHand(spot.hero, spot.villain!, spot.board).clean;
-    return {
-      ...spot,
-      outCards: clean,
-      outs: clean.length,
-      equity: equityVsHand(spot.hero, spot.villain!, spot.board).equity,
-      unseen: 52 - 4 - spot.board.length,
-    };
-  }
-  return dealDrawSpot({ street, level: ctx.level, rng: ctx.rng });
+  return dealSpotOnStreet(ctx, street);
 }
 
 const COUNT_PROMPT = "How many outs do you have?";
@@ -2289,7 +2289,7 @@ export const generateRule24: Generator = (ctx) => {
 };
 ```
 
-`dealOutsSpot` in `kinds/outs.ts` picks its own street. Export a second function from `kinds/outs.ts` that takes an explicit street — `export function dealSpotOnStreet(ctx: DrillContext, street: "flop" | "turn"): Spot` — and have `dealOutsSpot` call it. That is a small edit to a file Task 2 owns; make it in this task and mention it in the commit.
+`dealSpotOnStreet(ctx, street)` is already exported from `lib/drill/kinds/outs.ts` (Task 2) and handles both opponent modes. Import and use it — do not write another spot dealer.
 
 - [ ] **Step 4: Run the test file** → PASS.
 - [ ] **Step 5: Register and run the full suites** — add to `GENERATORS`; `npm test`, `npx tsc --noEmit`.
@@ -3174,4 +3174,4 @@ Update `docs/05-m1-status.md` (Google OAuth is no longer deferred) and `docs/04-
 
 **Type consistency.** `DrillQuestion`, `ViewBlock`, `Explain`, `DrillContext`, `Generator`, `OptionValue`, `DrillLevel`, `OppMode` are defined once in Task 1 Step 3 and used with those exact names throughout. `gradeAnswer`/`isRight` (Task 1) are the names used in `DrillPlayer` and `registry.test.ts`. `nextLevel`/`pushResult`/`emptyWindows`/`WINDOW_SIZE` (Task 1) are the names used in `DrillShell` and `drillState.ts`. `buildOpts`/`intOptsInRange`/`money`/`pct`/`signedMoney`/`roundTo`/`pick`/`shuffled`/`withArticle` (Task 1) are the names used in every generator task. `DrillResult` replaces `OutsDrillResult` in Task 2 and is the type `DrillShell` passes to `recordAttempt`. `dealSpotOnStreet` is introduced in Task 4 as an addition to `kinds/outs.ts` and consumed by Tasks 6 and 7 — flagged in Task 4 so it is not a surprise. `SKILL_TAGS`/`skill_tag_for`/`DRILL_KINDS` (Python, Task 3) are distinct from the TypeScript `DRILL_KINDS`; both exist deliberately, and `api/test_skills.py` pins that the Python one has all nine.
 
-One gap the review found and this plan closes: Task 4 needs a street-forced spot dealer that Task 2 does not create, and Tasks 6 and 7 need the same function. Task 4 now owns adding it, and Tasks 6 and 7 name it in their Interfaces block — so whichever agent runs first creates it and the others import it. If Tasks 4, 6 and 7 run truly concurrently, have the dispatcher land Task 4 first.
+Two gaps found during pre-flight verification against the real code, both closed above: (1) `dealSpotOnStreet` — needed by Tasks 4, 6 and 7 — is now created in Task 2 and merely imported by them, rather than one of three concurrent agents having to author it; (2) the Task 2 spot dealer originally re-derived `outs`/`outCards`/`unseen`/`equity` in face-up mode, which `dealVsHandSpot` already computes internally, so it now returns the engine's `Spot` untouched.
