@@ -72,7 +72,7 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
   return (
     <header className="site-header">
       <div className="inner">
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginRight: "auto" }}>
+        <div className="site-brand" style={{ display: "flex", alignItems: "baseline", gap: 8, marginRight: "auto" }}>
           <Link
             href="/"
             style={{
@@ -83,6 +83,7 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
             PotLuck
           </Link>
           <span
+            className="site-brand-tagline"
             style={{
               fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".12em",
               textTransform: "uppercase", color: "var(--color-accent-700)",
@@ -93,7 +94,7 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
         </div>
 
         {signedIn && (
-          <nav style={{ display: "flex", gap: 2 }}>
+          <nav className="site-nav" aria-label="Primary" style={{ display: "flex", gap: 2 }}>
             {NAV.map((n) => (
               <Link
                 key={n.href}
@@ -108,6 +109,7 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
         )}
 
         <div
+          className="site-actions"
           style={{
             display: "flex", alignItems: "center", gap: "var(--space-3)",
             paddingLeft: "var(--space-4)", borderLeft: "1px solid var(--color-divider)",
@@ -115,6 +117,7 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
         >
           {signedIn && streak !== undefined && (
             <div
+              className="site-streak"
               title="Days played in a row"
               style={{
                 display: "flex", alignItems: "center", gap: 6,
@@ -126,7 +129,8 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
                 <rect x="3" y="4" width="18" height="18" />
                 <path d="M8 2v4M16 2v4M3 10h18" />
               </svg>
-              {streak}-DAY STREAK
+              <span className="site-streak-label">{streak}-DAY STREAK</span>
+              <span className="site-streak-compact" aria-hidden="true">{streak}D</span>
             </div>
           )}
 
@@ -140,6 +144,7 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
           {signedIn && (
             <div style={{ position: "relative" }} ref={menuRef}>
               <button
+                className="site-account-trigger"
                 onClick={() => setAcctOpen((o) => !o)}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
@@ -158,7 +163,7 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
                 >
                   {username.slice(0, 1)}
                 </span>
-                {username}
+                <span className="site-account-name">{username}</span>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M6 9l6 6 6-6" />
                 </svg>

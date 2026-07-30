@@ -284,6 +284,42 @@ img { display: block; max-width: 100%; }
   transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .nav-btn:hover::after, .nav-btn[aria-current="page"]::after { transform: scaleX(1); }
+.site-streak-compact { display: none; }
+
+@media (max-width: 640px) {
+  .site-header .inner {
+    flex-wrap: wrap;
+    column-gap: var(--space-2);
+    row-gap: 0;
+    padding-bottom: 0;
+  }
+  .site-brand { order: 1; min-width: 0; }
+  .site-brand-tagline { display: none; }
+  .site-actions {
+    order: 2;
+    gap: var(--space-2) !important;
+    padding-left: 0 !important;
+    border-left: 0 !important;
+  }
+  .site-streak-label, .site-account-name { display: none; }
+  .site-streak-compact { display: inline; }
+  .site-account-trigger { gap: 4px !important; padding-right: 5px !important; }
+  .site-nav {
+    order: 3;
+    flex: 1 0 100%;
+    min-width: 0;
+    overflow-x: auto;
+    border-top: 1px solid var(--color-divider);
+    scrollbar-width: none;
+  }
+  .site-nav::-webkit-scrollbar { display: none; }
+  .site-nav .nav-btn {
+    flex: none;
+    padding: 7px 9px;
+    font-size: 12.5px;
+  }
+  .site-nav .nav-btn::after { left: 9px; right: 9px; }
+}
 
 /* — menus (account, all drills) — */
 .menu-item {
