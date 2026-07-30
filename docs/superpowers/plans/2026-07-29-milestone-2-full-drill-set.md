@@ -24,7 +24,9 @@
 - **XP is 10 per correct answer, 0 otherwise**, computed only in `api/index.py`. `level = xp // 100 + 1`, computed only in `api/progress.py::recalc_level`. The drill's session Score (`10 × difficulty + streak bonus`) is display-only and never written to the database.
 - **Secrets stay in git-ignored `.env.local`.** `SUPABASE_SERVICE_ROLE_KEY` must never reach the browser.
 - **Both suites stay green after every task:** `npm test` and `.venv/bin/python -m pytest api/ -q`. Baseline entering this plan: 49 TS tests, 17 pytest, 0 failures.
+- **Relative imports carry NO file extension.** Write `from "./contract"`, never `from "./contract.js"`. `tsconfig.json` sets `moduleResolution: "bundler"`, and Turbopack does not rewrite `.js` → `.ts`, so a `.js` extension on a **value** import fails `npm run build` with `Module not found`. (M1 used `.js` and got away with it only because its one such import was type-only and therefore erased before bundling — a trap, not a precedent.) Verified: extensionless resolves correctly under both `tsx --test` and Turbopack.
 - **Commit after every task.** Conventional-commit prefixes (`feat:`, `refactor:`, `test:`, `docs:`).
+- **No `setState` inside `useEffect`.** `eslint-config-next` errors on it (`react-hooks/set-state-in-effect`). Derive during render, initialise with a lazy `useState(() => …)`, set state from event handlers, or reset child state with a `key` prop. Anything the server must agree with (a persisted preference, the first dealt hand) comes down as a prop from the server component — cookies are server-readable, `localStorage` is not.
 
 ---
 
@@ -108,7 +110,7 @@ Create `lib/drill/contract.ts`:
  * no HTML strings, no DOM. That is what lets each generator be unit tested
  * with a seeded Rng and written independently of the renderer.
  */
-import type { Card, Rng } from "../poker/engine.js";
+import type { Card, Rng } from "../poker/engine";
 
 export type DrillKind =
   | "outs" | "rule24" | "potodds" | "decision" | "implied"
@@ -185,7 +187,7 @@ export type Generator = (ctx: DrillContext) => DrillQuestion;
 Create `lib/drill/rng.ts`:
 
 ```ts
-import type { Rng } from "../poker/engine.js";
+import type { Rng } from "../poker/engine";
 
 /**
  * mulberry32 — a small, fast, well-distributed 32-bit PRNG. Used so every
@@ -210,8 +212,8 @@ Create `lib/drill/grade.test.ts`:
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { gradeAnswer } from "./grade.js";
-import type { DrillQuestion } from "./contract.js";
+import { gradeAnswer } from "./grade";
+import type { DrillQuestion } from "./contract";
 
 function q(over: Partial<DrillQuestion> = {}): DrillQuestion {
   return {
@@ -263,7 +265,7 @@ test("gradeAnswer: numeric answers compare by value", () => {
 });
 
 test("isRight: correct and acceptable both count as right for scoring", async () => {
-  const { isRight } = await import("./grade.js");
+  const { isRight } = await import("./grade");
   assert.equal(isRight(q(), "r"), true);
   assert.equal(isRight(q({ acceptable: ["c"] }), "c"), true);
   assert.equal(isRight(q(), "f"), false);
@@ -280,7 +282,7 @@ Expected: FAIL — `Cannot find module './grade.js'`.
 Create `lib/drill/grade.ts`:
 
 ```ts
-import type { DrillQuestion, OptionValue } from "./contract.js";
+import type { DrillQuestion, OptionValue } from "./contract";
 
 export type Grade = "correct" | "acceptable" | "wrong";
 
@@ -317,8 +319,8 @@ Create `lib/drill/difficulty.test.ts`:
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nextLevel, pushResult, emptyWindows, WINDOW_SIZE } from "./difficulty.js";
-import { DRILL_KINDS } from "./contract.js";
+import { nextLevel, pushResult, emptyWindows, WINDOW_SIZE } from "./difficulty";
+import { DRILL_KINDS } from "./contract";
 
 const rep = (n: number, v: boolean) => Array.from({ length: n }, () => v);
 
@@ -395,7 +397,7 @@ Expected: FAIL — `Cannot find module './difficulty.js'`.
 Create `lib/drill/difficulty.ts`:
 
 ```ts
-import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract.js";
+import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
 
 export const WINDOW_SIZE = 10;
 const MIN_SAMPLE = 6;
@@ -447,8 +449,8 @@ import assert from "node:assert/strict";
 import {
   withArticle, buildOpts, intOptsInRange, money, pct, signedMoney,
   roundTo, pick, shuffled,
-} from "./opts.js";
-import { mulberry32 } from "./rng.js";
+} from "./opts";
+import { mulberry32 } from "./rng";
 
 test("withArticle: consonant-leading label gets 'a'", () => {
   assert.equal(withArticle("gutshot"), "a gutshot");
@@ -581,7 +583,7 @@ Create `lib/drill/opts.ts`. `buildOpts` is a port of reference lines 380–392 w
  *
  * Poker math itself lives in lib/poker/math.ts — never re-derive it here.
  */
-import type { Rng } from "../poker/engine.js";
+import type { Rng } from "../poker/engine";
 
 export const rnd = (n: number, rng: Rng): number => Math.floor(rng() * n);
 
@@ -744,10 +746,10 @@ Create `lib/drill/kinds/outs.test.ts`:
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateOuts } from "./outs.js";
-import { mulberry32 } from "../rng.js";
-import { DRAW_OUTS, coreDraw, drawOuts, outsVsHand, type Spot } from "../../poker/engine.js";
-import type { DrillContext, DrillLevel } from "../contract.js";
+import { generateOuts } from "./outs";
+import { mulberry32 } from "../rng";
+import { DRAW_OUTS, coreDraw, drawOuts, outsVsHand, type Spot } from "../../poker/engine";
+import type { DrillContext, DrillLevel } from "../contract";
 
 const ctx = (seed: number, level: DrillLevel = 2, oppMode: "unknown" | "shown" = "unknown"): DrillContext =>
   ({ level, oppMode, rng: mulberry32(seed) });
@@ -896,9 +898,9 @@ Create `lib/drill/kinds/outs.ts`. This ports `Q.outs` (reference lines 601–625
 import {
   dealDrawSpot, dealVsHandSpot, deadOuts, describeOuts, cardStr,
   type Spot, type Street,
-} from "../../poker/engine.js";
-import { intOptsInRange, pct, withArticle } from "../opts.js";
-import type { DrillContext, DrillQuestion, Generator, ViewBlock } from "../contract.js";
+} from "../../poker/engine";
+import { intOptsInRange, pct, withArticle } from "../opts";
+import type { DrillContext, DrillQuestion, Generator, ViewBlock } from "../contract";
 
 /**
  * The spot a question is built on, in whichever opponent mode is active.
@@ -1015,9 +1017,9 @@ Create `lib/drill/kinds/assertions.ts`. The filename deliberately does not match
 
 ```ts
 import assert from "node:assert/strict";
-import { mulberry32 } from "../rng.js";
-import { gradeAnswer } from "../grade.js";
-import type { DrillKind, DrillLevel, Generator, OppMode } from "../contract.js";
+import { mulberry32 } from "../rng";
+import { gradeAnswer } from "../grade";
+import type { DrillKind, DrillLevel, Generator, OppMode } from "../contract";
 
 const LEVELS: DrillLevel[] = [1, 2, 3];
 const MODES: OppMode[] = ["unknown", "shown"];
@@ -1082,11 +1084,11 @@ Then in `lib/drill/kinds/outs.test.ts`, replace the first shape test and the det
 Create `lib/drill/registry.ts`. Only `outs` is wired now; the eight later tasks each add exactly one import and one entry.
 
 ```ts
-import type { DrillKind, Generator } from "./contract.js";
-import type { Rng } from "../poker/engine.js";
-import { DRILL_KINDS } from "./contract.js";
-import { generateOuts } from "./kinds/outs.js";
-import { rnd } from "./opts.js";
+import type { DrillKind, Generator } from "./contract";
+import type { Rng } from "../poker/engine";
+import { DRILL_KINDS } from "./contract";
+import { generateOuts } from "./kinds/outs";
+import { rnd } from "./opts";
 
 export type TabId = "mixed" | DrillKind | "reference";
 
@@ -1586,7 +1588,7 @@ export function DrillShell({ profile: initialProfile, initialTab = "mixed" }: Dr
 In `lib/drill/recordAttempt.ts`, replace the `OutsDrillResult` interface, the `AttemptRequestBody.drill_kind` type, and `buildAttemptRequest`:
 
 ```ts
-import type { DrillKind, OptionValue } from "./contract.js";
+import type { DrillKind, OptionValue } from "./contract";
 
 /** One answered question, from DrillShell. */
 export interface DrillResult {
@@ -2002,9 +2004,9 @@ Create `lib/drill/drillState.test.ts`:
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { windowsFromResponse } from "./drillState.js";
-import { DRILL_KINDS } from "./contract.js";
-import { WINDOW_SIZE } from "./difficulty.js";
+import { windowsFromResponse } from "./drillState";
+import { DRILL_KINDS } from "./contract";
+import { WINDOW_SIZE } from "./difficulty";
 
 test("windowsFromResponse: fills every kind, even ones absent from the response", () => {
   const w = windowsFromResponse({ windows: { outs: [true, false] } });
@@ -2052,8 +2054,8 @@ Create `lib/drill/drillState.ts`:
 ```ts
 import { createClient } from "../supabase/client";
 import { supabaseConfigured } from "../supabase/env";
-import { DRILL_KINDS, type DrillKind } from "./contract.js";
-import { emptyWindows, WINDOW_SIZE, type DrillWindows } from "./difficulty.js";
+import { DRILL_KINDS, type DrillKind } from "./contract";
+import { emptyWindows, WINDOW_SIZE, type DrillWindows } from "./difficulty";
 
 const KINDS = new Set<string>(DRILL_KINDS);
 
@@ -2167,7 +2169,7 @@ These eight tasks are independent. Dispatch them in parallel once Task 2 has lan
 0. Open the test file with the two shared invariant helpers from `lib/drill/kinds/assertions.ts` (created in Task 2), then add the kind-specific tests:
 
 ```ts
-import { assertCommonShape, assertDeterministic } from "./assertions.js";
+import { assertCommonShape, assertDeterministic } from "./assertions";
 
 test("<kind>: satisfies the shared question invariants", () => {
   assertCommonShape(generateX, "<kind>");
@@ -2182,7 +2184,7 @@ test("<kind>: deterministic under a seed", () => {
 2. Run `npx tsx --test lib/drill/kinds/<kind>.test.ts` and confirm it fails with a missing module.
 3. Write the generator.
 4. Run the test file and confirm it passes.
-5. Register the kind: add `import { generateX } from "./kinds/<kind>.js";` and `<kind>: generateX,` to `GENERATORS` in `lib/drill/registry.ts`. Run `npm test` and `npx tsc --noEmit`.
+5. Register the kind: add `import { generateX } from "./kinds/<kind>";` and `<kind>: generateX,` to `GENERATORS` in `lib/drill/registry.ts`. Run `npm test` and `npx tsc --noEmit`.
 6. Commit with `feat: add the <name> drill`.
 
 **Shared rules for all eight, non-negotiable:**
@@ -3003,10 +3005,10 @@ Create `lib/drill/registry.test.ts`:
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GENERATORS, KIND_LABELS, TAB_ORDER, pickMixedKind, REGISTERED_KINDS } from "./registry.js";
-import { DRILL_KINDS, type DrillLevel } from "./contract.js";
-import { gradeAnswer } from "./grade.js";
-import { mulberry32 } from "./rng.js";
+import { GENERATORS, KIND_LABELS, TAB_ORDER, pickMixedKind, REGISTERED_KINDS } from "./registry";
+import { DRILL_KINDS, type DrillLevel } from "./contract";
+import { gradeAnswer } from "./grade";
+import { mulberry32 } from "./rng";
 
 test("registry: every drill kind is registered", () => {
   assert.deepEqual([...REGISTERED_KINDS()].sort(), [...DRILL_KINDS].sort());
