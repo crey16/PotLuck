@@ -1,4 +1,4 @@
-import type { DrillQuestion, OptionValue } from "./contract.js";
+import type { DrillQuestion, OptionValue } from "./contract";
 
 export type Grade = "correct" | "acceptable" | "wrong";
 

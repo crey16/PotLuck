@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { mulberry32 } from "../rng.js";
-import { gradeAnswer } from "../grade.js";
-import type { DrillKind, DrillLevel, Generator, OppMode } from "../contract.js";
+import { mulberry32 } from "../rng";
+import { gradeAnswer } from "../grade";
+import type { DrillKind, DrillLevel, Generator, OppMode } from "../contract";
 
 const LEVELS: DrillLevel[] = [1, 2, 3];
 const MODES: OppMode[] = ["unknown", "shown"];

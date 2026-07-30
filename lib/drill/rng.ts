@@ -1,4 +1,4 @@
-import type { Rng } from "../poker/engine.js";
+import type { Rng } from "../poker/engine";
 
 /**
  * mulberry32 — a small, fast, well-distributed 32-bit PRNG. Used so every

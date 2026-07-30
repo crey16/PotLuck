@@ -11,11 +11,11 @@
 import {
   dealDrawSpot, dealVsHandSpot, deadOuts, describeOuts, cardStr,
   type Spot, type Street,
-} from "../../poker/engine.js";
-import { intOptsInRange, pct, withArticle } from "../opts.js";
+} from "../../poker/engine";
+import { intOptsInRange, pct, withArticle } from "../opts";
 import type {
   DrillContext, DrillQuestion, ExplainNote, Generator, ViewBlock,
-} from "../contract.js";
+} from "../contract";
 
 /**
  * The spot a question is built on, in whichever opponent mode is active.

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { gradeAnswer } from "./grade.js";
-import type { DrillQuestion } from "./contract.js";
+import { gradeAnswer } from "./grade";
+import type { DrillQuestion } from "./contract";
 
 function q(over: Partial<DrillQuestion> = {}): DrillQuestion {
   return {
@@ -53,7 +53,7 @@ test("gradeAnswer: numeric answers compare by value", () => {
 });
 
 test("isRight: correct and acceptable both count as right for scoring", async () => {
-  const { isRight } = await import("./grade.js");
+  const { isRight } = await import("./grade");
   assert.equal(isRight(q(), "r"), true);
   assert.equal(isRight(q({ acceptable: ["c"] }), "c"), true);
   assert.equal(isRight(q(), "f"), false);

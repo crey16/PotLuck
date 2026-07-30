@@ -5,7 +5,7 @@
  *
  * Poker math itself lives in lib/poker/math.ts — never re-derive it here.
  */
-import type { Rng } from "../poker/engine.js";
+import type { Rng } from "../poker/engine";
 
 export const rnd = (n: number, rng: Rng): number => Math.floor(rng() * n);
 

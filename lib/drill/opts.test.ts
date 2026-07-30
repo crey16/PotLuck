@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import {
   withArticle, buildOpts, intOptsInRange, money, pct, signedMoney,
   roundTo, pick, shuffled,
-} from "./opts.js";
-import { mulberry32 } from "./rng.js";
+} from "./opts";
+import { mulberry32 } from "./rng";
 
 test("withArticle: consonant-leading label gets 'a'", () => {
   assert.equal(withArticle("gutshot"), "a gutshot");

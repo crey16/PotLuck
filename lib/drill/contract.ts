@@ -3,7 +3,7 @@
  * no HTML strings, no DOM. That is what lets each generator be unit tested
  * with a seeded Rng and written independently of the renderer.
  */
-import type { Card, Rng } from "../poker/engine.js";
+import type { Card, Rng } from "../poker/engine";
 
 export type DrillKind =
   | "outs" | "rule24" | "potodds" | "decision" | "implied"

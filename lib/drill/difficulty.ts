@@ -1,4 +1,4 @@
-import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract.js";
+import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
 
 export const WINDOW_SIZE = 10;
 const MIN_SAMPLE = 6;

@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateOuts } from "./outs.js";
-import { mulberry32 } from "../rng.js";
-import { DRAW_OUTS, coreDraw, drawOuts, outsVsHand, type Spot } from "../../poker/engine.js";
-import type { DrillContext, DrillLevel } from "../contract.js";
-import { assertCommonShape, assertDeterministic } from "./assertions.js";
+import { generateOuts } from "./outs";
+import { mulberry32 } from "../rng";
+import { DRAW_OUTS, coreDraw, drawOuts, outsVsHand, type Spot } from "../../poker/engine";
+import type { DrillContext, DrillLevel } from "../contract";
+import { assertCommonShape, assertDeterministic } from "./assertions";
 
 const ctx = (seed: number, level: DrillLevel = 2, oppMode: "unknown" | "shown" = "unknown"): DrillContext =>
   ({ level, oppMode, rng: mulberry32(seed) });

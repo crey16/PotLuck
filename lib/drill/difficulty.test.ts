@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nextLevel, pushResult, emptyWindows, WINDOW_SIZE } from "./difficulty.js";
-import { DRILL_KINDS } from "./contract.js";
+import { nextLevel, pushResult, emptyWindows, WINDOW_SIZE } from "./difficulty";
+import { DRILL_KINDS } from "./contract";
 
 const rep = (n: number, v: boolean) => Array.from({ length: n }, () => v);
 

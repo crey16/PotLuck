@@ -6,7 +6,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shouldRedirectToLogin, safeNext } from "./authRules.js";
+import { shouldRedirectToLogin, safeNext } from "./authRules";
 
 test("shouldRedirectToLogin: protected paths redirect when signed out", () => {
   assert.equal(shouldRedirectToLogin("/drill/outs", false), true);
