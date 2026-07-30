@@ -289,9 +289,12 @@ Generators take an injectable `rng`, so tests are deterministic and can loop
 - The answer is always derived from `lib/poker` — never a hand-written constant.
   A test that hard-codes an expected out count is itself a bug.
 - `options` contains `answer`, has no duplicate values, and its length agrees
-  with `layout`: exactly 2 for `"two"`, 3 or 4 for `"grid3"`, exactly 4 for
+  with `layout`: exactly 2 for `"two"`, exactly 4 for `"grid3"`, exactly 4 for
   `"one"` (the single-column layout used by the long-text concept questions in
-  `concepts` and `implied`'s concept mode).
+  `concepts` and `implied`'s concept mode). All nine ported generators build
+  exactly these counts, and `lib/drill/kinds/assertions.ts` enforces them from a
+  single `OPTIONS_PER_LAYOUT` map — a generator producing a different count is a
+  bug in the generator.
 - `outs`: the named draw and the out count agree with `DRAW_OUTS` in unknown
   mode (correctness rule 5), and a card that makes a hand living on the board
   alone is never counted (rule 3).

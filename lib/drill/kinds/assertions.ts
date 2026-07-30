@@ -1,10 +1,24 @@
 import assert from "node:assert/strict";
 import { mulberry32 } from "../rng";
 import { gradeAnswer } from "../grade";
-import type { DrillKind, DrillLevel, Generator, OppMode } from "../contract";
+import type { DrillKind, DrillLevel, DrillQuestion, Generator, OppMode } from "../contract";
 
 const LEVELS: DrillLevel[] = [1, 2, 3];
 const MODES: OppMode[] = ["unknown", "shown"];
+
+/**
+ * How many options each layout must offer. Stated explicitly rather than as
+ * `layout === "two" ? 2 : 4`, because the two four-option layouts mean
+ * different things: "grid3" is a row of short numeric answers, "one" is a
+ * single column of long-text concept answers. Every ported generator builds
+ * exactly these counts; a generator that produces a different number is a bug
+ * in the generator, not in this expectation.
+ */
+const OPTIONS_PER_LAYOUT: Record<DrillQuestion["layout"], number> = {
+  one: 4,
+  two: 2,
+  grid3: 4,
+};
 
 /**
  * The invariants every question of every kind must satisfy, checked across
@@ -31,7 +45,11 @@ export function assertCommonShape(
         // and exactly one that grades as the canonical correct answer.
         assert.equal(new Set(q.options.map((o) => o.value)).size, q.options.length, `${where}: duplicate option values`);
         for (const o of q.options) assert.ok(o.label.length > 0, `${where}: empty option label`);
-        assert.equal(q.options.length, q.layout === "two" ? 2 : 4, `${where}: ${q.options.length} options for layout ${q.layout}`);
+        assert.equal(
+          q.options.length,
+          OPTIONS_PER_LAYOUT[q.layout],
+          `${where}: ${q.options.length} options for layout "${q.layout}" (expected ${OPTIONS_PER_LAYOUT[q.layout]})`
+        );
         const corrects = q.options.filter((o) => gradeAnswer(q, o.value) === "correct");
         assert.equal(corrects.length, 1, `${where}: ${corrects.length} options grade as correct`);
 
