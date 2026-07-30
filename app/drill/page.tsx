@@ -3,7 +3,7 @@ import { DrillShell, type Profile } from "@/components/drill/DrillShell";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseConfigured } from "@/lib/supabase/env";
 import { TAB_ORDER, type TabId } from "@/lib/drill/registry";
-import { OPP_MODE_COOKIE, parseOppMode } from "@/components/drill/OpponentToggle";
+import { OPP_MODE_COOKIE, parseOppMode } from "@/lib/drill/oppMode";
 
 /** Best-effort profile fetch — returns null, never throws, when Supabase is
  *  unconfigured, there is no session, or the row is missing. */
