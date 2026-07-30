@@ -1,4 +1,4 @@
-# HCWK Wizard — project context
+# PotLuck — project context
 
 Read this first. It is the handoff from the planning session that produced this
 folder. Nothing here is aspirational: the decisions below are settled, and the
@@ -103,6 +103,9 @@ numbers that look plausible.
 ## Working agreements
 
 - **Never touch `~/PycharmProjects/PokerDuolingo`.** Read it for reference only.
+- **No AI commit attribution.** Keep the configured human Git author and never
+  add `Co-authored-by`, `Signed-off-by`, or similar attribution trailers for
+  Claude, Codex, Anthropic, OpenAI, or any other AI/tool to commit messages.
 - Run `npx tsx --test lib/poker/*.test.ts` after any change to `lib/poker`. Those
   tests encode real bugs that were found and fixed; if one fails, the engine is
   wrong, not the test.
@@ -138,7 +141,7 @@ project. Run them after any change to `lib/poker`, and keep them green.
 **M1 is shipped and live at https://hcwk-wizard.vercel.app.** Email signup,
 the outs drill, and XP/streak persistence are verified in production. Secrets
 and a working test account live in git-ignored `.env.local`. `main` on
-`crey16/hcwk-wizard` auto-deploys to Vercel.
+`crey16/PotLuck` auto-deploys to Vercel.
 
 **M2 is code-complete on branch `m2-full-drill-set`, not yet merged or
 deployed.** All nine drills behind one generic renderer, a Mixed mode, a

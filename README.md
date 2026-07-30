@@ -1,4 +1,4 @@
-# HCWK Wizard
+# PotLuck
 
 Poker training web app — Duolingo-style lessons, GTO-style range charts, exact
 math drills, and the social layer that makes it worth coming back to.

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ReferenceTab } from "@/components/drill/ReferenceTab";
 
-export const metadata = { title: "Reference — HCWK Wizard" };
+export const metadata = { title: "Reference — PotLuck" };
 
 export default function ReferencePage() {
   return (

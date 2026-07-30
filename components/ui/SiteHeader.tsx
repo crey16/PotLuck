@@ -79,7 +79,7 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
               letterSpacing: ".04em", textTransform: "uppercase", color: "var(--color-text)",
             }}
           >
-            HCWK Wizard
+            PotLuck
           </Link>
           <span
             style={{

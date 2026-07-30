@@ -1,7 +1,7 @@
 # Kickoff prompt
 
 Paste the block below as your first message in a Claude Code session opened at
-`~/PycharmProjects/HCWKWizard`.
+`~/PycharmProjects/PotLuck`.
 
 It is written for the **superpowers** skill set you have installed, and drives
 the intended pipeline: `brainstorming` → plan → `subagent-driven-development`
@@ -12,13 +12,13 @@ the intended pipeline: `brainstorming` → plan → `subagent-driven-development
 skills assume git (worktrees, branch finishing). Run this first:
 
 ```bash
-cd ~/PycharmProjects/HCWKWizard
+cd ~/PycharmProjects/PotLuck
 git init && git add -A && git commit -m "Handoff: context docs, poker engine, Supabase schema"
 ```
 
 ---
 
-I'm building **HCWK Wizard**: a poker training web app that merges an existing
+I'm building **PotLuck**: a poker training web app that merges an existing
 mobile app with a standalone HTML trainer into one deployable site I can share
 with friends. Think GTO Wizard's range charts crossed with Duolingo's lessons
 and streaks, plus a social layer.

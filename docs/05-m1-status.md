@@ -9,7 +9,7 @@ against production.
 | Thing | Value |
 |---|---|
 | Production URL | https://hcwk-wizard.vercel.app |
-| GitHub | `crey16/hcwk-wizard` (private), branch `main` — push = deploy |
+| GitHub | `crey16/PotLuck` (private), branch `main` — push = deploy |
 | Vercel project | `hcwk-wizard` on team `reymatvei-5892s-projects` |
 | Supabase org / project | HCWK / `hcwk-wizard`, ref `ajaryvyorhwnhinzubqd`, region `ca-central-1` |
 | DB | Migration `0001` applied: 17 tables, RLS on all 17, `on_auth_user_created` trigger live |

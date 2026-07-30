@@ -1,4 +1,4 @@
-export const metadata = { title: "System — HCWK Wizard" };
+export const metadata = { title: "System — PotLuck" };
 
 /** The design-system page: tokens and components, straight from the spec.
  *  Static by design — it documents the look, it doesn't compute anything. */

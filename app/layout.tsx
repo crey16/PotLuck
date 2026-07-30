@@ -22,7 +22,7 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "HCWK Wizard",
+  title: "PotLuck",
   description: "Poker math trainer — drills, range charts, and the formulas behind them.",
 };
 
