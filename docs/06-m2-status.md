@@ -3,9 +3,8 @@
 Read this before starting M3. It records what exists, what was verified and
 how, and the traps found along the way. Nothing here is aspirational.
 
-**State: code-complete and verified on branch `m2-full-drill-set`. Not yet
-merged, not yet deployed.** One verification is deliberately outstanding — see
-[Outstanding](#outstanding).
+**State: code-complete and verified on branch `m2-full-drill-set`, including the
+authenticated visual pass. Not yet merged, not yet deployed.**
 
 ## What a user can do that they could not before
 
@@ -112,9 +111,10 @@ have no lesson content yet.
 
 ## Verification
 
-- **187 TypeScript tests + 32 pytest**, `tsc` clean, `npm run lint` 0 errors
+- **200 TypeScript tests + 32 pytest**, `tsc` clean, `npm run lint` 0 errors
   (one pre-existing warning in `lib/poker/engine.test.ts`), `npm run build`
-  compiles.
+  compiles. Note that all of those were green over a `/drill` that threw on
+  every request — see the visual pass below before trusting this list.
 - **`lib/drill/registry.test.ts`** walks all nine kinds × 3 levels × 2 opponent
   modes × seeds asserting the shared contract: exactly one option grades
   correct, option arity matches layout, payloads carry `level`/`oppMode` and are
@@ -133,20 +133,53 @@ have no lesson content yet.
   `breakEvenFoldRate + minDefenceFrequency == 1`; potodds' raise spots price
   *better* than treating your own committed money as a cost.
 
-## Outstanding
+## The visual pass — done, and what it cost
 
-**The authenticated visual pass has not been done.** `/drill` is
-middleware-protected (verified: 307 → `/login?next=…`), and completing sign-in
-requires typing a password, which the assistant is not permitted to do. Every
-drill is verified mathematically and the production build compiles, but nobody
-has yet *seen* the felt render, the 13×13 grid draw, or the keyboard advance a
-hand. **Do this before merging.** Sign in at `/login`, then walk all eleven
-tabs, checking: the question renders with no missing block, the feedback numbers
-agree with the question, `N` deals the next hand, the Difficulty tile moves
-after six answers on one tab, and flipping Opponent to face-up shows the villain
-plus a dead-outs note.
+**Done. It found six real defects, one of them fatal.** All eleven tabs were
+walked signed-in: question renders, feedback numbers agree with the question,
+`N` advances, the Difficulty tile demoted 3 → 1 after six answers at 17%,
+face-up shows the villain, preflop draws the 13×13 grid, Reference renders every
+table.
 
-Also outstanding: **Google OAuth** (still blocked on enabling MFA on the Google
+| # | Defect | Why nothing else caught it |
+|---|---|---|
+| 1 | **`/drill` threw on every request** — a server component called `parseOppMode`, a value from a `"use client"` module | The page is dynamic (reads cookies), so `next build` never renders it. 187 tests, `tsc` and lint were all green over a dead page. |
+| 2 | "You have **a two overcards**." | Same shape as the known L-2 bug; the existing guard only matched `/a no/` and `/a [aeiou]/`. |
+| 3 | Backdoor flush claimed **on the turn**, where it cannot complete | No test related the sentence to the street. |
+| 4 | "You have **no made hand**" printed under a hero holding a pair of fives | "no obvious draw" says nothing about made hands. |
+| 5 | **Seeded difficulty never reached the first hand** — settled decision #3's re-deal was dead | Levels were built inside a `setLevels` updater and read synchronously on the next line, so the re-deal saw `{}`. Looked like cosmetic lag because the tile corrected on the first tab switch. |
+| 6 | The **dead-outs concepts item taught the concept backwards** — graded answer was a straight flush for the hero, stated reason impossible, and *all four* options were real outs | Nothing tied the prose to the evaluator. |
+
+2, 3 and 4 are **face-up only**: unknown mode filters the engine label through
+`coreDraw` to flush/straight/gutshot, while face-up passes `describeDraw`'s raw
+output into the sentence. That is the third time face-up prose has been wrong.
+Any new sentence built from an engine label belongs in `lib/drill/notes.ts`
+behind `lib/drill/notes.test.ts`, which sweeps the whole label vocabulary.
+
+New guards, all in `npm test` (200 TS tests):
+
+- `components/drill/clientBoundary.test.ts` — a server module may *render* a
+  client component but never *call* a client export.
+- `lib/drill/notes.test.ts` — every label `describeDraw` emits reads as English;
+  400 seeds × 3 levels in face-up mode.
+- `components/drill/referencePunctuation.test.ts` — HTML entities in JSX text
+  silently swallow the preceding space (see below).
+- `concepts.test.ts` now derives the dead-outs claim from `outsVsHand`/`deadOuts`.
+
+**The `npm test` glob did not cover `components/drill/`**, so the first guard
+would have reported green while executing zero tests — the same trap recorded in
+Process notes. Caught by requiring the pass count to rise: 187 → 193 for six new
+tests, not five.
+
+### One more compiler trap
+
+`<b>Never bluffing</b> — if you&rsquo;re never called…` renders as
+"Never bluffing— if you're never called". An HTML entity in a JSX text node eats
+the leading space of that node. Five of the seven "leaks" bullets were fine and
+two were not, and the two broken ones were exactly those containing `&rsquo;` —
+so all seven look identical in review. Write typographic characters literally.
+
+Still outstanding: **Google OAuth** (blocked on enabling MFA on the Google
 account) and the **confirm-email decision** — see `docs/04-roadmap.md`.
 
 ## Local development traps

@@ -57,12 +57,10 @@ inherits, and the local-dev traps.
 - ✅ Reference cheat-sheet tab, every figure computed from `lib/poker/math.ts`
   so it can never disagree with the drills.
 
-**Before merging — one verification still outstanding:**
-- [ ] **Authenticated visual pass over all eleven tabs.** `/drill` is
-  middleware-protected, so this needs a signed-in browser. Nothing has yet been
-  *seen* rendering: check the felt, the 13×13 grid, the keyboard advance, the
-  Difficulty tile moving after six answers on one tab, and face-up mode showing
-  the villain with a dead-outs note.
+- [x] **Authenticated visual pass over all eleven tabs.** Done. Found six real
+  defects — including `/drill` throwing on every request, and seeded difficulty
+  never reaching the first hand — all fixed with regression tests. Full
+  accounting in `docs/06-m2-status.md`.
 
 **Still carried over (now genuinely last):**
 - [ ] **Google OAuth provider.** Prereq: enable MFA on the Google account, then
