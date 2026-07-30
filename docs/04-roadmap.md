@@ -35,7 +35,7 @@ outs drill, and their XP persists.
 role key must be a Vercel env var, never in client code; `@supabase/ssr` cookie
 handling in middleware is the usual source of "logged out on refresh".
 
-## M2 — The full drill set ✅ CODE-COMPLETE (branch `m2-full-drill-set`)
+## M2 — The full drill set ✅ SHIPPED (merged to `main`, live in production)
 
 **Built and verified.** All nine drills, a Mixed mode, a generic renderer, a
 Reference tab, per-drill adaptive difficulty seeded from history, both opponent
@@ -75,21 +75,67 @@ inherits, and the local-dev traps.
   arrives. Revisit in M5, when public profiles and challenges give a reason to
   care who owns an address.
 
-## M3 — Range charts
+## Redesign + rebrand ✅ SHIPPED 2026-07-30 (unplanned, between M2 and M3)
 
-- 13×13 grid from `lib/poker/ranges.ts`, 8 scenarios, mixed cells rendered as
-  split bars, computed range percentages shown.
-- Explore mode and drill mode.
-- **Label them as reference ranges, not solver output.** Non-negotiable.
+The whole frontend moved to the "Industry" blueprint design system (from
+`HCWK Wizard Redesign.html`): Barlow/Barlow Condensed, light default + dark
+remap, sticky header with Home / Drill / Ranges / Reference / System nav, a
+real home dashboard (level hero, skill-strength bars, drill cards, 12-week XP
+heatmap), the drill switcher + session rail, standalone `/ranges`, `/reference`
+and `/system` pages, and the split-hero auth page. The app rebranded to
+**PotLuck**: repo `crey16/PotLuck`, folder `~/PycharmProjects/PotLuck`,
+production https://potluck-poker.vercel.app (old URL 307-redirects).
 
-## M4 — The learning path
+**Note for M4:** the redesign spec contains no lesson screens. The learning
+path needs its own design pass in the same system before implementation.
+
+## M3 — Range charts ✅ SHIPPED (with the redesign)
+
+- ✅ 13×13 grid from `lib/poker/ranges.ts`, 8 scenarios, mixed cells rendered
+  as split fills, computed range percentages shown.
+- ✅ Explore mode (`/ranges`) and drill mode (the M2 preflop drill).
+- ✅ Labelled as reference ranges, not solver output — the warning box sits
+  beside the page title.
+
+## M4 — The learning path ← NEXT (not started)
+
+**This is the Duolingo half of the product and none of it exists yet.** The
+app currently drills and documents; it does not teach. Everything below is
+pending.
 
 Port lessons, modules, scenarios and table scenarios from StackSchool. Seed the
-content from `backend/seed.py`. Bring across `/progress`, `/scenarios`,
-`/table-scenarios`, `/daily`, `/recommendations`, `/stats`.
+content from `backend/seed.py` (~1,700 lines: 5 modules — Foundations through
+bankroll discipline — with dozens of lessons built from info/quiz/drill/recap
+screens, plus scenarios and table scenarios). Bring across `/progress`
+(lesson-complete), `/scenarios`, `/table-scenarios`, `/daily`,
+`/recommendations`, `/stats`.
 
-This is the biggest chunk of straight porting. It is deliberately after the
-drills because the drills are what make the app worth opening.
+What exists already: the DB tables (`modules`, `lessons`, `scenarios`,
+`table_scenarios`, `progress`, `daily_content`, `user_daily_completions`) are
+in `0001_initial_schema.sql` with RLS, empty. `skill_stats` already pools
+drill and lesson accuracy on shared tags, and the home dashboard already
+surfaces the weakest skill — the recommendation hook is waiting for lessons
+to point at.
+
+What has to be built:
+1. **Content seed** — port `seed.py` into a Supabase seed (UUID user keys,
+   `lesson_type` enum).
+2. **API routes** — lesson list/complete (XP + streak + daily activity),
+   scenario random/submit, daily, recommendations, stats.
+3. **UI (needs design first — absent from the redesign spec):** a learn
+   path/module map on Home or `/learn`, `/learn/[module]` detail, and a
+   lesson player for the four screen types (info / quiz / drill / recap) with
+   XP award and progress. The Expo screens (ModuleDetail, LessonPlayer) are
+   the behavioural spec.
+4. **Recommendations surfaced** — "what should I do next" on Home, driven by
+   the existing deterministic rule (weakest tag ≥5 attempts → uncompleted
+   lesson for it → else scenario at matched difficulty → else first
+   Foundations lesson).
+5. **Daily content** — the `/daily` loop that gives the streak something to
+   bite on beyond raw drilling.
+
+This is the biggest chunk of straight porting. It was deliberately sequenced
+after the drills because the drills are what make the app worth opening.
 
 ## M5 — Social
 
@@ -102,14 +148,14 @@ drills because the drills are what make the app worth opening.
    Start with friend-to-friend and a 7-day expiry.
 5. **Activity feed** — meaningful events only.
 
-## M6 — Polish
+## M6 — Polish (partly absorbed by the redesign)
 
-- Mobile-responsive layout (the grid needs care under 560px).
-- Keyboard shortcuts for drills — A–D / 1–4 to answer, N for next. Big deal for
-  drilling speed.
-- Light/dark themes.
-- Empty states, loading skeletons, error boundaries.
-- Rate limiting on write endpoints.
+- [x] Keyboard shortcuts — 1–4 to answer, N/Enter next, R reference, D mixed.
+- [x] Light/dark themes (token remap, cookie-persisted, no flash).
+- [~] Mobile-responsive layout — grids and answer lists collapse, but no
+  device pass has been done; the 13×13 grid under 560px needs a real check.
+- [ ] Empty states audit, loading skeletons, error boundaries.
+- [ ] Rate limiting on write endpoints.
 
 ## Deliberately not in v1
 

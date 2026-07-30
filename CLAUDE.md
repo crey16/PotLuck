@@ -138,18 +138,23 @@ project. Run them after any change to `lib/poker`, and keep them green.
 
 ## Current state (updated 2026-07-30)
 
-**M1 is shipped and live at https://potluck-poker.vercel.app.** Email signup,
-the outs drill, and XP/streak persistence are verified in production. Secrets
-and a working test account live in git-ignored `.env.local`. `main` on
-`crey16/PotLuck` auto-deploys to Vercel.
+**M1, M2 and M3 are shipped and live at https://potluck-poker.vercel.app**
+(the old hcwk-wizard URL redirects). All nine drills + Mixed behind one
+generic renderer, per-drill adaptive difficulty seeded from history, both
+opponent modes, `skill_stats` per skill tag, and the range-chart explore page.
+Secrets and a working test account live in git-ignored `.env.local`. `main`
+on `crey16/PotLuck` auto-deploys to Vercel.
 
-**M2 is code-complete on branch `m2-full-drill-set`, not yet merged or
-deployed.** All nine drills behind one generic renderer, a Mixed mode, a
-Reference tab, per-drill adaptive difficulty seeded from history, both opponent
-modes, and `skill_stats` per skill tag. 183 TS + 28 pytest green; 18/18 live API
-checks against the real Supabase project. **One verification is outstanding: an
-authenticated visual pass over the eleven tabs — nothing has been seen rendering
-in a browser yet.** Google OAuth and the confirm-email decision are still open.
+**The app was rebranded to PotLuck and fully restyled (2026-07-30)** to the
+"Industry" blueprint design system from `HCWK Wizard Redesign.html`: home
+dashboard, drill switcher + session rail, standalone /ranges /reference
+/system pages, redesigned auth, light/dark themes, keyboard shortcuts.
+
+**M4 (the learning path — lessons, modules, scenarios, recommendations,
+daily) is NOT started and is the next milestone.** The DB tables exist but
+are empty; no lesson API routes or UI exist; the redesign spec has no lesson
+screens, so M4 needs a design pass first. Google OAuth provider config and
+the confirm-email decision are still open.
 
 Read `docs/06-m2-status.md` before touching M2 code — it carries the settled
 decisions M3 inherits and three local-dev traps that each cost real time
