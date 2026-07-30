@@ -67,7 +67,7 @@ test("decision: face-up mode lists dead outs when there are any", () => {
     const p = q.payload as { spot: Spot };
     if (!deadOuts(p.spot.hero, p.spot.villain!, p.spot.board).length) continue;
     found++;
-    assert.ok(q.explain(q.answer).notes.some((n) => /dead out/i.test(n.title ?? "" + n.text)));
+    assert.ok(q.explain(q.answer).notes.some((n) => /dead out/i.test((n.title ?? "") + n.text)));
   }
   assert.ok(found > 0, "no dead-out spot in 200 seeds — widen the search");
 });

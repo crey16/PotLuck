@@ -179,7 +179,7 @@ export const CONCEPT_BANK: ConceptItem[] = [
     options: [
       "Discount them heavily — reverse implied odds are large",
       "Increase them — deep stacks always mean big implied odds",
-      "They don't apply to straights, only flushes",
+      "They don’t apply to straights, only flushes",
       "Ignore them; only direct pot odds matter",
     ],
     explain:
@@ -193,7 +193,7 @@ export const CONCEPT_BANK: ConceptItem[] = [
       "Zero — there is no more money to win",
       "Double, because two cards are coming",
       "The same as any other flop call",
-      "Half of villain's stack",
+      "Half of villain’s stack",
     ],
     explain:
       "No more betting can happen, so there is no future money. Facing an all-in you price the call on " +
@@ -204,7 +204,7 @@ export const CONCEPT_BANK: ConceptItem[] = [
     prompt:
       "You hold the nut flush draw against a short stack with 1/3 of a pot-sized bet left behind. You need 28% to call and you have 19%.",
     options: [
-      "Fold — there isn't enough money left to bridge the gap",
+      "Fold — there isn’t enough money left to bridge the gap",
       "Call — nut draws always have implied odds",
       "Call — you can bluff the river when you miss",
       "Raise — fold equity replaces implied odds",
@@ -239,7 +239,7 @@ export const CONCEPT_BANK: ConceptItem[] = [
       "that never shows up.",
   },
   {
-    prompt: "What actually is your 'equity' in a pot?",
+    prompt: "What actually is your ‘equity’ in a pot?",
     options: [
       "The share of the pot that belongs to you right now, based on how often you win",
       "The amount of money you have invested",

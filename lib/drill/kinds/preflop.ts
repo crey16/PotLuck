@@ -81,7 +81,7 @@ export const generatePreflop: Generator = (ctx): DrillQuestion => {
 
   return {
     kind: "preflop",
-    kicker: "Preflop range",
+    kicker: "Preflop ranges",
     chip: scenario.name,
     prompt: `${scenario.name} — what do you do with ${hand}?`,
     sub: scenario.description,
@@ -96,14 +96,19 @@ export const generatePreflop: Generator = (ctx): DrillQuestion => {
         value: pct(f[key]),
       }));
       rows.push({ label: "Hand", value: `${hand} — ${combosOf(hand)} combos` });
-      rows.push({ label: "Scenario", value: scenario.description });
+      rows.push({ label: "Scenario", value: scenario.name });
+
+      const answerLabel = scenario.actions.find(([key]) => key === answer)?.[1] ?? "";
 
       const notes: ExplainNote[] = [
         {
           tone: "plain",
+          title: isPure ? undefined : "This one is a mix.",
           text: isPure
-            ? `${hand} is played the same way every time here — there is no mix.`
-            : `${hand} is a mixed-strategy hand: the solver-shaped range plays it more than one way, and every action at ${pct(MIX_THRESHOLD)} or higher counts as correct.`,
+            ? `This hand is a pure ${answerLabel.toLowerCase()} — no mixing.`
+            : `Solvers split it — at the table that means pick either, but keep the split roughly honest ` +
+              `across sessions rather than always defaulting to the same side. Any action at ${pct(MIX_THRESHOLD)} ` +
+              "or higher is accepted here.",
         },
         {
           tone: "warn",
