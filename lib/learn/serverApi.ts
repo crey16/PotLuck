@@ -1,11 +1,17 @@
+import { headers } from "next/headers";
 import { createClient } from "../supabase/server";
 import { supabaseConfigured } from "../supabase/env";
+import { resolveApiOrigin } from "./apiOrigin";
 import type { AuthoredScenario, DailyContent, TableScenario } from "./types";
 
-function apiOrigin(): string {
-  const vercelHost = process.env.VERCEL_URL;
-  if (vercelHost) return `https://${vercelHost}`;
-  return `http://127.0.0.1:${process.env.API_PORT ?? "8000"}`;
+async function apiOrigin(): Promise<string> {
+  if (!process.env.VERCEL) return resolveApiOrigin(process.env);
+
+  const requestHeaders = await headers();
+  return resolveApiOrigin(process.env, {
+    host: requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host"),
+    protocol: requestHeaders.get("x-forwarded-proto"),
+  });
 }
 
 async function serverAuthRequest<T>(path: string): Promise<T | null> {
@@ -16,7 +22,7 @@ async function serverAuthRequest<T>(path: string): Promise<T | null> {
   } = await supabase.auth.getSession();
   if (!session) return null;
   try {
-    const response = await fetch(`${apiOrigin()}${path}`, {
+    const response = await fetch(`${await apiOrigin()}${path}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
       cache: "no-store",
     });
