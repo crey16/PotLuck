@@ -62,7 +62,7 @@ export function ReferenceTab() {
         <b>Pot odds</b> — equity you need to call = <b>call ÷ (pot + call)</b>
         <br />
         <span style={{ color: "var(--muted)", fontSize: 13 }}>
-          &quot;pot&quot; = the pot after villain&rsquo;s bet, i.e. what you win. Half-pot bet
+          &quot;pot&quot; = the pot after villain’s bet, i.e. what you win. Half-pot bet
           → {pct(HALF_POT_CALLER_NEEDS)}. Pot-sized bet → {pct(POT_CALLER_NEEDS)}.
         </span>
       </div>
@@ -70,7 +70,7 @@ export function ReferenceTab() {
         <b>Rule of 2 and 4</b> — equity ≈ outs × 4 with two cards to come, outs × 2 with one.
         <br />
         <span style={{ color: "var(--muted)", fontSize: 13 }}>
-          Above 8 outs, subtract one point per extra out. Only use ×4 when you&rsquo;re all-in.
+          Above 8 outs, subtract one point per extra out. Only use ×4 when you’re all-in.
         </span>
       </div>
       <div className="formula">
@@ -89,7 +89,7 @@ export function ReferenceTab() {
         <b>MDF</b> — how much you must defend = <b>pot ÷ (pot + bet)</b>
         <br />
         <span style={{ color: "var(--muted)", fontSize: 13 }}>
-          The bigger they bet, the more you&rsquo;re allowed to fold. Pot-sized bet → MDF{" "}
+          The bigger they bet, the more you’re allowed to fold. Pot-sized bet → MDF{" "}
           {pct(POT_MDF)}.
         </span>
       </div>
@@ -181,13 +181,13 @@ export function ReferenceTab() {
         1. <b>Counting outs that are dead</b> — the card completes your draw but makes villain a
         better hand.
         <br />
-        2. <b>Using ×4 when more betting is coming</b> — ×4 only holds if you&rsquo;re all-in and
+        2. <b>Using ×4 when more betting is coming</b> — ×4 only holds if you’re all-in and
         guaranteed both cards.
         <br />
         3. <b>Adding your own dead money to the cost of calling</b> — chips in the pot are not
         yours; they improve your price.
         <br />
-        4. <b>Counting implied odds that don&rsquo;t exist</b> — no stack behind, or an opponent
+        4. <b>Counting implied odds that don’t exist</b> — no stack behind, or an opponent
         who never pays off.
         <br />
         5. <b>Ignoring reverse implied odds</b> — non-nut draws hit and still lose the maximum.
@@ -195,7 +195,7 @@ export function ReferenceTab() {
         6. <b>Judging a decision by the result</b> — a +EV call is right on the many occasions it
         loses.
         <br />
-        7. <b>Never bluffing</b> — if you&rsquo;re never called, you&rsquo;re folding away pots
+        7. <b>Never bluffing</b> — if you’re never called, you’re folding away pots
         the math says are yours.
       </p>
 
@@ -219,7 +219,7 @@ export function ReferenceTab() {
         mode for building the count.
       </p>
       <p>
-        <b>Face-up</b> — villain&rsquo;s hand is shown, and an out is only a card that actually
+        <b>Face-up</b> — villain’s hand is shown, and an out is only a card that actually
         beats them. Dead outs get stripped and listed back with the reason, and awkward boards
         come back in. Switch to this once counting your own draw is automatic.
       </p>
