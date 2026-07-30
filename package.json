@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/poker/*.test.ts lib/drill/*.test.ts lib/drill/kinds lib/supabase/*.test.ts components/ui/*.test.ts",
+    "test": "tsx --test lib/poker/*.test.ts lib/drill/*.test.ts lib/drill/kinds/*.test.ts lib/supabase/*.test.ts components/ui/*.test.ts",
     "api": "uvicorn api.index:app --port 8000 --reload --env-file .env.local",
     "api:bare": "uvicorn api.index:app --port 8000 --reload",
     "dev:all": "concurrently \"npm:dev\" \"npm:api\"",
