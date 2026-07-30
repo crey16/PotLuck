@@ -30,6 +30,13 @@ def today_et(now: datetime.datetime | None = None) -> datetime.date:
     return now.astimezone(ET).date()
 
 
+def et_day_start_utc(day: datetime.date) -> datetime.datetime:
+    """Return midnight at the product's ET day boundary as a UTC instant."""
+    return datetime.datetime.combine(day, datetime.time.min, tzinfo=ET).astimezone(
+        datetime.timezone.utc
+    )
+
+
 def recalc_level(xp: int) -> int:
     """Denormalised level from XP. The ONE consolidated place this is
     computed — StackSchool had this duplicated across three routes."""

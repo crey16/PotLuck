@@ -3,6 +3,8 @@ import { fetchDashboardStats, type SkillStat } from "@/lib/drill/serverStats";
 import { KIND_LABELS, TAB_ORDER, drillHref } from "@/lib/drill/registry";
 import type { DrillKind } from "@/lib/drill/contract";
 import { supabaseConfigured } from "@/lib/supabase/env";
+import { fetchServerRecommendation } from "@/lib/learn/server";
+import type { Recommendation } from "@/lib/learn/types";
 
 /** Card blurbs, from the redesign spec. */
 const DRILL_DESCRIPTIONS: Record<DrillKind | "mixed", string> = {
@@ -42,6 +44,20 @@ function heatFill(xp: number): string | null {
   if (xp >= 60) return "color-mix(in srgb, var(--color-accent) 75%, transparent)";
   if (xp >= 30) return "color-mix(in srgb, var(--color-accent) 50%, transparent)";
   return "color-mix(in srgb, var(--color-accent) 25%, transparent)";
+}
+
+function learningHref(recommendation: Recommendation): string {
+  if (recommendation.type === "lesson" && recommendation.module_id && recommendation.lesson_id) {
+    return `/learn/${recommendation.module_id}/${recommendation.lesson_id}`;
+  }
+  if (recommendation.type === "scenario") {
+    const params = new URLSearchParams();
+    if (recommendation.scenario_id) params.set("id", String(recommendation.scenario_id));
+    if (recommendation.skill_tag) params.set("skill", recommendation.skill_tag);
+    if (recommendation.difficulty) params.set("difficulty", String(recommendation.difficulty));
+    return `/learn/practice${params.size ? `?${params}` : ""}`;
+  }
+  return "/learn";
 }
 
 function Pips({ level }: { level: number }) {
@@ -108,7 +124,10 @@ export default async function Home() {
     );
   }
 
-  const stats = await fetchDashboardStats();
+  const [stats, learningRecommendation] = await Promise.all([
+    fetchDashboardStats(),
+    fetchServerRecommendation(),
+  ]);
   const { profile } = stats;
   const level = profile?.level ?? 1;
   const xp = profile?.xp ?? 0;
@@ -192,12 +211,18 @@ export default async function Home() {
           </div>
           <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)", flexWrap: "wrap" }}>
             <Link
-              href={drillHref("mixed")}
+              href={learningHref(learningRecommendation)}
               className="btn btn-primary blueprint btn-caps"
               style={{ fontSize: 16, padding: "12px 22px" }}
             >
-              Start mixed drill
-              <span className="keyhint">D</span>
+              Continue learning
+            </Link>
+            <Link
+              href={drillHref("mixed")}
+              className="btn btn-secondary btn-caps"
+              style={{ fontSize: 15, padding: "12px 18px" }}
+            >
+              Mixed drill <span className="keyhint">D</span>
             </Link>
             {resumeKind && (
               <Link
@@ -270,6 +295,41 @@ export default async function Home() {
           </div>
         </div>
       </div>
+
+      {/* — learning path — */}
+      <section style={{ marginBottom: "var(--space-8)" }}>
+        <div className="section-head">
+          <h2>Learning path</h2>
+          <span className="lede">Build the concept first; then use the drills to make it automatic.</span>
+        </div>
+        <div className="home-learning">
+          <div className="blueprint home-learn-next">
+            <div>
+              <div className="mono-label accent">Recommended next</div>
+              <h3>
+                {learningRecommendation.lesson?.title ??
+                  (learningRecommendation.type === "scenario" ? "Authored practice hand" : "Open the course map")}
+              </h3>
+              <p>{learningRecommendation.reason}</p>
+            </div>
+            <Link href={learningHref(learningRecommendation)} className="btn btn-primary blueprint btn-caps">
+              Learn now
+            </Link>
+          </div>
+          <Link href="/daily" className="blueprint home-daily">
+            <div className="mono-label">Daily lesson</div>
+            <strong>One focused decision</strong>
+            <span>Changes at midnight ET · +15 XP</span>
+            <b>Open daily →</b>
+          </Link>
+          <Link href="/learn" className="blueprint home-course-link">
+            <div className="mono-label">Full course</div>
+            <strong>5 modules · 20 lessons</strong>
+            <span>Foundations through bankroll discipline</span>
+            <b>View map →</b>
+          </Link>
+        </div>
+      </section>
 
       {/* — skill strengths — */}
       <section style={{ marginBottom: "var(--space-8)" }}>

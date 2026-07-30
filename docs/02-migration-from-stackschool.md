@@ -41,7 +41,7 @@ needed. Users re-register.
 | `lessons` | Kept as-is | `lesson_type` becomes a real Postgres enum. |
 | `scenarios` | Kept as-is | |
 | `table_scenarios` | Kept as-is | |
-| `attempts` | Kept + extended | New `drill_kind` and `drill_payload` columns so client-generated drills can be recorded. |
+| `attempts` | Kept + extended | New `drill_kind` and `drill_payload` columns record client-generated drills; M4 adds `lesson_screen_index` so lesson completion and first-try score are verified from server-graded attempts. |
 | `progress` | Kept | Gains a `unique(user_id, lesson_id)` constraint it should always have had. |
 | `skill_stats` | Kept as-is | |
 | `user_daily_activity` | Kept as-is | |

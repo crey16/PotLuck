@@ -9,6 +9,7 @@ import { THEME_COOKIE, type Theme } from "@/lib/theme";
 
 const NAV = [
   { href: "/", label: "Home" },
+  { href: "/learn", label: "Learn" },
   { href: "/drill", label: "Drill" },
   { href: "/ranges", label: "Ranges" },
   { href: "/reference", label: "Reference" },

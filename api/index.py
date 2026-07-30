@@ -15,10 +15,20 @@ from pydantic import BaseModel, Field
 
 from api.db import get_connection
 from api.deps import current_user_id
+from api.daily import router as daily_router
+from api.learning import (
+    LessonAttemptIn,
+    record_lesson_attempt,
+    router as learning_router,
+)
 from api.progress import next_streak, recalc_level, today_et
+from api.scenarios import router as scenarios_router
 from api.skills import DRILL_KINDS, skill_tag_for
 
 app = FastAPI()
+app.include_router(learning_router)
+app.include_router(scenarios_router)
+app.include_router(daily_router)
 
 XP_CORRECT_ANSWER = 10
 
@@ -85,9 +95,12 @@ DRILL_STATE_SQL = f"""
 
 @app.post("/api/progress/attempts")
 def record_attempt(
-    body: AttemptIn,
+    body: AttemptIn | LessonAttemptIn,
     user_id: str = Depends(current_user_id),
 ) -> dict:
+    if isinstance(body, LessonAttemptIn):
+        return record_lesson_attempt(body, user_id)
+
     xp_earned = XP_CORRECT_ANSWER if body.is_correct else 0
     today = today_et()
 

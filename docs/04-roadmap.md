@@ -97,45 +97,32 @@ path needs its own design pass in the same system before implementation.
 - ✅ Labelled as reference ranges, not solver output — the warning box sits
   beside the page title.
 
-## M4 — The learning path ← NEXT (not started)
+## M4 — The learning path ◐ LOCAL CODE-COMPLETE 2026-07-30 (not deployed)
 
-**This is the Duolingo half of the product and none of it exists yet.** The
-app currently drills and documents; it does not teach. Everything below is
-pending.
+The complete learning loop now exists in the worktree and passes local tests
+and a production build. It has deliberately **not** been migrated, seeded, or
+deployed yet. See `docs/07-m4-status.md` for the architecture, verification,
+corrected content decisions, and exact release order.
 
-Port lessons, modules, scenarios and table scenarios from StackSchool. Seed the
-content from `backend/seed.py` (~1,700 lines: 5 modules — Foundations through
-bankroll discipline — with dozens of lessons built from info/quiz/drill/recap
-screens, plus scenarios and table scenarios). Bring across `/progress`
-(lesson-complete), `/scenarios`, `/table-scenarios`, `/daily`,
-`/recommendations`, `/stats`.
-
-What exists already: the DB tables (`modules`, `lessons`, `scenarios`,
-`table_scenarios`, `progress`, `daily_content`, `user_daily_completions`) are
-in `0001_initial_schema.sql` with RLS, empty. `skill_stats` already pools
-drill and lesson accuracy on shared tags, and the home dashboard already
-surfaces the weakest skill — the recommendation hook is waiting for lessons
-to point at.
-
-What has to be built:
-1. **Content seed** — port `seed.py` into a Supabase seed (UUID user keys,
-   `lesson_type` enum).
-2. **API routes** — lesson list/complete (XP + streak + daily activity),
-   scenario random/submit, daily, recommendations, stats.
-3. **UI (needs design first — absent from the redesign spec):** a learn
-   path/module map on Home or `/learn`, `/learn/[module]` detail, and a
-   lesson player for the four screen types (info / quiz / drill / recap) with
-   XP award and progress. The Expo screens (ModuleDetail, LessonPlayer) are
-   the behavioural spec.
-4. **Recommendations surfaced** — "what should I do next" on Home, driven by
-   the existing deterministic rule (weakest tag ≥5 attempts → uncompleted
-   lesson for it → else scenario at matched difficulty → else first
-   Foundations lesson).
-5. **Daily content** — the `/daily` loop that gives the streak something to
-   bite on beyond raw drilling.
-
-This is the biggest chunk of straight porting. It was deliberately sequenced
-after the drills because the drills are what make the app worth opening.
+- [x] **Content seed:** 5 modules, 20 lessons, 33 authored scenarios, and 20
+  table scenarios with explicit stable IDs and non-destructive upserts.
+- [x] **API:** content/progress, server-graded lesson attempts, server-derived
+  completion scores, scenario and table-scenario grading, deterministic
+  recommendations, deterministic ET daily content, guarded/idempotent daily
+  bonus, skill stats, and activity stats.
+- [x] **Industry-system design:** approved local spec at
+  `docs/superpowers/specs/2026-07-30-milestone-4-learning-path-design.md`.
+- [x] **UI:** `/learn`, module detail, four-screen lesson player,
+  `/learn/practice`, `/learn/table`, and `/daily`, plus Learn navigation and a
+  next recommendation on Home.
+- [x] **Missing-content fallback:** a weak skill with no matching lesson or
+  scenario falls through to the next real item instead of a dead link.
+- [ ] **Release migration:** apply `0002_lesson_screen_attempts.sql` to the
+  production database.
+- [ ] **Release content:** apply `supabase/seed.sql` after the migration.
+- [ ] **Ship and verify:** deploy, run the authenticated lesson/scenario/table/
+  daily walkthrough, verify first-completion and replay XP against production,
+  and repeat the two-account RLS check before marking M4 shipped.
 
 ## M5 — Social
 

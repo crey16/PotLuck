@@ -34,7 +34,7 @@ entirely and select from Supabase in a server component.
 | Method | Path | Fate |
 |---|---|---|
 | POST | `/progress/attempts` | **CHANGE** — accept `drill_kind`/`drill_payload` for client-generated drills |
-| POST | `/progress/lesson-complete` | **KEEP** — awards XP, updates streak + daily activity |
+| POST | `/progress/lesson-complete` | **KEEP** — requires every authored check, derives score from stored server-graded attempts, then awards first-completion XP and updates streak/activity |
 | GET | `/progress/lessons` | **KEEP** |
 
 ## scenarios — `/scenarios`
@@ -58,7 +58,7 @@ entirely and select from Supabase in a server component.
 | Method | Path | Fate |
 |---|---|---|
 | GET | `/daily` | **KEEP** |
-| POST | `/daily/complete` | **KEEP** — the streak-driving endpoint |
+| POST | `/daily/complete` | **KEEP** — guarded by persisted completion/attempt evidence, idempotent per ET date, and streak-driving |
 
 ## recommendations — `/recommendations`
 
