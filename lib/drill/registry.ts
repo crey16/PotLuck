@@ -61,3 +61,14 @@ export const pickMixedKind = (rng: Rng): DrillKind => {
   const kinds = REGISTERED_KINDS();
   return kinds[rnd(kinds.length, rng)];
 };
+
+/**
+ * The canonical URL for a drill tab.
+ *
+ * Shared by the home page's drill cards and by the drill switcher, which
+ * rewrites the address bar as you move between drills. Both must agree with
+ * app/drill/page.tsx, which keeps `?tab=` only for values in TAB_ORDER and
+ * otherwise falls back to "mixed" without complaint — so a drifted string
+ * would not error, it would just quietly always open the mixed drill.
+ */
+export const drillHref = (tab: TabId): string => `/drill?tab=${tab}`;

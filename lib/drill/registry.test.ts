@@ -10,6 +10,7 @@ import {
   TAB_LABELS,
   TAB_ORDER,
   pickMixedKind,
+  drillHref,
 } from "./registry";
 import { gradeAnswer, isRight } from "./grade";
 import { mulberry32 } from "./rng";
@@ -200,4 +201,27 @@ test("10. determinism across the registry: same seed/context -> deeply-equal pay
       }
     }
   }
+});
+
+/**
+ * The drill switcher writes the current drill into the URL so a refresh,
+ * bookmark or shared link lands back on the same drill. That only works if
+ * what the client WRITES is what the server page ACCEPTS: app/drill/page.tsx
+ * keeps `?tab=` only when the value is in TAB_ORDER and otherwise silently
+ * falls back to "mixed". A helper both sides share is what keeps the two from
+ * drifting — the home page's drill cards link with the same function.
+ */
+test("drillHref: every drill's URL round-trips through the page's own parsing", () => {
+  const parse = (href: string): string => {
+    const tab = new URL(href, "http://localhost").searchParams.get("tab");
+    return tab && (TAB_ORDER as string[]).includes(tab) ? tab : "mixed";
+  };
+  for (const tab of TAB_ORDER) {
+    assert.equal(parse(drillHref(tab)), tab, `${tab} must survive the round trip`);
+  }
+});
+
+test("drillHref: points at the drill route", () => {
+  assert.equal(drillHref("outs"), "/drill?tab=outs");
+  assert.equal(drillHref("mixed"), "/drill?tab=mixed");
 });

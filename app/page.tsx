@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { fetchDashboardStats, type SkillStat } from "@/lib/drill/serverStats";
-import { KIND_LABELS, TAB_ORDER } from "@/lib/drill/registry";
+import { KIND_LABELS, TAB_ORDER, drillHref } from "@/lib/drill/registry";
 import type { DrillKind } from "@/lib/drill/contract";
 import { supabaseConfigured } from "@/lib/supabase/env";
 
@@ -192,7 +192,7 @@ export default async function Home() {
           </div>
           <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)", flexWrap: "wrap" }}>
             <Link
-              href="/drill?tab=mixed"
+              href={drillHref("mixed")}
               className="btn btn-primary blueprint btn-caps"
               style={{ fontSize: 16, padding: "12px 22px" }}
             >
@@ -201,7 +201,7 @@ export default async function Home() {
             </Link>
             {resumeKind && (
               <Link
-                href={`/drill?tab=${resumeKind}`}
+                href={drillHref(resumeKind)}
                 className="btn btn-secondary btn-caps"
                 style={{ fontSize: 15, padding: "12px 18px" }}
               >
@@ -261,7 +261,7 @@ export default async function Home() {
               </div>
             </div>
             <Link
-              href={weakestKind ? `/drill?tab=${weakestKind}` : "/drill?tab=mixed"}
+              href={drillHref(weakestKind ?? "mixed")}
               className="btn btn-secondary btn-caps"
               style={{ whiteSpace: "nowrap" }}
             >
@@ -320,7 +320,7 @@ export default async function Home() {
             const acc = isMixed ? accuracy : stat!.accuracy;
             const lvl = isMixed ? mixedLevel : stat!.level;
             return (
-              <Link key={t} href={`/drill?tab=${t}`} className="blueprint drill-card">
+              <Link key={t} href={drillHref(t)} className="blueprint drill-card">
                 <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
                   <span className="mono-label accent" style={{ letterSpacing: ".12em" }}>
                     DRILL {String(i + 1).padStart(2, "0")}

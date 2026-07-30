@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DrillPlayer } from "@/components/drill/DrillPlayer";
 import { OpponentToggle, writeOppModeCookie } from "@/components/drill/OpponentToggle";
-import { GENERATORS, KIND_LABELS, TAB_ORDER, pickMixedKind, type TabId } from "@/lib/drill/registry";
+import { GENERATORS, KIND_LABELS, TAB_ORDER, drillHref, pickMixedKind, type TabId } from "@/lib/drill/registry";
 import {
   emptyWindows,
   mergeSeededWindows,
@@ -161,6 +161,15 @@ export function DrillShell({
       setTab(next);
       setMenuOpen(false);
       deal(next, oppMode, levels);
+      // Keep the address bar on the drill you are actually looking at, so a
+      // refresh, bookmark or shared link comes back here rather than to Mixed.
+      //
+      // `history.replaceState`, not `router.push`: pushing re-runs the server
+      // component, which mints a fresh per-request `seed`, and `seed` drives
+      // the seeding effect and every deal. A tab switch would then refetch
+      // drill-state and re-seed for no reason. This is the App Router's
+      // supported shallow update — the URL changes, the RSC payload does not.
+      window.history.replaceState(null, "", drillHref(next));
     },
     [deal, oppMode, levels]
   );
