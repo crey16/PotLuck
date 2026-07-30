@@ -203,11 +203,27 @@ export const SCENARIOS: Scenario[] = [
 export const getScenario = (id: string): Scenario | undefined =>
   SCENARIOS.find((s) => s.id === id);
 
-/** Deal concrete cards for a grid hand, so the UI can render real card faces. */
+/**
+ * Deal concrete cards for a grid hand, so the UI can render real card faces.
+ *
+ * The suit shuffle is Fisher-Yates rather than `[0,1,2,3].sort(() => rng() - 0.5)`.
+ * A random comparator is not a uniform shuffle, and worse here, the number of
+ * rng draws it consumes depends on the values drawn — 3, 5 or 6 for this array.
+ * The drill page renders on the server and hydrates on the client, and Node's
+ * V8 and Chrome's V8 need not order sort comparisons identically, so the two
+ * consumed the seeded stream differently: React reported a hydration mismatch
+ * on the preflop tab (server "♣", client "♠") and every later rng() call was
+ * shifted as well. Fisher-Yates over 4 elements is always exactly 3 draws.
+ * See lib/poker/ranges.test.ts.
+ */
 export function dealGridHand(hand: string, rng: () => number = Math.random): [number, number] {
   const hi = RANK_VALUE[hand[0]], lo = RANK_VALUE[hand[1]];
   const kind = hand.length === 2 ? "p" : hand[2];
-  const suits = [0, 1, 2, 3].sort(() => rng() - 0.5);
+  const suits = [0, 1, 2, 3];
+  for (let i = suits.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [suits[i], suits[j]] = [suits[j], suits[i]];
+  }
   if (kind === "p") return [(hi - 2) * 4 + suits[0], (hi - 2) * 4 + suits[1]];
   if (kind === "s") return [(hi - 2) * 4 + suits[0], (lo - 2) * 4 + suits[0]];
   return [(hi - 2) * 4 + suits[0], (lo - 2) * 4 + suits[1]];
