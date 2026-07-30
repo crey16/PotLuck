@@ -34,7 +34,12 @@ export const pct = (v: number): string => (v * 100).toFixed(1) + "%";
 export const signedMoney = (v: number): string =>
   (v >= 0 ? "+" : "−") + money(Math.abs(v));
 
-/** Dedupe on 2-decimal precision, preserving the first occurrence's value. */
+/**
+ * Dedupe on 2-decimal precision, preserving the first occurrence's value.
+ * Note: this hardcodes 2-decimal rounding regardless of minGap, which is correct
+ * for current callers (percentages to 1 decimal, whole dollars) but would need
+ * to be parameterized if a future caller requires finer precision.
+ */
 function uniqNums(values: readonly number[]): number[] {
   const seen = new Set<number>();
   const out: number[] = [];
@@ -87,8 +92,11 @@ export function buildOpts(
 /**
  * Integer flavour: exactly `n` distinct integers inside [lo, hi], always
  * containing `answer`. Candidates outside the range are dropped, and padding
- * walks outward from the answer so the range is never violated — the guard
- * M1 deferred, needed once difficulty 3 widens the out-count range.
+ * walks outward from the answer so the range is never violated.
+ *
+ * @throws {RangeError} if answer is not an integer or outside [lo, hi]
+ * @throws {RangeError} if the range [lo, hi] cannot supply n distinct integers
+ *   (i.e., if hi - lo + 1 < n)
  */
 export function intOptsInRange(
   answer: number,
@@ -98,6 +106,26 @@ export function intOptsInRange(
   hi: number,
   rng: Rng
 ): number[] {
+  // Validate answer
+  if (!Number.isInteger(answer)) {
+    throw new RangeError(
+      `intOptsInRange: answer must be an integer, got ${answer}`
+    );
+  }
+  if (answer < lo || answer > hi) {
+    throw new RangeError(
+      `intOptsInRange: answer ${answer} is outside range [${lo}, ${hi}]`
+    );
+  }
+
+  // Check if range can supply n distinct integers
+  const rangeSize = hi - lo + 1;
+  if (rangeSize < n) {
+    throw new RangeError(
+      `intOptsInRange: cannot pick ${n} distinct integers from [${lo}, ${hi}]`
+    );
+  }
+
   const valid = (v: number) => Number.isInteger(v) && v >= lo && v <= hi;
   const out: number[] = [answer];
   const push = (v: number) => {

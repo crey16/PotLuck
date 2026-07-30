@@ -118,3 +118,70 @@ test("intOptsInRange: pads inside the range at the top edge too", () => {
   assert.ok(opts.includes(20));
   for (const v of opts) assert.ok(v >= 1 && v <= 20);
 });
+
+test("intOptsInRange: throws RangeError when range cannot supply n distinct integers", () => {
+  // Range [1, 3] has only 3 values, but we want 4
+  assert.throws(
+    () => intOptsInRange(2, [1, 3], 4, 1, 3, mulberry32(1)),
+    RangeError,
+    "Should throw when range is too small"
+  );
+
+  // Range [5, 5] has only 1 value, but we want 4
+  assert.throws(
+    () => intOptsInRange(5, [], 4, 5, 5, mulberry32(1)),
+    RangeError,
+    "Should throw when range has only one value"
+  );
+
+  // Range [9, 11] has only 3 values, but we want 4
+  assert.throws(
+    () => intOptsInRange(10, [], 4, 9, 11, mulberry32(1)),
+    RangeError,
+    "Should throw when range is too small"
+  );
+});
+
+test("intOptsInRange: RangeError message includes n, lo, and hi", () => {
+  try {
+    intOptsInRange(2, [1, 3], 4, 1, 3, mulberry32(1));
+    assert.fail("Should have thrown");
+  } catch (e) {
+    assert.ok(e instanceof RangeError);
+    const msg = (e as RangeError).message;
+    assert.ok(msg.includes("4"), "Message should include n=4");
+    assert.ok(msg.includes("1"), "Message should include lo=1");
+    assert.ok(msg.includes("3"), "Message should include hi=3");
+  }
+});
+
+test("intOptsInRange: throws when answer is out of range", () => {
+  assert.throws(
+    () => intOptsInRange(0, [], 4, 1, 20, mulberry32(1)),
+    RangeError,
+    "Should throw when answer is below lo"
+  );
+
+  assert.throws(
+    () => intOptsInRange(21, [], 4, 1, 20, mulberry32(1)),
+    RangeError,
+    "Should throw when answer is above hi"
+  );
+});
+
+test("intOptsInRange: throws when answer is not an integer", () => {
+  assert.throws(
+    () => intOptsInRange(2.5, [], 4, 1, 20, mulberry32(1)),
+    RangeError,
+    "Should throw when answer is not an integer"
+  );
+});
+
+test("intOptsInRange: works when hi - lo + 1 === n (exact fit)", () => {
+  // Range [1, 4] has exactly 4 values, answer=2 is in range
+  const opts = intOptsInRange(2, [], 4, 1, 4, mulberry32(3));
+  assert.equal(opts.length, 4);
+  assert.equal(new Set(opts).size, 4);
+  assert.ok(opts.includes(2));
+  assert.deepEqual([...opts].sort(), [1, 2, 3, 4]);
+});
