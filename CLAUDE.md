@@ -133,14 +133,38 @@ flow, and where each skill earns its keep here:
 The 14 tests in `lib/poker/engine.test.ts` are the regression suite for the whole
 project. Run them after any change to `lib/poker`, and keep them green.
 
-## Current state (updated 2026-07-29)
+## Current state (updated 2026-07-30)
 
 **M1 is shipped and live at https://hcwk-wizard.vercel.app.** Email signup,
-the outs drill, and XP/streak persistence are verified in production. Google
-OAuth is deferred to the start of M2 (blocked on Google-account MFA). Secrets
+the outs drill, and XP/streak persistence are verified in production. Secrets
 and a working test account live in git-ignored `.env.local`. `main` on
-`crey16/hcwk-wizard` auto-deploys to Vercel. Read `docs/05-m1-status.md`
-before touching anything.
+`crey16/hcwk-wizard` auto-deploys to Vercel.
+
+**M2 is code-complete on branch `m2-full-drill-set`, not yet merged or
+deployed.** All nine drills behind one generic renderer, a Mixed mode, a
+Reference tab, per-drill adaptive difficulty seeded from history, both opponent
+modes, and `skill_stats` per skill tag. 183 TS + 28 pytest green; 18/18 live API
+checks against the real Supabase project. **One verification is outstanding: an
+authenticated visual pass over the eleven tabs — nothing has been seen rendering
+in a browser yet.** Google OAuth and the confirm-email decision are still open.
+
+Read `docs/06-m2-status.md` before touching M2 code — it carries the settled
+decisions M3 inherits and three local-dev traps that each cost real time
+(`python-dotenv` missing from `api/requirements.txt`, `PyJWKClient` needing
+`SSL_CERT_FILE` or every request 401s, and the dev `/api` proxy port now being
+`API_PORT` because a collision on 8000 silently routes into another service).
+Then `docs/05-m1-status.md` for M1.
+
+### M2 rules that are easy to break
+- Relative imports under `lib/` carry **no** file extension — Turbopack does not
+  rewrite `.js`→`.ts` for value imports and the build fails.
+- **No `setState` inside `useEffect`** (lint error). Derive during render,
+  initialise lazily, set from event handlers, or reset a child with `key`.
+  Anything the server must agree with comes down as a prop.
+- Annotate conditionally-built arrays (`ExplainNote[]`, `ViewBlock[]`) or the
+  first element's literal type narrows the array and later pushes won't compile.
+- `GENERATORS` in `lib/drill/registry.ts` is a **total** `Record`: adding a
+  `DrillKind` without a generator is a compile error, by design.
 
 ## Getting oriented
 

@@ -1,18 +1,19 @@
-import type { Spot } from "@/lib/poker/engine";
+import type { DrillKind, OptionValue } from "@/lib/drill/contract";
 import { createClient } from "@/lib/supabase/client";
 import { supabaseConfigured } from "@/lib/supabase/env";
 
-/** Contract mirrored from OutsDrill's `onResult` (components/drill/OutsDrill.tsx). */
-export interface OutsDrillResult {
-  spot: Spot;
-  answer: number;
+/** One answered question, from DrillShell. */
+export interface DrillResult {
+  kind: DrillKind;
+  payload: Record<string, unknown>;
+  answer: OptionValue;
   correct: boolean;
 }
 
-/** Body shape expected by `AttemptIn` in api/index.py. Field names must match exactly. */
+/** Body shape expected by `AttemptIn` in api/index.py. Names must match exactly. */
 export interface AttemptRequestBody {
-  drill_kind: "outs";
-  drill_payload: Spot;
+  drill_kind: DrillKind;
+  drill_payload: Record<string, unknown>;
   answer: string;
   is_correct: boolean;
 }
@@ -38,12 +39,12 @@ export interface ProfileUpdate {
  * Pure request-shaping, no I/O — the testable unit. Keep this in sync with
  * `AttemptIn` in api/index.py: field names, and `answer` stringified.
  */
-export function buildAttemptRequest(result: OutsDrillResult): AttemptRequest {
+export function buildAttemptRequest(result: DrillResult): AttemptRequest {
   return {
     path: "/api/progress/attempts",
     body: {
-      drill_kind: "outs",
-      drill_payload: result.spot,
+      drill_kind: result.kind,
+      drill_payload: result.payload,
       answer: String(result.answer),
       is_correct: result.correct,
     },
@@ -57,7 +58,7 @@ export function buildAttemptRequest(result: OutsDrillResult): AttemptRequest {
  *  - No signed-in session → null (drill still works signed-out in dev).
  *  - Non-OK response / network failure → null, with a console.warn.
  */
-export async function recordAttempt(result: OutsDrillResult): Promise<ProfileUpdate | null> {
+export async function recordAttempt(result: DrillResult): Promise<ProfileUpdate | null> {
   if (!supabaseConfigured()) return null;
 
   try {

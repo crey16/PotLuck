@@ -10,12 +10,12 @@ import {
   parseCards, score5, bestHand, handName, equityVsHand, outsVsHand, drawOuts,
   deadOuts, describeDraw, coreDraw, DRAW_OUTS, dealDrawSpot, dealVsHandSpot,
   hitProbability, categoryOf, cardStr, isPlausibleHand, rankOf,
-} from "./engine.js";
+} from "./engine";
 import {
   requiredEquity, evOfCall, breakEvenFoldRate, minDefenceFrequency,
   impliedOddsNeeded, hitByRiver, hitOnRiver, ruleOf4Corrected,
-} from "./math.js";
-import { SCENARIOS, cellFrequency, rangePercent, handAt, combosOf } from "./ranges.js";
+} from "./math";
+import { SCENARIOS, cellFrequency, rangePercent, handAt, combosOf } from "./ranges";
 
 const P = parseCards;
 const s5 = (s: string) => { const c = P(s); return score5(c[0], c[1], c[2], c[3], c[4]); };

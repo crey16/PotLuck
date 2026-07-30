@@ -24,7 +24,9 @@
 - **XP is 10 per correct answer, 0 otherwise**, computed only in `api/index.py`. `level = xp // 100 + 1`, computed only in `api/progress.py::recalc_level`. The drill's session Score (`10 × difficulty + streak bonus`) is display-only and never written to the database.
 - **Secrets stay in git-ignored `.env.local`.** `SUPABASE_SERVICE_ROLE_KEY` must never reach the browser.
 - **Both suites stay green after every task:** `npm test` and `.venv/bin/python -m pytest api/ -q`. Baseline entering this plan: 49 TS tests, 17 pytest, 0 failures.
+- **Relative imports carry NO file extension.** Write `from "./contract"`, never `from "./contract.js"`. `tsconfig.json` sets `moduleResolution: "bundler"`, and Turbopack does not rewrite `.js` → `.ts`, so a `.js` extension on a **value** import fails `npm run build` with `Module not found`. (M1 used `.js` and got away with it only because its one such import was type-only and therefore erased before bundling — a trap, not a precedent.) Verified: extensionless resolves correctly under both `tsx --test` and Turbopack.
 - **Commit after every task.** Conventional-commit prefixes (`feat:`, `refactor:`, `test:`, `docs:`).
+- **No `setState` inside `useEffect`.** `eslint-config-next` errors on it (`react-hooks/set-state-in-effect`). Derive during render, initialise with a lazy `useState(() => …)`, set state from event handlers, or reset child state with a `key` prop. Anything the server must agree with (a persisted preference, the first dealt hand) comes down as a prop from the server component — cookies are server-readable, `localStorage` is not.
 
 ---
 
@@ -108,7 +110,7 @@ Create `lib/drill/contract.ts`:
  * no HTML strings, no DOM. That is what lets each generator be unit tested
  * with a seeded Rng and written independently of the renderer.
  */
-import type { Card, Rng } from "../poker/engine.js";
+import type { Card, Rng } from "../poker/engine";
 
 export type DrillKind =
   | "outs" | "rule24" | "potodds" | "decision" | "implied"
@@ -185,7 +187,7 @@ export type Generator = (ctx: DrillContext) => DrillQuestion;
 Create `lib/drill/rng.ts`:
 
 ```ts
-import type { Rng } from "../poker/engine.js";
+import type { Rng } from "../poker/engine";
 
 /**
  * mulberry32 — a small, fast, well-distributed 32-bit PRNG. Used so every
@@ -210,8 +212,8 @@ Create `lib/drill/grade.test.ts`:
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { gradeAnswer } from "./grade.js";
-import type { DrillQuestion } from "./contract.js";
+import { gradeAnswer } from "./grade";
+import type { DrillQuestion } from "./contract";
 
 function q(over: Partial<DrillQuestion> = {}): DrillQuestion {
   return {
@@ -263,7 +265,7 @@ test("gradeAnswer: numeric answers compare by value", () => {
 });
 
 test("isRight: correct and acceptable both count as right for scoring", async () => {
-  const { isRight } = await import("./grade.js");
+  const { isRight } = await import("./grade");
   assert.equal(isRight(q(), "r"), true);
   assert.equal(isRight(q({ acceptable: ["c"] }), "c"), true);
   assert.equal(isRight(q(), "f"), false);
@@ -280,7 +282,7 @@ Expected: FAIL — `Cannot find module './grade.js'`.
 Create `lib/drill/grade.ts`:
 
 ```ts
-import type { DrillQuestion, OptionValue } from "./contract.js";
+import type { DrillQuestion, OptionValue } from "./contract";
 
 export type Grade = "correct" | "acceptable" | "wrong";
 
@@ -317,8 +319,8 @@ Create `lib/drill/difficulty.test.ts`:
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nextLevel, pushResult, emptyWindows, WINDOW_SIZE } from "./difficulty.js";
-import { DRILL_KINDS } from "./contract.js";
+import { nextLevel, pushResult, emptyWindows, WINDOW_SIZE } from "./difficulty";
+import { DRILL_KINDS } from "./contract";
 
 const rep = (n: number, v: boolean) => Array.from({ length: n }, () => v);
 
@@ -395,7 +397,7 @@ Expected: FAIL — `Cannot find module './difficulty.js'`.
 Create `lib/drill/difficulty.ts`:
 
 ```ts
-import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract.js";
+import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
 
 export const WINDOW_SIZE = 10;
 const MIN_SAMPLE = 6;
@@ -447,8 +449,8 @@ import assert from "node:assert/strict";
 import {
   withArticle, buildOpts, intOptsInRange, money, pct, signedMoney,
   roundTo, pick, shuffled,
-} from "./opts.js";
-import { mulberry32 } from "./rng.js";
+} from "./opts";
+import { mulberry32 } from "./rng";
 
 test("withArticle: consonant-leading label gets 'a'", () => {
   assert.equal(withArticle("gutshot"), "a gutshot");
@@ -581,7 +583,7 @@ Create `lib/drill/opts.ts`. `buildOpts` is a port of reference lines 380–392 w
  *
  * Poker math itself lives in lib/poker/math.ts — never re-derive it here.
  */
-import type { Rng } from "../poker/engine.js";
+import type { Rng } from "../poker/engine";
 
 export const rnd = (n: number, rng: Rng): number => Math.floor(rng() * n);
 
@@ -712,7 +714,7 @@ git add lib/drill/contract.ts lib/drill/rng.ts lib/drill/grade.ts lib/drill/grad
 git commit -m "feat: freeze the M2 drill contract, grading, difficulty and helpers"
 ```
 
-**The contract is now frozen.** Any later change to `contract.ts` must be announced, because Tasks 5–12 are written against it in parallel.
+**The contract is now frozen.** Any later change to `contract.ts` must be announced, because Tasks 4–11 are written against it in parallel.
 
 ---
 
@@ -744,10 +746,10 @@ Create `lib/drill/kinds/outs.test.ts`:
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateOuts } from "./outs.js";
-import { mulberry32 } from "../rng.js";
-import { DRAW_OUTS, coreDraw, drawOuts, outsVsHand, type Spot } from "../../poker/engine.js";
-import type { DrillContext, DrillLevel } from "../contract.js";
+import { generateOuts } from "./outs";
+import { mulberry32 } from "../rng";
+import { DRAW_OUTS, coreDraw, drawOuts, outsVsHand, type Spot } from "../../poker/engine";
+import type { DrillContext, DrillLevel } from "../contract";
 
 const ctx = (seed: number, level: DrillLevel = 2, oppMode: "unknown" | "shown" = "unknown"): DrillContext =>
   ({ level, oppMode, rng: mulberry32(seed) });
@@ -874,11 +876,9 @@ test("generateOuts: same seed gives the same question, different seeds differ", 
 Run: `npx tsx --test lib/drill/kinds/outs.test.ts`
 Expected: FAIL — `Cannot find module './outs.js'`.
 
-- [ ] **Step 3: Check the engine surface the generator needs**
+- [ ] **Step 3: Note the engine surface (already confirmed — no investigation needed)**
 
-Run: `grep -n "export function dealDrawSpot\|export function dealVsHandSpot\|export interface Spot\|export interface DrawSpotOptions" -A 12 lib/poker/engine.ts`
-
-Confirm `Spot` has `hero`, `board`, `street`, `outs`, `outCards`, `draw`, `unseen`, `equity`, and an optional `villain`. If `dealVsHandSpot` returns a field named other than `villain`, use the real name throughout and note it in the commit message — do not rename engine fields.
+`Spot` is `{ hero, board, villain?, street, outs, outCards, draw, unseen, equity }` (`lib/poker/engine.ts:322-332`). `DrawSpotOptions` is `{ street?, level?, rng?, gutshotKeepRate? }` (`:363-370`). Both `dealDrawSpot` and `dealVsHandSpot` take it and return a fully-populated `Spot`; `dealVsHandSpot` sets `villain` and throws `Error("dealVsHandSpot: no qualifying spot found")` if it exhausts 8000 attempts. Pass `ctx.rng` through as `rng`. Do not modify `lib/poker/`.
 
 - [ ] **Step 4: Implement the `outs` generator**
 
@@ -896,27 +896,29 @@ Create `lib/drill/kinds/outs.ts`. This ports `Q.outs` (reference lines 601–625
  * actually beat the villain's hand, so dead outs are stripped and named.
  */
 import {
-  dealDrawSpot, dealVsHandSpot, deadOuts, describeOuts, outsVsHand,
-  equityVsHand, cardStr, type Spot,
-} from "../../poker/engine.js";
-import { intOptsInRange, pct, withArticle } from "../opts.js";
-import type { DrillContext, DrillQuestion, Generator, ViewBlock } from "../contract.js";
+  dealDrawSpot, dealVsHandSpot, deadOuts, describeOuts, cardStr,
+  type Spot, type Street,
+} from "../../poker/engine";
+import { intOptsInRange, pct, withArticle } from "../opts";
+import type { DrillContext, DrillQuestion, Generator, ViewBlock } from "../contract";
 
-/** The spot a question is built on, in whichever opponent mode is active. */
+/**
+ * The spot a question is built on, in whichever opponent mode is active.
+ *
+ * Both engine dealers already return a fully-populated Spot — `dealVsHandSpot`
+ * derives outs/outCards/unseen/equity from `outsVsHand` and `equityVsHand`
+ * itself (engine.ts:419-447), so face-up mode needs no post-processing here.
+ * Recomputing them would duplicate engine math for identical results.
+ */
+export function dealSpotOnStreet(ctx: DrillContext, street: Street): Spot {
+  const opts = { street, level: ctx.level, rng: ctx.rng };
+  return ctx.oppMode === "shown" ? dealVsHandSpot(opts) : dealDrawSpot(opts);
+}
+
+/** Street choice for the outs drill: turns appear from level 2 upward. */
 export function dealOutsSpot(ctx: DrillContext): Spot {
   const street = ctx.level >= 2 && ctx.rng() < 0.4 ? "turn" : "flop";
-  if (ctx.oppMode === "shown") {
-    const spot = dealVsHandSpot({ street, level: ctx.level, rng: ctx.rng });
-    const clean = outsVsHand(spot.hero, spot.villain!, spot.board).clean;
-    return {
-      ...spot,
-      outCards: clean,
-      outs: clean.length,
-      equity: equityVsHand(spot.hero, spot.villain!, spot.board).equity,
-      unseen: 52 - 4 - spot.board.length,
-    };
-  }
-  return dealDrawSpot({ street, level: ctx.level, rng: ctx.rng });
+  return dealSpotOnStreet(ctx, street);
 }
 
 const COUNT_PROMPT = "How many outs do you have?";
@@ -1002,23 +1004,91 @@ export const generateOuts: Generator = (ctx): DrillQuestion => {
 };
 ```
 
-If `dealDrawSpot` / `dealVsHandSpot` do not accept an `rng` option, add it as an optional field on `DrawSpotOptions` defaulting to `Math.random` — a one-line, backwards-compatible change to `lib/poker/engine.ts`. Re-run `npx tsx --test lib/poker/engine.test.ts` afterwards and confirm 14/14 still pass.
+`DrawSpotOptions` already has an optional `rng` field (`lib/poker/engine.ts:363-370`), so pass `ctx.rng` straight through. No engine change is needed for this task — if you find yourself editing `lib/poker/`, stop and report instead.
 
 - [ ] **Step 5: Run it to confirm it passes**
 
 Run: `npx tsx --test lib/drill/kinds/outs.test.ts`
 Expected: PASS, 11 tests. If the `DRAW_OUTS` agreement test fails in level 3, the spot dealer is falling back to a loose deal — fix the generator to reject and re-deal in unknown mode, never the test.
 
+- [ ] **Step 5b: Create the shared invariant assertions the eight later kinds reuse**
+
+Create `lib/drill/kinds/assertions.ts`. The filename deliberately does not match the `*.test.ts` glob, so it is a helper rather than a test file. Every generator task calls these instead of copying the same four tests eight times.
+
+```ts
+import assert from "node:assert/strict";
+import { mulberry32 } from "../rng";
+import { gradeAnswer } from "../grade";
+import type { DrillKind, DrillLevel, Generator, OppMode } from "../contract";
+
+const LEVELS: DrillLevel[] = [1, 2, 3];
+const MODES: OppMode[] = ["unknown", "shown"];
+
+/**
+ * The invariants every question of every kind must satisfy, checked across
+ * levels, opponent modes and seeds. Called from each kind's test file so the
+ * rules live in one place and a new rule reaches all nine kinds at once.
+ */
+export function assertCommonShape(
+  generate: Generator,
+  kind: DrillKind,
+  opts: { seeds?: number } = {}
+): void {
+  const seeds = opts.seeds ?? 40;
+  for (const level of LEVELS) {
+    for (const oppMode of MODES) {
+      for (let seed = 1; seed <= seeds; seed++) {
+        const where = `${kind} L${level} ${oppMode} seed ${seed}`;
+        const q = generate({ level, oppMode, rng: mulberry32(seed) });
+
+        assert.equal(q.kind, kind, where);
+        assert.ok(q.prompt.length > 0, `${where}: empty prompt`);
+        assert.ok(q.kicker.length > 0, `${where}: empty kicker`);
+
+        // Options: distinct values, non-empty labels, arity matching layout,
+        // and exactly one that grades as the canonical correct answer.
+        assert.equal(new Set(q.options.map((o) => o.value)).size, q.options.length, `${where}: duplicate option values`);
+        for (const o of q.options) assert.ok(o.label.length > 0, `${where}: empty option label`);
+        assert.equal(q.options.length, q.layout === "two" ? 2 : 4, `${where}: ${q.options.length} options for layout ${q.layout}`);
+        const corrects = q.options.filter((o) => gradeAnswer(q, o.value) === "correct");
+        assert.equal(corrects.length, 1, `${where}: ${corrects.length} options grade as correct`);
+
+        // The explanation must actually explain something.
+        const ex = q.explain(q.answer);
+        assert.ok(ex.rows.length + ex.notes.length > 0, `${where}: empty explanation`);
+
+        // Payload: carries the context and survives the trip to Postgres.
+        assert.equal(q.payload.level, level, `${where}: payload level`);
+        assert.equal(q.payload.oppMode, oppMode, `${where}: payload oppMode`);
+        assert.deepEqual(JSON.parse(JSON.stringify(q.payload)), q.payload, `${where}: payload is not JSON-clean`);
+      }
+    }
+  }
+}
+
+/** Same seed, same question — the property every generator test relies on. */
+export function assertDeterministic(generate: Generator, seed = 31): void {
+  const ctx = () => ({ level: 2 as DrillLevel, oppMode: "unknown" as OppMode, rng: mulberry32(seed) });
+  const a = generate(ctx());
+  const b = generate(ctx());
+  assert.deepEqual(a.payload, b.payload);
+  assert.equal(a.answer, b.answer);
+  assert.deepEqual(a.options, b.options);
+}
+```
+
+Then in `lib/drill/kinds/outs.test.ts`, replace the first shape test and the determinism test with calls to these two helpers, keeping every outs-specific test as it is. Re-run `npx tsx --test lib/drill/kinds/outs.test.ts` and confirm it still passes.
+
 - [ ] **Step 6: Create the registry**
 
 Create `lib/drill/registry.ts`. Only `outs` is wired now; the eight later tasks each add exactly one import and one entry.
 
 ```ts
-import type { DrillKind, Generator } from "./contract.js";
-import type { Rng } from "../poker/engine.js";
-import { DRILL_KINDS } from "./contract.js";
-import { generateOuts } from "./kinds/outs.js";
-import { rnd } from "./opts.js";
+import type { DrillKind, Generator } from "./contract";
+import type { Rng } from "../poker/engine";
+import { DRILL_KINDS } from "./contract";
+import { generateOuts } from "./kinds/outs";
+import { rnd } from "./opts";
 
 export type TabId = "mixed" | DrillKind | "reference";
 
@@ -1518,7 +1588,7 @@ export function DrillShell({ profile: initialProfile, initialTab = "mixed" }: Dr
 In `lib/drill/recordAttempt.ts`, replace the `OutsDrillResult` interface, the `AttemptRequestBody.drill_kind` type, and `buildAttemptRequest`:
 
 ```ts
-import type { DrillKind, OptionValue } from "./contract.js";
+import type { DrillKind, OptionValue } from "./contract";
 
 /** One answered question, from DrillShell. */
 export interface DrillResult {
@@ -1934,9 +2004,9 @@ Create `lib/drill/drillState.test.ts`:
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { windowsFromResponse } from "./drillState.js";
-import { DRILL_KINDS } from "./contract.js";
-import { WINDOW_SIZE } from "./difficulty.js";
+import { windowsFromResponse } from "./drillState";
+import { DRILL_KINDS } from "./contract";
+import { WINDOW_SIZE } from "./difficulty";
 
 test("windowsFromResponse: fills every kind, even ones absent from the response", () => {
   const w = windowsFromResponse({ windows: { outs: [true, false] } });
@@ -1984,8 +2054,8 @@ Create `lib/drill/drillState.ts`:
 ```ts
 import { createClient } from "../supabase/client";
 import { supabaseConfigured } from "../supabase/env";
-import { DRILL_KINDS, type DrillKind } from "./contract.js";
-import { emptyWindows, WINDOW_SIZE, type DrillWindows } from "./difficulty.js";
+import { DRILL_KINDS, type DrillKind } from "./contract";
+import { emptyWindows, WINDOW_SIZE, type DrillWindows } from "./difficulty";
 
 const KINDS = new Set<string>(DRILL_KINDS);
 
@@ -2096,11 +2166,25 @@ These eight tasks are independent. Dispatch them in parallel once Task 2 has lan
 
 **Every one of these tasks follows the same six steps.** They are written out per task below only where the code differs; the shared procedure is:
 
+0. Open the test file with the two shared invariant helpers from `lib/drill/kinds/assertions.ts` (created in Task 2), then add the kind-specific tests:
+
+```ts
+import { assertCommonShape, assertDeterministic } from "./assertions";
+
+test("<kind>: satisfies the shared question invariants", () => {
+  assertCommonShape(generateX, "<kind>");
+});
+
+test("<kind>: deterministic under a seed", () => {
+  assertDeterministic(generateX);
+});
+```
+
 1. Write the test file first, in full.
 2. Run `npx tsx --test lib/drill/kinds/<kind>.test.ts` and confirm it fails with a missing module.
 3. Write the generator.
 4. Run the test file and confirm it passes.
-5. Register the kind: add `import { generateX } from "./kinds/<kind>.js";` and `<kind>: generateX,` to `GENERATORS` in `lib/drill/registry.ts`. Run `npm test` and `npx tsc --noEmit`.
+5. Register the kind: add `import { generateX } from "./kinds/<kind>";` and `<kind>: generateX,` to `GENERATORS` in `lib/drill/registry.ts`. Run `npm test` and `npx tsc --noEmit`.
 6. Commit with `feat: add the <name> drill`.
 
 **Shared rules for all eight, non-negotiable:**
@@ -2123,45 +2207,8 @@ These eight tasks are independent. Dispatch them in parallel once Task 2 has lan
 - Every generator takes its randomness from `ctx.rng`. No `Math.random()` anywhere in `lib/drill/`.
 - Every payload includes `level: ctx.level` and `oppMode: ctx.oppMode`, and must be JSON-round-trippable.
 - Prose (prompts, subs, notes) is copied from the reference so the pedagogy survives the port. Straight-quote it or keep the curly quotes consistently; don't mix.
-- Each test file must include these four tests, adapted to the kind. Written out once here; each task's test file repeats them with its own generator:
-
-```ts
-test("<kind>: shape is well formed across levels and modes", () => {
-  for (const level of [1, 2, 3] as DrillLevel[]) {
-    for (const oppMode of ["unknown", "shown"] as const) {
-      for (let seed = 1; seed <= 40; seed++) {
-        const q = generate({ level, oppMode, rng: mulberry32(seed) });
-        assert.equal(q.kind, "<kind>");
-        assert.ok(q.options.length >= 2 && q.options.length <= 4);
-        assert.equal(new Set(q.options.map((o) => o.value)).size, q.options.length);
-        assert.equal(q.options.filter((o) => o.value === q.answer).length, 1);
-        assert.equal(q.options.length, q.layout === "two" ? 2 : 4);
-        assert.ok(q.prompt.length > 0);
-        assert.ok(q.explain(q.answer).rows.length > 0 || q.explain(q.answer).notes.length > 0);
-      }
-    }
-  }
-});
-
-test("<kind>: payload carries level and oppMode and survives JSON", () => {
-  const q = generate({ level: 3, oppMode: "shown", rng: mulberry32(7) });
-  assert.equal(q.payload.level, 3);
-  assert.equal(q.payload.oppMode, "shown");
-  assert.deepEqual(JSON.parse(JSON.stringify(q.payload)), q.payload);
-});
-
-test("<kind>: the answer is re-derivable from the payload alone", () => {
-  /* recompute from payload using lib/poker/math and assert it equals q.answer —
-     the kind-specific version is spelled out in each task below */
-});
-
-test("<kind>: deterministic under a seed", () => {
-  const a = generate({ level: 2, oppMode: "unknown", rng: mulberry32(31) });
-  const b = generate({ level: 2, oppMode: "unknown", rng: mulberry32(31) });
-  assert.deepEqual(a.payload, b.payload);
-  assert.equal(a.answer, b.answer);
-});
-```
+- **Annotate note arrays as `ExplainNote[]`.** Writing `const notes = [{ tone: "plain", ... }]` lets the first element's literal type narrow the whole array, and every later `notes.push({ tone: "warn", ... })` then fails to compile with `Type '"warn"' is not assignable to type '"plain"'`. This bit the outs generator in Task 2; the fix is `const notes: ExplainNote[] = [...]` with no `as const`. Same applies to `ExplainRow[]` and `ViewBlock[]` arrays you build up conditionally. Import the types from `../contract.js`.
+- The shared invariants (option arity vs layout, exactly one correct option, non-empty explanation, payload carries `level`/`oppMode` and is JSON-clean, determinism under a seed) come from `assertCommonShape` and `assertDeterministic` — do not re-implement them per kind. On top of those, every kind's test file must add a **"the answer is re-derivable from the payload alone"** test: recompute the answer from the JSON-round-tripped payload using `lib/poker/math.ts`, and assert it equals `q.answer`. That test is what keeps eight independently written generators honest about the betting convention, and its kind-specific form is spelled out in each task below.
 
 ---
 
@@ -2245,7 +2292,7 @@ export const generateRule24: Generator = (ctx) => {
 };
 ```
 
-`dealOutsSpot` in `kinds/outs.ts` picks its own street. Export a second function from `kinds/outs.ts` that takes an explicit street — `export function dealSpotOnStreet(ctx: DrillContext, street: "flop" | "turn"): Spot` — and have `dealOutsSpot` call it. That is a small edit to a file Task 2 owns; make it in this task and mention it in the commit.
+`dealSpotOnStreet(ctx, street)` is already exported from `lib/drill/kinds/outs.ts` (Task 2) and handles both opponent modes. Import and use it — do not write another spot dealer.
 
 - [ ] **Step 4: Run the test file** → PASS.
 - [ ] **Step 5: Register and run the full suites** — add to `GENERATORS`; `npm test`, `npx tsc --noEmit`.
@@ -2663,7 +2710,7 @@ test("bluff: all three modes appear, with break-even the most common", () => {
 ### Task 10: OMC mistakes (concepts) drill
 
 **Files:** Create `lib/drill/kinds/concepts.ts`, `lib/drill/kinds/concepts.test.ts`. Modify `lib/drill/registry.ts`.
-**Reference:** lines 925–978 — a 16-item bank (`CONCEPTS`) and `Q.concepts`.
+**Reference:** lines 925–978 — a 15-item bank (`CONCEPTS`) and `Q.concepts`.
 **Interfaces:** Produces `export const generateConcepts: Generator`, `export const CONCEPTS: ConceptItem[]`.
 
 This one has no poker math to get wrong, but it has a trap the reference itself contains: **item index 9 (line 953–955) has `a:2`, not `a:0`** — its correct answer is the third option, and options 0 and 2 say nearly the same thing. Port the bank with an explicit correct index per item; do not assume index 0.
@@ -2674,7 +2721,7 @@ Include the four shared tests, plus:
 
 ```ts
 test("concepts: the bank is fully populated and internally consistent", () => {
-  assert.equal(CONCEPTS.length, 16);
+  assert.equal(CONCEPTS.length, 15);
   for (const [i, item] of CONCEPTS.entries()) {
     assert.ok(item.prompt.length > 10, `item ${i}: prompt`);
     assert.equal(item.options.length, 4, `item ${i}: four options`);
@@ -2730,7 +2777,7 @@ test("concepts: the whole bank is reachable", () => {
 ```
 
 - [ ] **Step 2: Run it and confirm it fails.**
-- [ ] **Step 3: Write the generator.** Port the 16 items from lines 925–971 as `{ prompt, options, correct, explain }`, then `Q.concepts` from 972–978. Shuffle the options with `ctx.rng`, and set `answer` to the shuffled index of the correct option (or, more robustly, use the option *text* as the value — either is fine as long as the test above passes). Payload: `{ level, oppMode, conceptId }`.
+- [ ] **Step 3: Write the generator.** Port the 15 items from lines 925–971 as `{ prompt, options, correct, explain }`, then `Q.concepts` from 972–978. Shuffle the options with `ctx.rng`, and set `answer` to the shuffled index of the correct option (or, more robustly, use the option *text* as the value — either is fine as long as the test above passes). Payload: `{ level, oppMode, conceptId }`.
 - [ ] **Step 4: Run the test file** → PASS.
 - [ ] **Step 5: Register; `npm test`; `npx tsc --noEmit`.**
 - [ ] **Step 6: Commit** — `git commit -m "feat: add the OMC mistakes drill"`
@@ -2756,7 +2803,8 @@ test("preflop: the answer is the highest-frequency action for the dealt hand", (
     const { scenarioId, hand } = q.payload as { scenarioId: string; hand: string };
     const sc = getScenario(scenarioId)!;
     const f = cellFrequency(sc, hand);
-    const best = sc.actions.map((a) => a.key).sort((x, y) => f[y] - f[x])[0];
+    // Scenario.actions is Array<[Action, string]> — [key, label] tuples.
+    const best = sc.actions.map(([key]) => key).sort((x, y) => f[y] - f[x])[0];
     assert.equal(q.answer, best, `seed ${seed}: ${hand} in ${scenarioId}`);
   }
 });
@@ -2768,7 +2816,7 @@ test("preflop: acceptable holds every action at >= 20% frequency, excluding the 
     const sc = getScenario(scenarioId)!;
     const f = cellFrequency(sc, hand);
     const expected = sc.actions
-      .map((a) => a.key)
+      .map(([key]) => key)
       .filter((k) => f[k] >= MIX_THRESHOLD && k !== q.answer)
       .sort();
     assert.deepEqual([...(q.acceptable ?? [])].sort(), expected, `seed ${seed}: ${hand}`);
@@ -2839,8 +2887,8 @@ test("preflop: the explanation shows every action's frequency and labels the ran
   const q = generatePreflop({ level: 2, oppMode: "unknown", rng: mulberry32(3) });
   const ex = q.explain(q.answer);
   const sc = getScenario((q.payload as { scenarioId: string }).scenarioId)!;
-  for (const a of sc.actions) {
-    assert.ok(ex.rows.some((r) => r.label === a.label), `missing row for ${a.label}`);
+  for (const [, label] of sc.actions) {
+    assert.ok(ex.rows.some((r) => r.label === label), `missing row for ${label}`);
   }
   assert.ok(ex.rows.some((r) => r.label === "Hand"));
   assert.ok(ex.blocks?.some((b) => b.type === "grid"));
@@ -2856,7 +2904,7 @@ test("preflop: payload is JSON-clean and re-grades to the same answer", () => {
     const p = JSON.parse(JSON.stringify(q.payload)) as { scenarioId: string; hand: string };
     const f = cellFrequency(getScenario(p.scenarioId)!, p.hand);
     const sc = getScenario(p.scenarioId)!;
-    const best = sc.actions.map((a) => a.key).sort((x, y) => f[y] - f[x])[0];
+    const best = sc.actions.map(([key]) => key).sort((x, y) => f[y] - f[x])[0];
     assert.equal(best, q.answer);
   }
 });
@@ -2868,7 +2916,7 @@ test("preflop: payload is JSON-clean and re-grades to the same answer", () => {
 
 Run: `grep -n "export interface Scenario" -A 20 lib/poker/ranges.ts`
 
-The reference uses `sc.acts` as `[key, label]` pairs; our `Scenario` may name the field `actions` with `{key, label}` objects. **Use the real field names from `lib/poker/ranges.ts`** and adjust the test file above to match before implementing — that file is the tested engine and does not change to suit the port.
+Confirmed shape (`lib/poker/ranges.ts:46-54`): `Scenario` is `{ id, name, description, actions: Array<[Action, string]>, r, c? }`. The reference calls this field `acts`; ours is `actions`, and it holds `[key, label]` tuples — destructure them (`sc.actions.map(([key, label]) => …)`), never `a.key`. Also note `description`, not the reference's `desc`. `lib/poker/ranges.ts` is the tested engine and does not change to suit the port.
 
 - [ ] **Step 4: Write the generator**
 
@@ -2957,10 +3005,10 @@ Create `lib/drill/registry.test.ts`:
 ```ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GENERATORS, KIND_LABELS, TAB_ORDER, pickMixedKind, REGISTERED_KINDS } from "./registry.js";
-import { DRILL_KINDS, type DrillLevel } from "./contract.js";
-import { gradeAnswer } from "./grade.js";
-import { mulberry32 } from "./rng.js";
+import { GENERATORS, KIND_LABELS, TAB_ORDER, pickMixedKind, REGISTERED_KINDS } from "./registry";
+import { DRILL_KINDS, type DrillLevel } from "./contract";
+import { gradeAnswer } from "./grade";
+import { mulberry32 } from "./rng";
 
 test("registry: every drill kind is registered", () => {
   assert.deepEqual([...REGISTERED_KINDS()].sort(), [...DRILL_KINDS].sort());
@@ -3129,4 +3177,4 @@ Update `docs/05-m1-status.md` (Google OAuth is no longer deferred) and `docs/04-
 
 **Type consistency.** `DrillQuestion`, `ViewBlock`, `Explain`, `DrillContext`, `Generator`, `OptionValue`, `DrillLevel`, `OppMode` are defined once in Task 1 Step 3 and used with those exact names throughout. `gradeAnswer`/`isRight` (Task 1) are the names used in `DrillPlayer` and `registry.test.ts`. `nextLevel`/`pushResult`/`emptyWindows`/`WINDOW_SIZE` (Task 1) are the names used in `DrillShell` and `drillState.ts`. `buildOpts`/`intOptsInRange`/`money`/`pct`/`signedMoney`/`roundTo`/`pick`/`shuffled`/`withArticle` (Task 1) are the names used in every generator task. `DrillResult` replaces `OutsDrillResult` in Task 2 and is the type `DrillShell` passes to `recordAttempt`. `dealSpotOnStreet` is introduced in Task 4 as an addition to `kinds/outs.ts` and consumed by Tasks 6 and 7 — flagged in Task 4 so it is not a surprise. `SKILL_TAGS`/`skill_tag_for`/`DRILL_KINDS` (Python, Task 3) are distinct from the TypeScript `DRILL_KINDS`; both exist deliberately, and `api/test_skills.py` pins that the Python one has all nine.
 
-One gap the review found and this plan closes: Task 4 needs a street-forced spot dealer that Task 2 does not create, and Tasks 6 and 7 need the same function. Task 4 now owns adding it, and Tasks 6 and 7 name it in their Interfaces block — so whichever agent runs first creates it and the others import it. If Tasks 4, 6 and 7 run truly concurrently, have the dispatcher land Task 4 first.
+Two gaps found during pre-flight verification against the real code, both closed above: (1) `dealSpotOnStreet` — needed by Tasks 4, 6 and 7 — is now created in Task 2 and merely imported by them, rather than one of three concurrent agents having to author it; (2) the Task 2 spot dealer originally re-derived `outs`/`outCards`/`unseen`/`equity` in face-up mode, which `dealVsHandSpot` already computes internally, so it now returns the engine's `Spot` untouched.

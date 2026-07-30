@@ -1,0 +1,187 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  nextLevel, pushResult, emptyWindows, levelFromHistory, mergeSeededWindows, seededLevels, WINDOW_SIZE,
+} from "./difficulty";
+import { DRILL_KINDS } from "./contract";
+import { mulberry32 } from "./rng";
+
+const rep = (n: number, v: boolean) => Array.from({ length: n }, () => v);
+
+test("nextLevel: fewer than 6 results leaves the level alone", () => {
+  assert.equal(nextLevel(rep(5, true), 1), 1);
+  assert.equal(nextLevel(rep(5, false), 3), 3);
+  assert.equal(nextLevel([], 2), 2);
+});
+
+test("nextLevel: 6 results is enough to move", () => {
+  assert.equal(nextLevel(rep(6, true), 1), 2);
+});
+
+test("nextLevel: exactly 80% promotes (boundary is inclusive)", () => {
+  // 8 of 10 = 0.80
+  assert.equal(nextLevel([...rep(8, true), ...rep(2, false)], 1), 2);
+});
+
+test("nextLevel: just under 80% does not promote", () => {
+  // 7 of 10 = 0.70
+  assert.equal(nextLevel([...rep(7, true), ...rep(3, false)], 1), 1);
+});
+
+test("nextLevel: exactly 50% does NOT demote (boundary is exclusive)", () => {
+  // 5 of 10 = 0.50
+  assert.equal(nextLevel([...rep(5, true), ...rep(5, false)], 2), 2);
+});
+
+test("nextLevel: below 50% demotes", () => {
+  // 4 of 10 = 0.40
+  assert.equal(nextLevel([...rep(4, true), ...rep(6, false)], 2), 1);
+});
+
+test("nextLevel: promotion caps at 3 and demotion floors at 1", () => {
+  assert.equal(nextLevel(rep(10, true), 3), 3);
+  assert.equal(nextLevel(rep(10, false), 1), 1);
+});
+
+test("nextLevel: only the last 10 results count", () => {
+  // 20 wrong then 10 right: accuracy over the window is 1.0
+  const window = [...rep(20, false), ...rep(10, true)];
+  assert.equal(nextLevel(window, 1), 2);
+});
+
+test("pushResult: appends and caps the window at WINDOW_SIZE", () => {
+  let w: boolean[] = [];
+  for (let i = 0; i < 15; i++) w = pushResult(w, i % 2 === 0);
+  assert.equal(w.length, WINDOW_SIZE);
+  // the survivors are the most recent 10 of the 15
+  assert.deepEqual(w, Array.from({ length: 15 }, (_, i) => i % 2 === 0).slice(5));
+});
+
+test("pushResult: does not mutate its input", () => {
+  const original: boolean[] = [true];
+  const next = pushResult(original, false);
+  assert.deepEqual(original, [true]);
+  assert.deepEqual(next, [true, false]);
+});
+
+test("emptyWindows: one empty window per drill kind, and nothing else", () => {
+  const w = emptyWindows();
+  assert.deepEqual(Object.keys(w).sort(), [...DRILL_KINDS].sort());
+  for (const k of DRILL_KINDS) assert.deepEqual(w[k], []);
+});
+
+test("levelFromHistory: an empty window restores level 1", () => {
+  assert.equal(levelFromHistory([]), 1);
+});
+
+test("levelFromHistory: ten correct answers restore level 3 (the regression this fixes)", () => {
+  // A single nextLevel() call against the full window can only move one step
+  // from the default (1 -> 2). Replaying over growing prefixes reproduces the
+  // climb: 1->2 at 6 correct, 2->3 at ~ the point accuracy holds at >=0.80.
+  assert.equal(levelFromHistory(rep(10, true)), 3);
+});
+
+test("levelFromHistory: ten wrong answers restore level 1", () => {
+  assert.equal(levelFromHistory(rep(10, false)), 1);
+});
+
+test("levelFromHistory: fewer than the 6-sample minimum restores 1 regardless of content", () => {
+  assert.equal(levelFromHistory(rep(5, true)), 1);
+  assert.equal(levelFromHistory(rep(3, false)), 1);
+});
+
+test("levelFromHistory: climbs before it slips restores a level >= 2", () => {
+  const window = [...rep(8, true), ...rep(2, false)];
+  assert.ok(levelFromHistory(window) >= 2, `expected >= 2, got ${levelFromHistory(window)}`);
+});
+
+test("levelFromHistory: never returns a value outside 1..3", () => {
+  const rng = mulberry32(12345);
+  for (let trial = 0; trial < 300; trial++) {
+    const len = Math.floor(rng() * 15);
+    const window = Array.from({ length: len }, () => rng() < 0.5);
+    const level = levelFromHistory(window);
+    assert.ok(level >= 1 && level <= 3, `level ${level} out of bounds for window ${JSON.stringify(window)}`);
+  }
+});
+
+test("mergeSeededWindows: takes the seeded window for kinds not answered this session", () => {
+  const seeded = emptyWindows();
+  seeded.outs = rep(10, true);
+  seeded.potodds = rep(8, true);
+  const local = emptyWindows();
+  const merged = mergeSeededWindows(seeded, local, []);
+  assert.deepEqual(merged.outs, rep(10, true));
+  assert.deepEqual(merged.potodds, rep(8, true));
+});
+
+test("mergeSeededWindows: keeps the local window for a kind already answered", () => {
+  // The bug this exists for: a blanket overwrite rolled the answer back to the
+  // server snapshot, invisibly, because Score and XP still reflected it.
+  const seeded = emptyWindows();
+  seeded.outs = rep(10, true);
+  seeded.potodds = rep(10, true);
+  const local = emptyWindows();
+  local.outs = [false];
+  const merged = mergeSeededWindows(seeded, local, ["outs"]);
+  assert.deepEqual(merged.outs, [false], "the answered kind must not be overwritten");
+  assert.deepEqual(merged.potodds, rep(10, true), "unanswered kinds must still be seeded");
+});
+
+test("mergeSeededWindows: one early answer does not discard the other eight kinds", () => {
+  const seeded = emptyWindows();
+  for (const kind of DRILL_KINDS) seeded[kind] = rep(10, true);
+  const local = emptyWindows();
+  local.ev = [false];
+  const merged = mergeSeededWindows(seeded, local, ["ev"]);
+  const seededStill = DRILL_KINDS.filter((k) => merged[k].length === 10);
+  assert.equal(seededStill.length, DRILL_KINDS.length - 1);
+  assert.deepEqual(merged.ev, [false]);
+});
+
+test("mergeSeededWindows: covers every drill kind and mutates neither input", () => {
+  const seeded = emptyWindows();
+  const local = emptyWindows();
+  local.bluff = [true];
+  const merged = mergeSeededWindows(seeded, local, ["bluff"]);
+  assert.deepEqual(Object.keys(merged).sort(), [...DRILL_KINDS].sort());
+  assert.deepEqual(seeded.bluff, [], "seeded must not be mutated");
+  assert.deepEqual(local.bluff, [true], "local must not be mutated");
+});
+
+test("seededLevels: restores each kind's level from its own window", () => {
+  const seeded = emptyWindows();
+  seeded.outs = rep(10, true);
+  seeded.potodds = rep(10, false);
+  const levels = seededLevels(seeded, {}, []);
+  assert.equal(levels.outs, 3, "ten correct answers restore to level 3");
+  assert.equal(levels.potodds, 1);
+  assert.equal(levels.bluff, 1, "an empty window starts at level 1");
+});
+
+test("seededLevels: a kind answered this session keeps its session level", () => {
+  const seeded = emptyWindows();
+  seeded.outs = rep(10, true);
+  seeded.ev = rep(10, true);
+  const levels = seededLevels(seeded, { ev: 2 }, ["ev"]);
+  assert.equal(levels.ev, 2, "the session's own level wins for an answered kind");
+  assert.equal(levels.outs, 3, "other kinds still restore from the snapshot");
+});
+
+/**
+ * The regression this function exists for. The seeding effect re-deals the
+ * hand on screen using these levels and reads them synchronously, so a
+ * partially-built object silently deals a level-1 hand. Before the fix the
+ * levels were assembled inside a `setLevels` updater that React had not yet
+ * run, so the re-deal saw `{}` — every page load opened at level 1 and only
+ * corrected itself on the first tab switch.
+ */
+test("seededLevels: returns a level for every kind, ready to deal from", () => {
+  const seeded = emptyWindows();
+  seeded.outs = rep(10, true);
+  const levels = seededLevels(seeded, {}, []);
+  assert.deepEqual(Object.keys(levels).sort(), [...DRILL_KINDS].sort());
+  for (const kind of DRILL_KINDS) {
+    assert.ok(levels[kind]! >= 1 && levels[kind]! <= 3, `${kind} has a usable level`);
+  }
+});

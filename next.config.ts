@@ -3,11 +3,18 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   async rewrites() {
     // Dev: proxy /api/* to the local uvicorn server (npm run api).
+    //
+    // The port is overridable via API_PORT because 8000 is a popular default —
+    // if another local service already holds it, this rewrite silently sends
+    // this app's API calls into that service, which is baffling to debug.
+    // package.json's `api` / `api:bare` scripts read the same variable, so
+    // `API_PORT=8011 npm run dev:all` moves both sides together.
     if (process.env.NODE_ENV === "development") {
+      const apiPort = process.env.API_PORT ?? "8000";
       return [
         {
           source: "/api/:path*",
-          destination: "http://127.0.0.1:8000/api/:path*",
+          destination: `http://127.0.0.1:${apiPort}/api/:path*`,
         },
       ];
     }

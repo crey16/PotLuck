@@ -35,27 +35,45 @@ outs drill, and their XP persists.
 role key must be a Vercel env var, never in client code; `@supabase/ssr` cookie
 handling in middleware is the usual source of "logged out on refresh".
 
-## M2 — The full drill set
+## M2 — The full drill set ✅ CODE-COMPLETE (branch `m2-full-drill-set`)
 
-**Carried over from M1 (do first):**
-- **Google OAuth provider.** Prereq: enable MFA on the Google account, then
+**Built and verified.** All nine drills, a Mixed mode, a generic renderer, a
+Reference tab, per-drill adaptive difficulty seeded from history, both opponent
+modes, and `skill_stats` per canonical skill tag. 183 TS + 28 pytest green,
+`tsc`/lint/build clean, and 18/18 live API checks against the real Supabase
+project. See `docs/06-m2-status.md` for the full state, the settled decisions M3
+inherits, and the local-dev traps.
+
+- ✅ Counting outs · Rule of 2 & 4 · Pot odds · Call or fold · Implied odds ·
+  Expected value · Bluff math · OMC mistakes · Preflop drill
+- ✅ Adaptive difficulty from a rolling window of the last 10 — **per drill
+  kind**, not global, and restored on load with `levelFromHistory`.
+- ✅ Two opponent modes: unknown (draw outs) and face-up (outs vs a known hand,
+  with dead outs named). Default unknown, persisted in a cookie so the
+  server-rendered first hand already respects it.
+- ✅ Every answer records an `attempts` row with `drill_kind` + `drill_payload`.
+- ✅ `skill_stats` updated per canonical skill tag (`api/skills.py`), five tags
+  reused from StackSchool so drill and lesson accuracy pool.
+- ✅ Reference cheat-sheet tab, every figure computed from `lib/poker/math.ts`
+  so it can never disagree with the drills.
+
+- [x] **Authenticated visual pass over all eleven tabs.** Done. Found six real
+  defects — including `/drill` throwing on every request, and seeded difficulty
+  never reaching the first hand — all fixed with regression tests. Full
+  accounting in `docs/06-m2-status.md`.
+
+**Still carried over (now genuinely last):**
+- [ ] **Google OAuth provider.** Prereq: enable MFA on the Google account, then
   Google Cloud console → OAuth consent screen + Web client with redirect URI
   `https://ajaryvyorhwnhinzubqd.supabase.co/auth/v1/callback` → paste client
   ID/secret into Supabase → Auth → Providers → Google. The app-side button
   already works.
-- Decide whether to re-enable Supabase "Confirm email" (off for M1 so friends
-  can sign up instantly; needs an SMTP story if turned back on).
-
-Port the 10 modules from the trainer HTML. The behaviour is fully specified by
-that file, and the engine already exists.
-
-- Counting outs · Rule of 2 & 4 · Pot odds · Call or fold · Implied odds ·
-  Expected value · Bluff math · OMC mistakes · Preflop drill
-- Adaptive difficulty from a rolling window of the last 10 answers.
-- Two opponent modes: unknown (draw outs) and face-up (outs vs a known hand,
-  with dead outs shown). Default to unknown.
-- Record every answer as an `attempts` row with `drill_kind` + `drill_payload`.
-- Update `skill_stats` per drill kind so recommendations keep working.
+- [ ] **Confirm-email decision.** Recommendation: **leave it off** until there is
+  an SMTP story. Nothing in the app trusts the address; Supabase's default sender
+  is rate-limited and lands in spam often enough to lose a friend at the signup
+  step, and an unverified signup that works beats a confirmation mail that never
+  arrives. Revisit in M5, when public profiles and challenges give a reason to
+  care who owns an address.
 
 ## M3 — Range charts
 

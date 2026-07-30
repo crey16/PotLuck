@@ -7,8 +7,13 @@
 /** Where an unauthenticated user lands, and where signed-in users bounce from. */
 export const LOGIN_PATH = "/login";
 
-/** Default landing page once signed in — also safeNext's fallback. */
-export const DEFAULT_NEXT = "/drill/outs";
+/**
+ * Default landing page once signed in — also safeNext's fallback. Deliberately
+ * no `?tab=` so the default Mixed tab (the point of M2) wins. `/drill/outs`
+ * still exists and redirects to `/drill?tab=outs`, preserving the URL M1
+ * shipped, but nothing should route a fresh sign-in through that extra hop.
+ */
+export const DEFAULT_NEXT = "/drill";
 
 /** Paths that are always allowed through, signed in or not. */
 const PUBLIC_PREFIXES = [LOGIN_PATH, "/auth", "/api"];
