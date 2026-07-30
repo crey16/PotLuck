@@ -2,12 +2,11 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Header } from "@/components/ui/Header";
 import { createClient } from "@/lib/supabase/client";
 import { supabaseConfigured } from "@/lib/supabase/env";
 import { safeNext } from "@/lib/supabase/authRules";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "forgot";
 
 /** Signed-out gate. Not rendered while /login is guarded by middleware for an
  * already-authenticated request, but a client-side check below covers the
@@ -31,8 +30,10 @@ function LoginForm() {
   const configured = supabaseConfigured();
 
   const [mode, setMode] = useState<Mode>("signin");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [resetSentTo, setResetSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(
     searchParams.get("error") === "auth_callback"
       ? "Something went wrong finishing sign-in. Please try again."
@@ -57,6 +58,12 @@ function LoginForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configured]);
 
+  function switchMode(m: Mode) {
+    setMode(m);
+    setError(null);
+    setResetSentTo(null);
+  }
+
   async function handleGoogle() {
     if (!configured) return;
     setError(null);
@@ -75,10 +82,25 @@ function LoginForm() {
     setError(null);
     setPending(true);
     const supabase = createClient();
+
+    if (mode === "forgot") {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      });
+      setPending(false);
+      if (resetError) setError(resetError.message);
+      else setResetSentTo(email);
+      return;
+    }
+
     const { error: authError } =
       mode === "signin"
         ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+        : await supabase.auth.signUp({
+            email,
+            password,
+            options: username.trim() ? { data: { username: username.trim() } } : undefined,
+          });
     setPending(false);
     if (authError) {
       setError(authError.message);
@@ -89,42 +111,118 @@ function LoginForm() {
   }
 
   return (
-    <div className="wrap">
-      <Header />
-      <div className="panel" style={{ maxWidth: 420, margin: "0 auto" }}>
-        <div className="prompt">Sign in</div>
-        <p className="sub">Track XP, streaks, and progress across drills.</p>
+    <main className="auth-layout">
+      <div>
+        <div className="mono-label accent" style={{ letterSpacing: ".14em", marginBottom: "var(--space-3)" }}>
+          Poker math trainer
+        </div>
+        <h1 style={{ fontSize: 58, lineHeight: 0.95, margin: "0 0 var(--space-4)", maxWidth: "20ch" }}>
+          Learn the numbers until they are automatic.
+        </h1>
+        <p style={{ fontSize: 16, maxWidth: "52ch", color: "color-mix(in srgb, var(--color-text) 72%, transparent)" }}>
+          Ten drills — outs, pot odds, EV, implied odds, bluff math, preflop ranges — each with
+          its own adaptive difficulty and a worked derivation after every hand. Keyboard-first:
+          1–4 to answer, N for the next hand.
+        </p>
+        <div
+          style={{
+            display: "flex", gap: "var(--space-6)", marginTop: "var(--space-6)", flexWrap: "wrap",
+            fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: ".08em",
+            textTransform: "uppercase",
+            color: "color-mix(in srgb, var(--color-text) 55%, transparent)",
+          }}
+        >
+          <span>10 drills</span>
+          <span>8 skill tags</span>
+          <span>169-cell range charts</span>
+          <span>Free</span>
+        </div>
+      </div>
+
+      <div className="blueprint" style={{ padding: "var(--space-6)", background: "var(--color-bg)" }}>
+        <div style={{ display: "flex", gap: "var(--space-1)", marginBottom: "var(--space-6)", borderBottom: "1px solid var(--color-divider)" }}>
+          <button className={`auth-tab${mode === "signin" ? " on" : ""}`} onClick={() => switchMode("signin")}>
+            Sign in
+          </button>
+          <button className={`auth-tab${mode === "signup" ? " on" : ""}`} onClick={() => switchMode("signup")}>
+            Create account
+          </button>
+          <button
+            className={`auth-tab${mode === "forgot" ? " on" : ""}`}
+            style={{ marginLeft: "auto" }}
+            onClick={() => switchMode("forgot")}
+          >
+            Forgot?
+          </button>
+        </div>
 
         {!configured ? (
-          <div className="note warnl">
+          <div className="note warnl" style={{ marginTop: 0 }}>
             <b>Supabase is not configured.</b> Add <code>NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-            <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to <code>.env.local</code> to enable sign in.
-            The drill still works without an account.
+            <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to <code>.env.local</code> to enable sign
+            in. The drills still work without an account.
           </div>
         ) : (
-          <>
-            <button type="button" className="btn ghost" style={{ width: "100%" }} onClick={handleGoogle}>
-              Continue with Google
-            </button>
+          <form onSubmit={handleSubmit}>
+            {mode === "signin" && (
+              <>
+                <h2 style={{ fontSize: 28, margin: "0 0 var(--space-2)" }}>Welcome back</h2>
+                <p style={{ fontSize: 13.5, color: "color-mix(in srgb, var(--color-text) 65%, transparent)", margin: "0 0 var(--space-4)" }}>
+                  XP, streak and per-drill difficulty are on your account.
+                </p>
+                <button type="button" className="btn btn-secondary btn-block" style={{ minHeight: 40 }} onClick={handleGoogle}>
+                  Continue with Google
+                </button>
+                <div className="or-rule">or</div>
+              </>
+            )}
+            {mode === "signup" && (
+              <>
+                <h2 style={{ fontSize: 28, margin: "0 0 var(--space-2)" }}>Create your account</h2>
+                <p style={{ fontSize: 13.5, color: "color-mix(in srgb, var(--color-text) 65%, transparent)", margin: "0 0 var(--space-4)" }}>
+                  Pick a username — it is the name on your profile and, later, on leaderboards.
+                </p>
+                <div className="field" style={{ marginBottom: "var(--space-3)" }}>
+                  <label htmlFor="username">Username</label>
+                  <input
+                    id="username"
+                    className="input"
+                    type="text"
+                    autoComplete="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+            {mode === "forgot" && (
+              <>
+                <h2 style={{ fontSize: 28, margin: "0 0 var(--space-2)" }}>Reset your password</h2>
+                <p style={{ fontSize: 13.5, color: "color-mix(in srgb, var(--color-text) 65%, transparent)", margin: "0 0 var(--space-4)" }}>
+                  We send a one-time link. It expires in an hour.
+                </p>
+              </>
+            )}
 
-            <div className="dividertext">or</div>
+            <div className="field" style={{ marginBottom: "var(--space-3)" }}>
+              <label htmlFor="email">Email</label>
+              <input
+                id="email"
+                className="input"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
 
-            <form onSubmit={handleSubmit}>
-              <div className="field">
-                <label htmlFor="email">Email</label>
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="field">
+            {mode !== "forgot" && (
+              <div className="field" style={{ marginBottom: "var(--space-4)" }}>
                 <label htmlFor="password">Password</label>
                 <input
                   id="password"
+                  className="input"
                   type="password"
                   autoComplete={mode === "signin" ? "current-password" : "new-password"}
                   required
@@ -133,29 +231,76 @@ function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
+            )}
 
-              {error && <div className="error">{error}</div>}
+            {mode === "signup" && password.length >= 6 && (
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: ".06em",
+                  textTransform: "uppercase", color: "var(--good)",
+                  display: "flex", alignItems: "center", gap: 6, marginBottom: "var(--space-4)",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                {password.length} characters — good
+              </div>
+            )}
 
-              <div className="formrow">
-                <button type="submit" className="btn" disabled={pending}>
-                  {mode === "signin" ? "Sign in" : "Sign up"}
-                </button>
-                <button
-                  type="button"
-                  className="btn ghost"
-                  disabled={pending}
-                  onClick={() => {
-                    setError(null);
-                    setMode((m) => (m === "signin" ? "signup" : "signin"));
+            {error && <div className="error">{error}</div>}
+
+            <button
+              type="submit"
+              className="btn btn-primary btn-block blueprint btn-caps"
+              style={{ minHeight: 42, letterSpacing: ".05em" }}
+              disabled={pending}
+            >
+              {mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link"}
+            </button>
+
+            {mode === "forgot" && resetSentTo && (
+              <div className="note" style={{ fontSize: 13 }}>
+                Sent. Check {resetSentTo} — the link signs you back in.
+              </div>
+            )}
+
+            {mode === "signin" && (
+              <p style={{ fontSize: 12.5, color: "color-mix(in srgb, var(--color-text) 60%, transparent)", margin: "var(--space-4) 0 0" }}>
+                No account?{" "}
+                <a
+                  href="#signup"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    switchMode("signup");
                   }}
                 >
-                  {mode === "signin" ? "Need an account? Sign up" : "Have an account? Sign in"}
-                </button>
-              </div>
-            </form>
-          </>
+                  Create one
+                </a>{" "}
+                — nothing is saved without one.
+              </p>
+            )}
+            {mode === "signup" && (
+              <p style={{ fontSize: 12, color: "color-mix(in srgb, var(--color-text) 55%, transparent)", margin: "var(--space-3) 0 0" }}>
+                Level 1, 0 XP, no streak yet. First correct answer starts it.
+              </p>
+            )}
+            {mode === "forgot" && (
+              <p style={{ fontSize: 12.5, margin: "var(--space-3) 0 0" }}>
+                <a
+                  href="#signin"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    switchMode("signin");
+                  }}
+                >
+                  Back to sign in
+                </a>
+              </p>
+            )}
+          </form>
         )}
       </div>
-    </div>
+    </main>
   );
 }

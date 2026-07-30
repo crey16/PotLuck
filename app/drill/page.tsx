@@ -1,24 +1,9 @@
 import { cookies } from "next/headers";
-import { DrillShell, type Profile } from "@/components/drill/DrillShell";
-import { createClient } from "@/lib/supabase/server";
-import { supabaseConfigured } from "@/lib/supabase/env";
+import { redirect } from "next/navigation";
+import { DrillShell } from "@/components/drill/DrillShell";
 import { TAB_ORDER, type TabId } from "@/lib/drill/registry";
 import { OPP_MODE_COOKIE, parseOppMode } from "@/lib/drill/oppMode";
-
-/** Best-effort profile fetch — returns null, never throws, when Supabase is
- *  unconfigured, there is no session, or the row is missing. */
-async function fetchProfile(): Promise<Profile | null> {
-  if (!supabaseConfigured()) return null;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("username, xp, level, streak_count")
-    .eq("id", user.id)
-    .single();
-  return profile;
-}
+import { fetchKindStats } from "@/lib/drill/serverStats";
 
 export default async function DrillPage({
   searchParams,
@@ -26,9 +11,12 @@ export default async function DrillPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
+  // Reference is a page of its own in the redesign; the old tab URL still works.
+  if (tab === "reference") redirect("/reference");
   const initialTab: TabId =
     tab && (TAB_ORDER as string[]).includes(tab) ? (tab as TabId) : "mixed";
-  const profile = await fetchProfile();
+
+  const kindStats = await fetchKindStats();
 
   // Opponent mode comes from a cookie so the first server-rendered hand already
   // respects the preference (localStorage is invisible to the server).
@@ -46,13 +34,11 @@ export default async function DrillPage({
   const seed = Math.floor(Math.random() * 2 ** 31);
 
   return (
-    <div className="wrap">
-      <DrillShell
-        profile={profile}
-        initialTab={initialTab}
-        initialOppMode={initialOppMode}
-        seed={seed}
-      />
-    </div>
+    <DrillShell
+      initialTab={initialTab}
+      initialOppMode={initialOppMode}
+      seed={seed}
+      kindStats={kindStats}
+    />
   );
 }

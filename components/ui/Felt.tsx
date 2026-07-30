@@ -4,22 +4,24 @@ export interface FeltProps {
   children: ReactNode;
 }
 
-/** The reference `.felt` table container. Compose with `<Seat>` and `<Divider>`. */
+/** The grid-lined table strip. Compose with `<Seat>` and `<Divider>`. */
 export function Felt({ children }: FeltProps) {
-  return <div className="felt">{children}</div>;
+  return <div className="felt seats">{children}</div>;
 }
 
 export interface SeatProps {
-  /** e.g. "You", "Villain", "Board" */
+  /** e.g. "Your hand", "Board — flop", "Villain — shown" */
   label: string;
+  /** Accent the label (the mockup accents the villain seat). */
+  accent?: boolean;
   children: ReactNode;
 }
 
 /** A `.seat` — a labelled hand of `PlayingCard`s. */
-export function Seat({ label, children }: SeatProps) {
+export function Seat({ label, accent = false, children }: SeatProps) {
   return (
     <div className="seat">
-      <div className="who">{label}</div>
+      <div className={accent ? "who accent" : "who"}>{label}</div>
       <div className="hand">{children}</div>
     </div>
   );

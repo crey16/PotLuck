@@ -3,7 +3,6 @@ import {
   getScenario,
   handAt,
   rangePercent,
-  type Action,
 } from "@/lib/poker/ranges";
 
 export interface RangeGridProps {
@@ -11,19 +10,12 @@ export interface RangeGridProps {
   highlight?: string;
 }
 
-/** Same three colours the reference trainer uses for raise / call / fold. */
-const ACTION_COLOR: Record<Action, string> = {
-  r: "var(--orange)",
-  c: "var(--aqua)",
-  f: "var(--surface-3)",
-};
+/** Value steps of one hue, per the redesign: raise/3-bet is the dark accent,
+ *  call the light accent, fold transparent with a hairline border. Split
+ *  cells are mixed frequencies, filled bottom-up. */
+const RAISE = "var(--color-accent-800)";
+const CALL = "var(--color-accent-300)";
 
-/**
- * Renders the reference trainer's `gridHTML` + `legendHTML`
- * (poker-math-trainer.html lines 1069-1088) as React, using the tested range
- * engine (`lib/poker/ranges.ts`) for every frequency and percentage — nothing
- * here is hard-coded.
- */
 export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
   const scenario = getScenario(scenarioId);
   if (!scenario) return null;
@@ -35,21 +27,20 @@ export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
       const f = cellFrequency(scenario, hand);
       const rp = f.r * 100;
       const cp = (f.r + f.c) * 100;
-      const bg =
-        f.r >= 0.999
-          ? ACTION_COLOR.r
+      const dim = f.f >= 0.999;
+      const bg = dim
+        ? "transparent"
+        : f.r >= 0.999
+          ? RAISE
           : f.c >= 0.999
-            ? ACTION_COLOR.c
-            : f.f >= 0.999
-              ? ACTION_COLOR.f
-              : `linear-gradient(to top, ${ACTION_COLOR.r} 0 ${rp.toFixed(1)}%, ` +
-                `${ACTION_COLOR.c} ${rp.toFixed(1)}% ${cp.toFixed(1)}%, ` +
-                `${ACTION_COLOR.f} ${cp.toFixed(1)}% 100%)`;
+            ? CALL
+            : `linear-gradient(to top, ${RAISE} 0 ${rp.toFixed(1)}%, ` +
+              `${CALL} ${rp.toFixed(1)}% ${cp.toFixed(1)}%, transparent ${cp.toFixed(1)}% 100%)`;
       const title =
         `${hand} — ${Math.round(f.r * 100)}% ${scenario.c ? "3-bet" : "raise"}` +
         (scenario.c ? `, ${Math.round(f.c * 100)}% call` : "") +
         `, ${Math.round(f.f * 100)}% fold`;
-      cells.push({ hand, bg, dim: f.f >= 0.999, pick: hand === highlight, title });
+      cells.push({ hand, bg, dim, pick: hand === highlight, title });
     }
   }
 
@@ -57,16 +48,26 @@ export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
 
   return (
     <div>
-      <div className="legend">
+      <div className="legend-line">
         {scenario.actions.map(([key, label]) => (
-          <span className="lg" key={key}>
-            <i style={{ background: ACTION_COLOR[key] }} />
+          <span key={key} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <i
+              className="sw"
+              style={
+                key === "f"
+                  ? { border: "1px solid var(--color-divider)" }
+                  : { background: key === "r" ? RAISE : CALL }
+              }
+            />
             {label}
-            {key !== "f" && <> <b>{rangePercent(scenario, key).toFixed(1)}%</b></>}
+            {key !== "f" && <b>&nbsp;{rangePercent(scenario, key).toFixed(1)}%</b>}
           </span>
         ))}
-        <span className="lg" style={{ color: "var(--muted)" }}>
-          Total played <b>{totalPlayed.toFixed(1)}%</b>
+        <span style={{ color: "color-mix(in srgb, var(--color-text) 55%, transparent)" }}>
+          Split cell = mixed frequency, filled bottom-up
+        </span>
+        <span style={{ marginLeft: "auto", color: "var(--color-accent-700)" }}>
+          Total played <b>&nbsp;{totalPlayed.toFixed(1)}%</b>
         </span>
       </div>
       <div className="grid13">
@@ -80,6 +81,17 @@ export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
             {c.hand}
           </div>
         ))}
+      </div>
+      <div
+        style={{
+          display: "flex", justifyContent: "space-between", marginTop: "var(--space-3)",
+          fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".08em",
+          textTransform: "uppercase",
+          color: "color-mix(in srgb, var(--color-text) 55%, transparent)",
+        }}
+      >
+        <span>Suited above the diagonal · pairs on it · offsuit below</span>
+        {highlight && <span>{highlight} outlined — the hand you were dealt</span>}
       </div>
     </div>
   );

@@ -1,40 +1,460 @@
-import { redirect } from "next/navigation";
-import { Header } from "@/components/ui/Header";
-import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
+import { fetchDashboardStats, type SkillStat } from "@/lib/drill/serverStats";
+import { KIND_LABELS, TAB_ORDER } from "@/lib/drill/registry";
+import type { DrillKind } from "@/lib/drill/contract";
 import { supabaseConfigured } from "@/lib/supabase/env";
 
-/**
- * Authenticated users are redirected straight to the drill. Unauthenticated
- * hits are already sent to /login by middleware — this only fires when
- * Supabase isn't configured yet (middleware is a passthrough) or when a
- * signed-in user lands here directly.
- */
+/** Card blurbs, from the redesign spec. */
+const DRILL_DESCRIPTIONS: Record<DrillKind | "mixed", string> = {
+  mixed: "Deals from all nine kinds; each answer counts toward that kind",
+  outs: "Cards that complete your draw, dead outs stripped",
+  rule24: "Turn outs into equity in your head",
+  potodds: "The equity a call needs to break even",
+  decision: "Price against equity, one decision",
+  implied: "What you must win later to justify the call",
+  ev: "EV of a call in dollars",
+  bluff: "Folds a bluff needs, and MDF",
+  concepts: "Spot the old-man-coffee leak",
+  preflop: "6-max reference ranges, 169 cells",
+};
+
+const LEVEL_LABELS: Record<number, string> = {
+  1: "Clean numbers",
+  2: "Mixed sizings",
+  3: "Awkward sizings",
+};
+
+/** Weakest-skill routing: the drill that trains each tag. */
+const TAG_TO_KIND: Record<string, DrillKind> = {
+  pot_odds: "potodds",
+  bluffing: "bluff",
+  discipline: "concepts",
+  hand_selection: "preflop",
+  counting_outs: "outs",
+  equity_estimation: "rule24",
+  implied_odds: "implied",
+  expected_value: "ev",
+};
+
+function heatFill(xp: number): string | null {
+  if (xp <= 0) return null;
+  if (xp >= 100) return "var(--color-accent)";
+  if (xp >= 60) return "color-mix(in srgb, var(--color-accent) 75%, transparent)";
+  if (xp >= 30) return "color-mix(in srgb, var(--color-accent) 50%, transparent)";
+  return "color-mix(in srgb, var(--color-accent) 25%, transparent)";
+}
+
+function Pips({ level }: { level: number }) {
+  return (
+    <div className="pips" style={{ justifyContent: "flex-end", marginBottom: 4 }}>
+      {[1, 2, 3].map((i) => (
+        <span key={i} className={i <= level ? "on" : undefined} />
+      ))}
+    </div>
+  );
+}
+
+function SkillRow({ skill, weak }: { skill: SkillStat; weak: boolean }) {
+  return (
+    <div className={`skill-row${weak ? " weak" : ""}`}>
+      <span className="name" style={weak ? { display: "flex", alignItems: "center", gap: 6 } : undefined}>
+        {weak && (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" strokeWidth="1.5">
+            <path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a1.9 1.9 0 0 0 1.7 2.9h15.8a1.9 1.9 0 0 0 1.7-2.9L13.7 3.9a1.9 1.9 0 0 0-3.4 0z" />
+          </svg>
+        )}
+        {skill.label}
+      </span>
+      <span
+        className="meter thin"
+        style={weak ? { borderColor: "var(--warn)" } : undefined}
+      >
+        <i
+          className={weak ? "hatch" : undefined}
+          style={
+            weak
+              ? {
+                  width: `${skill.accuracy}%`,
+                  color: "var(--warn)",
+                  backgroundColor: "color-mix(in srgb, var(--warn) 22%, transparent)",
+                }
+              : { width: `${skill.accuracy}%` }
+          }
+        />
+      </span>
+      <span className="pct" style={weak ? { color: "var(--warn)" } : undefined}>
+        {skill.attempts > 0 ? `${skill.accuracy}%` : "—"}{" "}
+        <span className="n" style={weak ? { opacity: 0.7, color: "inherit" } : undefined}>
+          /{skill.attempts}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 export default async function Home() {
-  if (supabaseConfigured()) {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      redirect("/drill");
-    }
+  if (!supabaseConfigured()) {
+    return (
+      <main className="page">
+        <div className="mono-label accent" style={{ marginBottom: "var(--space-3)" }}>
+          Poker math trainer
+        </div>
+        <h1 style={{ fontSize: 52, lineHeight: 0.95 }}>Learn the numbers until they are automatic.</h1>
+        <p className="text-dim" style={{ maxWidth: "52ch" }}>
+          Supabase is not configured — add <code>.env.local</code> to enable accounts.{" "}
+          <Link href="/drill">The drills still work without one</Link>.
+        </p>
+      </main>
+    );
   }
 
-  // Reachable only when Supabase isn't configured yet (no .env.local) —
-  // middleware becomes a passthrough in that case, so a signed-out hit on
-  // "/" isn't redirected to /login. Every other signed-out request is
-  // already sent to /login by middleware before this component runs.
+  const stats = await fetchDashboardStats();
+  const { profile } = stats;
+  const level = profile?.level ?? 1;
+  const xp = profile?.xp ?? 0;
+  const xpToNext = level * 100 - xp;
+  const xpPct = Math.min(100, Math.max(0, xp - (level - 1) * 100));
+  const accuracy =
+    stats.totalAttempts > 0 ? Math.round((stats.totalCorrect / stats.totalAttempts) * 100) : null;
+
+  const sinceLabel = profile?.createdAt
+    ? new Date(profile.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+    : null;
+
+  // Weakest skill: lowest accuracy among tags with ≥5 attempts — the same
+  // rule the recommendation engine uses.
+  const ranked = [...stats.skills].filter((s) => s.attempts >= 5).sort((a, b) => a.accuracy - b.accuracy);
+  const weakest = ranked[0] ?? null;
+  const weakestKind = weakest ? TAG_TO_KIND[weakest.tag] : null;
+
+  // All 8 tags, best first, zero-attempt tags at the end.
+  const allSkills = [...stats.skills].sort((a, b) => b.accuracy - a.accuracy);
+
+  const drillOrder = TAB_ORDER.filter((t) => t !== "reference");
+  const kindLevels = Object.values(stats.kinds).filter((k) => k.attempts > 0).map((k) => k.level);
+  const mixedLevel = kindLevels.length
+    ? Math.round(kindLevels.reduce((a, b) => a + b, 0) / kindLevels.length)
+    : 1;
+
+  const resumeKind = stats.lastKind;
+
+  // 12-week heatmap: columns are weeks (oldest → newest), rows Mon → Sun.
+  const xpByDate = new Map(stats.activity.map((a) => [a.date, a.xp]));
+  const today = new Date();
+  const dow = (today.getDay() + 6) % 7; // Monday = 0
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - dow);
+  const weeks: { date: string; xp: number; future: boolean }[][] = [];
+  for (let w = 11; w >= 0; w--) {
+    const col: { date: string; xp: number; future: boolean }[] = [];
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() - w * 7 + d);
+      const iso = day.toISOString().slice(0, 10);
+      col.push({ date: iso, xp: xpByDate.get(iso) ?? 0, future: day > today });
+    }
+    weeks.push(col);
+  }
+
   return (
-    <div className="wrap">
-      <Header />
-      <div className="panel">
-        <div className="prompt">HCWK Wizard</div>
-        <p className="sub">
-          Lessons-style poker training: math drills for counting outs, pot
-          odds, EV, bluffs and more, with adaptive difficulty.{" "}
-          <a href="/drill">Open the drill</a>.
-        </p>
+    <main className="page" style={{ paddingTop: "var(--space-8)" }}>
+      {/* — hero — */}
+      <div className="home-hero">
+        <div>
+          <div className="mono-label accent" style={{ letterSpacing: ".14em", marginBottom: "var(--space-2)" }}>
+            All time{sinceLabel ? ` · since ${sinceLabel}` : ""}
+          </div>
+          <h1 style={{ fontSize: 52, lineHeight: 0.95, margin: "0 0 var(--space-2)" }}>
+            Level {level}
+          </h1>
+          <p
+            style={{
+              fontSize: 15, color: "color-mix(in srgb, var(--color-text) 70%, transparent)",
+              maxWidth: "44ch", margin: "0 0 var(--space-4)",
+            }}
+          >
+            Every correct answer is 10&nbsp;XP, flat. 100&nbsp;XP a level — difficulty never
+            inflates the rate.
+          </p>
+          <div
+            style={{
+              display: "flex", alignItems: "baseline", justifyContent: "space-between",
+              fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: ".08em",
+              textTransform: "uppercase",
+              color: "color-mix(in srgb, var(--color-text) 60%, transparent)", marginBottom: 5,
+            }}
+          >
+            <span>{xp.toLocaleString()} XP total</span>
+            <span>{xpToNext} XP to level {level + 1}</span>
+          </div>
+          <div className="meter">
+            <i style={{ width: `${xpPct}%` }} />
+          </div>
+          <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)", flexWrap: "wrap" }}>
+            <Link
+              href="/drill?tab=mixed"
+              className="btn btn-primary blueprint btn-caps"
+              style={{ fontSize: 16, padding: "12px 22px" }}
+            >
+              Start mixed drill
+              <span className="keyhint">D</span>
+            </Link>
+            {resumeKind && (
+              <Link
+                href={`/drill?tab=${resumeKind}`}
+                className="btn btn-secondary btn-caps"
+                style={{ fontSize: 15, padding: "12px 18px" }}
+              >
+                Resume {KIND_LABELS[resumeKind].toLowerCase()}
+              </Link>
+            )}
+          </div>
+        </div>
+
+        <div className="home-tiles">
+          <div className="blueprint stat-tile">
+            <div className="mono-label">Day streak</div>
+            <div className="big">
+              {profile?.streak ?? 0}{" "}
+              <span style={{ fontSize: 15, color: "color-mix(in srgb, var(--color-text) 55%, transparent)" }}>
+                days
+              </span>
+            </div>
+            <div className="small">Days played in a row. Answer once today to keep it.</div>
+          </div>
+          <div className="blueprint stat-tile">
+            <div className="mono-label">All-time accuracy</div>
+            <div className="big">
+              {accuracy !== null ? (
+                <>
+                  {accuracy}
+                  <span style={{ fontSize: 22 }}>%</span>
+                </>
+              ) : (
+                "—"
+              )}
+            </div>
+            <div className="small">
+              {stats.totalAttempts > 0
+                ? `${stats.totalCorrect} correct of ${stats.totalAttempts} answers`
+                : "No answers yet"}
+            </div>
+          </div>
+          <div
+            className="blueprint stat-tile"
+            style={{ gridColumn: "span 2", display: "flex", gap: "var(--space-4)", alignItems: "center" }}
+          >
+            <div style={{ flex: 1 }}>
+              <div className="mono-label" style={{ color: "var(--warn)" }}>Weakest skill</div>
+              <div
+                style={{
+                  fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 24,
+                  lineHeight: 1.1, marginTop: 2,
+                }}
+              >
+                {weakest ? `${weakest.label} — ${weakest.accuracy}%` : "Not enough data yet"}
+              </div>
+              <div style={{ fontSize: 12.5, color: "color-mix(in srgb, var(--color-text) 65%, transparent)" }}>
+                {weakest
+                  ? `${weakest.attempts} answers. The app already picks this for recommendations.`
+                  : "Five answers on a skill puts it on the board."}
+              </div>
+            </div>
+            <Link
+              href={weakestKind ? `/drill?tab=${weakestKind}` : "/drill?tab=mixed"}
+              className="btn btn-secondary btn-caps"
+              style={{ whiteSpace: "nowrap" }}
+            >
+              Drill it
+            </Link>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* — skill strengths — */}
+      <section style={{ marginBottom: "var(--space-8)" }}>
+        <div className="section-head">
+          <h2>Skill strengths</h2>
+          <span className="lede">
+            Eight tags, tracked on every answer. Bars are all-time accuracy; the count is sample size.
+          </span>
+        </div>
+        {allSkills.length === 0 ? (
+          <p className="text-dim">Answer a few hands and the eight skill tags appear here.</p>
+        ) : (
+          <>
+            <div className="home-skills">
+              {allSkills.map((s) => (
+                <SkillRow key={s.tag} skill={s} weak={weakest !== null && s.tag === weakest.tag} />
+              ))}
+            </div>
+            {weakest && (
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: ".08em",
+                  textTransform: "uppercase", color: "var(--warn)", marginTop: "var(--space-3)",
+                  display: "flex", alignItems: "center", gap: 7,
+                }}
+              >
+                <span className="hatch" style={{ width: 16, height: 10, border: "1px solid var(--warn)", display: "inline-block" }} />
+                Hatched + flagged = weakest tag, not colour alone
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* — the drills — */}
+      <section style={{ marginBottom: "var(--space-8)" }}>
+        <div className="section-head">
+          <h2>The drills</h2>
+          <span className="lede">
+            Each drill carries its own difficulty, set by your last 10 answers in that drill.
+          </span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(258px, 1fr))", gap: "var(--space-4)" }}>
+          {drillOrder.map((t, i) => {
+            const isMixed = t === "mixed";
+            const stat = isMixed ? null : stats.kinds[t as DrillKind];
+            const answers = isMixed ? stats.totalAttempts : stat!.attempts;
+            const acc = isMixed ? accuracy : stat!.accuracy;
+            const lvl = isMixed ? mixedLevel : stat!.level;
+            return (
+              <Link key={t} href={`/drill?tab=${t}`} className="blueprint drill-card">
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                  <span className="mono-label accent" style={{ letterSpacing: ".12em" }}>
+                    DRILL {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="mono-label" style={{ letterSpacing: ".08em" }}>
+                    {answers > 0 ? `${answers} ANSWERS` : "NEW"}
+                  </span>
+                </div>
+                <div className="title">{isMixed ? "Mixed drill" : KIND_LABELS[t as DrillKind]}</div>
+                <div className="desc">{DRILL_DESCRIPTIONS[t as DrillKind | "mixed"]}</div>
+                <div
+                  style={{
+                    display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+                    gap: "var(--space-3)", marginTop: "auto",
+                  }}
+                >
+                  <div>
+                    <div className="acc">
+                      {acc !== null && answers > 0 ? (
+                        <>
+                          {acc}
+                          <span style={{ fontSize: 15 }}>%</span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </div>
+                    <div className="mono-label" style={{ fontSize: 9.5, letterSpacing: ".1em" }}>
+                      accuracy
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <Pips level={lvl} />
+                    <div className="mono-label" style={{ fontSize: 9.5, letterSpacing: ".08em" }}>
+                      lvl {lvl} · {LEVEL_LABELS[lvl]}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* — activity + later — */}
+      <section className="home-bottom">
+        <div>
+          <div className="section-head">
+            <h2>Activity</h2>
+            <span className="lede">XP earned per day, last 12 weeks.</span>
+          </div>
+          <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "flex-start" }}>
+            <div
+              style={{
+                display: "grid", gridTemplateRows: "repeat(7, 15px)", gap: 3,
+                fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".06em",
+                color: "color-mix(in srgb, var(--color-text) 50%, transparent)",
+                textAlign: "right", paddingTop: 1,
+              }}
+            >
+              <span>MON</span><span /><span>WED</span><span /><span>FRI</span><span /><span>SUN</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 15px)", gridTemplateRows: "repeat(7, 15px)", gap: 3 }}>
+              {weeks.map((col, w) =>
+                col.map((day, d) => {
+                  const fill = day.future ? null : heatFill(day.xp);
+                  return (
+                    <div
+                      key={day.date}
+                      title={`${day.xp} XP`}
+                      className={`heat-cell${fill ? "" : " empty"}`}
+                      style={{
+                        gridColumn: w + 1,
+                        gridRow: d + 1,
+                        background: fill ?? "transparent",
+                        opacity: day.future ? 0.35 : 1,
+                      }}
+                    />
+                  );
+                })
+              )}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", marginTop: "var(--space-4)", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".08em",
+                textTransform: "uppercase",
+                color: "color-mix(in srgb, var(--color-text) 55%, transparent)",
+              }}
+            >
+              none
+              <span className="heat-cell empty" style={{ width: 13, height: 13, display: "inline-block" }} />
+              <span style={{ width: 13, height: 13, display: "inline-block", background: "color-mix(in srgb, var(--color-accent) 25%, transparent)" }} />
+              <span style={{ width: 13, height: 13, display: "inline-block", background: "color-mix(in srgb, var(--color-accent) 50%, transparent)" }} />
+              <span style={{ width: 13, height: 13, display: "inline-block", background: "color-mix(in srgb, var(--color-accent) 75%, transparent)" }} />
+              <span style={{ width: 13, height: 13, display: "inline-block", background: "var(--color-accent)" }} />
+              120+ xp
+            </div>
+            {(profile?.streak ?? 0) > 0 && (
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".08em",
+                  textTransform: "uppercase", color: "var(--color-accent-700)",
+                }}
+              >
+                last {profile!.streak} day{profile!.streak === 1 ? "" : "s"} played — streak live
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="section-head" style={{ gap: 0 }}>
+            <h2>Later</h2>
+          </div>
+          <div
+            style={{
+              border: "1px dashed var(--color-divider)", padding: "var(--space-6)",
+              display: "flex", flexDirection: "column", gap: "var(--space-2)",
+            }}
+          >
+            <div className="mono-label" style={{ fontSize: 10, letterSpacing: ".12em" }}>Reserved</div>
+            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 20, lineHeight: 1.15 }}>
+              Friends · leaderboards · head-to-head
+            </div>
+            <p style={{ fontSize: 13, color: "color-mix(in srgb, var(--color-text) 60%, transparent)", margin: 0 }}>
+              This column is held open for the social layer. Nothing is designed here yet — the grid
+              takes a third card row without moving anything above it.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

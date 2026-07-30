@@ -1,14 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { DrillQuestion, Explain, OptionValue, ViewBlock } from "@/lib/drill/contract";
 import { gradeAnswer, isRight } from "@/lib/drill/grade";
 import { Felt, Seat, Divider } from "@/components/ui/Felt";
 import { PlayingCard } from "@/components/ui/PlayingCard";
-import { Pills } from "@/components/ui/Pills";
+import { MoneyStrip } from "@/components/ui/MoneyStrip";
 import { RangeGrid } from "@/components/ui/RangeGrid";
 import { OptionButton, type OptionButtonState } from "@/components/ui/OptionButton";
-import { FeedbackPanel, WorkTable, WorkRow } from "@/components/ui/FeedbackPanel";
+import { WorkTable, WorkRow } from "@/components/ui/FeedbackPanel";
 
 function Blocks({ blocks }: { blocks: ViewBlock[] }) {
   return (
@@ -28,8 +29,8 @@ function Blocks({ blocks }: { blocks: ViewBlock[] }) {
                 {b.villain && (
                   <>
                     <Divider />
-                    <Seat label="Villain (shown)">
-                      {b.villain.map((c) => <PlayingCard key={c} card={c} />)}
+                    <Seat label="Villain — shown" accent>
+                      {b.villain.map((c) => <PlayingCard key={c} card={c} highlight />)}
                     </Seat>
                   </>
                 )}
@@ -44,19 +45,34 @@ function Blocks({ blocks }: { blocks: ViewBlock[] }) {
               </Felt>
             );
           case "money":
-            return <Pills key={i} items={b.items} />;
+            return <MoneyStrip key={i} items={b.items} />;
           case "text":
-            return (
-              <div
+            return b.tone === "warn" ? (
+              <div key={i} className="note warnl" style={{ display: "flex", gap: "var(--space-3)" }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" strokeWidth="1.5" style={{ flex: "none", marginTop: 3 }}>
+                  <path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a1.9 1.9 0 0 0 1.7 2.9h15.8a1.9 1.9 0 0 0 1.7-2.9L13.7 3.9a1.9 1.9 0 0 0-3.4 0z" />
+                </svg>
+                <span>{b.text}</span>
+              </div>
+            ) : (
+              <p
                 key={i}
-                className={b.tone === "warn" ? "note warnl" : "sub"}
-                style={b.center ? { textAlign: "center", margin: "6px 0 0" } : undefined}
+                style={{
+                  fontSize: 14,
+                  color: "color-mix(in srgb, var(--color-text) 70%, transparent)",
+                  margin: "var(--space-3) 0 0",
+                  ...(b.center ? { textAlign: "center" as const } : {}),
+                }}
               >
                 {b.text}
-              </div>
+              </p>
             );
           case "grid":
-            return <RangeGrid key={i} scenarioId={b.scenarioId} highlight={b.highlight} />;
+            return (
+              <div key={i} style={{ margin: "var(--space-3) 0" }}>
+                <RangeGrid scenarioId={b.scenarioId} highlight={b.highlight} />
+              </div>
+            );
         }
       })}
     </>
@@ -66,13 +82,23 @@ function Blocks({ blocks }: { blocks: ViewBlock[] }) {
 function ExplainBody({ explain }: { explain: Explain }) {
   return (
     <>
+      <div className="mono-label" style={{ letterSpacing: ".12em", marginBottom: "var(--space-2)" }}>
+        Working
+      </div>
       <WorkTable>
         {explain.rows.map((r) => <WorkRow key={r.label} label={r.label} value={r.value} />)}
       </WorkTable>
       {explain.notes.map((n, i) => (
-        <div key={i} className={n.tone === "warn" ? "note warnl" : "note"}>
-          {n.title && <b>{n.title} </b>}
-          {n.text}
+        <div key={i} className={n.tone === "warn" ? "note warnl" : "note"} style={n.tone === "warn" ? { display: "flex", gap: "var(--space-3)" } : undefined}>
+          {n.tone === "warn" && (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" strokeWidth="1.5" style={{ flex: "none", marginTop: 3 }}>
+              <path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a1.9 1.9 0 0 0 1.7 2.9h15.8a1.9 1.9 0 0 0 1.7-2.9L13.7 3.9a1.9 1.9 0 0 0-3.4 0z" />
+            </svg>
+          )}
+          <span>
+            {n.title && <b>{n.title} </b>}
+            {n.text}
+          </span>
         </div>
       ))}
       {explain.blocks && <Blocks blocks={explain.blocks} />}
@@ -82,19 +108,20 @@ function ExplainBody({ explain }: { explain: Explain }) {
 
 export interface DrillPlayerProps {
   question: DrillQuestion;
+  /** The session run AFTER this answer landed — shown in the feedback bar. */
+  run: number;
   /** Fired once per question, with whether it counted as right. */
   onAnswered: (chosen: OptionValue, right: boolean) => void;
   onNext: () => void;
 }
 
 /** Renders and drives ANY DrillQuestion. The only drill state machine. */
-export function DrillPlayer({ question, onAnswered, onNext }: DrillPlayerProps) {
+export function DrillPlayer({ question, run, onAnswered, onNext }: DrillPlayerProps) {
   const [chosen, setChosen] = useState<OptionValue | null>(null);
   const answered = chosen !== null;
 
   // No reset effect here on purpose: DrillShell gives this component a `key`
   // per deal, so a new hand remounts it and `chosen` starts null naturally.
-  // Resetting via useEffect would be a setState-in-effect cascade.
 
   const handleAnswer = useCallback(
     (value: OptionValue) => {
@@ -126,11 +153,32 @@ export function DrillPlayer({ question, onAnswered, onNext }: DrillPlayerProps) 
   }, [answered, question, handleAnswer, onNext]);
 
   const grade = answered ? gradeAnswer(question, chosen) : null;
+  const ok = grade !== null && grade !== "wrong";
+
+  const chosenLabel = answered
+    ? question.options.find((o) => o.value === chosen)?.label
+    : undefined;
+  const correctLabel = question.options.find(
+    (o) => gradeAnswer(question, o.value) === "correct"
+  )?.label;
 
   return (
     <>
-      <div className="prompt">{question.prompt}</div>
-      {question.sub && <div className="sub">{question.sub}</div>}
+      <h2 style={{ fontSize: 34, lineHeight: 1.05, margin: "0 0 var(--space-2)", textWrap: "pretty" }}>
+        {question.prompt}
+      </h2>
+      {question.sub && (
+        <p
+          style={{
+            fontSize: 15,
+            color: "color-mix(in srgb, var(--color-text) 70%, transparent)",
+            margin: "0 0 var(--space-6)",
+            maxWidth: "60ch",
+          }}
+        >
+          {question.sub}
+        </p>
+      )}
       <Blocks blocks={question.body} />
 
       <div className={`opts ${question.layout === "one" ? "" : question.layout}`.trim()}>
@@ -157,20 +205,51 @@ export function DrillPlayer({ question, onAnswered, onNext }: DrillPlayerProps) 
       </div>
 
       {answered && (
-        <>
-          <FeedbackPanel
-            ok={grade !== "wrong"}
-            message={
-              grade === "correct" ? "Correct." : grade === "acceptable" ? "Also fine." : "Not quite."
-            }
-          >
-            <ExplainBody explain={question.explain(chosen)} />
-          </FeedbackPanel>
-          <div className="actions">
-            <button className="btn" onClick={onNext}>Next hand →</button>
-            <span className="hint">or press <b>N</b> / Enter</span>
+        <div className={`fb${ok ? "" : " no"}`}>
+          <div className="bar">
+            <span className="glyph">
+              {ok ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              )}
+            </span>
+            <span className="word">
+              {grade === "correct" ? "Correct" : grade === "acceptable" ? "Also fine" : "Not quite"}
+            </span>
+            <span className="xp">
+              {ok
+                ? "+10 XP"
+                : chosenLabel && correctLabel
+                  ? `You picked ${chosenLabel} · answer ${correctLabel}`
+                  : ""}
+            </span>
+            <span className="run">{ok ? `Run ${run}` : "Run reset"}</span>
           </div>
-        </>
+          <div className="body">
+            <ExplainBody explain={question.explain(chosen)} />
+            <div className="actions">
+              <button
+                className="btn btn-primary blueprint btn-caps"
+                style={{ fontSize: 15, padding: "11px 20px", letterSpacing: ".05em" }}
+                onClick={onNext}
+              >
+                Next hand
+                <span className="keyhint">N</span>
+              </button>
+              <span className="hint">or Enter</span>
+              {!ok && (
+                <Link href="/reference" className="btn btn-secondary btn-caps">
+                  Read the formula
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

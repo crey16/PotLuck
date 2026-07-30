@@ -1,40 +1,14 @@
 import type { ReactNode } from "react";
 
-export interface FeedbackPanelProps {
-  /** Whether the answer was correct — drives the `.fb.ok`/`.fb.no` bar color. */
-  ok: boolean;
-  /** The bar's headline text. */
-  message: string;
-  /** Worked-math content, e.g. one or more `<WorkTable>`. */
-  children?: ReactNode;
-  /** Optional callout rendered as `.note` below the body. */
-  note?: string;
-  /** Use the amber `.note.warnl` variant instead of the default blue accent. */
-  noteWarn?: boolean;
-}
-
-/** The reference `.fb` feedback panel shown after answering. */
-export function FeedbackPanel({ ok, message, children, note, noteWarn = false }: FeedbackPanelProps) {
-  const classes = ["fb", "show", ok ? "ok" : "no"].join(" ");
-
-  return (
-    <div className={classes}>
-      <div className="bar">{message}</div>
-      <div className="body">
-        {children}
-        {note !== undefined && (
-          <div className={noteWarn ? "note warnl" : "note"}>{note}</div>
-        )}
-      </div>
-    </div>
-  );
-}
+/* The old FeedbackPanel wrapper is gone — the redesigned feedback markup
+ * lives in DrillPlayer (.fb / .bar / .body). What remains here is the
+ * worked-derivation table the explain bodies still compose. */
 
 export interface WorkTableProps {
   children: ReactNode;
 }
 
-/** Wraps `WorkRow`s in the reference `.work` tabular-numeric layout. */
+/** Wraps `WorkRow`s in the tabular-numeric derivation layout. */
 export function WorkTable({ children }: WorkTableProps) {
   return <div className="work">{children}</div>;
 }
