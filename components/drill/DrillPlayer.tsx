@@ -6,6 +6,7 @@ import { gradeAnswer, isRight } from "@/lib/drill/grade";
 import { Felt, Seat, Divider } from "@/components/ui/Felt";
 import { PlayingCard } from "@/components/ui/PlayingCard";
 import { Pills } from "@/components/ui/Pills";
+import { RangeGrid } from "@/components/ui/RangeGrid";
 import { OptionButton, type OptionButtonState } from "@/components/ui/OptionButton";
 import { FeedbackPanel, WorkTable, WorkRow } from "@/components/ui/FeedbackPanel";
 
@@ -55,7 +56,7 @@ function Blocks({ blocks }: { blocks: ViewBlock[] }) {
               </div>
             );
           case "grid":
-            return null; // RangeGrid arrives with the preflop drill (Task 12).
+            return <RangeGrid key={i} scenarioId={b.scenarioId} highlight={b.highlight} />;
         }
       })}
     </>

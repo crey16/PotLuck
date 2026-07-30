@@ -7,17 +7,20 @@ const LEVELS: DrillLevel[] = [1, 2, 3];
 const MODES: OppMode[] = ["unknown", "shown"];
 
 /**
- * How many options each layout must offer. Stated explicitly rather than as
- * `layout === "two" ? 2 : 4`, because the two four-option layouts mean
- * different things: "grid3" is a row of short numeric answers, "one" is a
- * single column of long-text concept answers. Every ported generator builds
- * exactly these counts; a generator that produces a different number is a bug
- * in the generator, not in this expectation.
+ * The option counts each layout permits.
+ *
+ * `grid3` is a row of short answers and allows 3 or 4: the money drills build
+ * four choices with `buildOpts`, while the preflop drill derives its options
+ * from a scenario's legal actions — three for a defence (3-bet/call/fold).
+ * `two` is the binary call-or-fold layout; `one` is the single column of
+ * long-text concept answers, always four.
+ *
+ * A count outside these sets is a bug in the generator, not in this expectation.
  */
-const OPTIONS_PER_LAYOUT: Record<DrillQuestion["layout"], number> = {
-  one: 4,
-  two: 2,
-  grid3: 4,
+const OPTIONS_PER_LAYOUT: Record<DrillQuestion["layout"], number[]> = {
+  one: [4],
+  two: [2],
+  grid3: [3, 4],
 };
 
 /**
@@ -45,10 +48,9 @@ export function assertCommonShape(
         // and exactly one that grades as the canonical correct answer.
         assert.equal(new Set(q.options.map((o) => o.value)).size, q.options.length, `${where}: duplicate option values`);
         for (const o of q.options) assert.ok(o.label.length > 0, `${where}: empty option label`);
-        assert.equal(
-          q.options.length,
-          OPTIONS_PER_LAYOUT[q.layout],
-          `${where}: ${q.options.length} options for layout "${q.layout}" (expected ${OPTIONS_PER_LAYOUT[q.layout]})`
+        assert.ok(
+          OPTIONS_PER_LAYOUT[q.layout].includes(q.options.length),
+          `${where}: ${q.options.length} options for layout "${q.layout}" (expected one of ${OPTIONS_PER_LAYOUT[q.layout].join(" or ")})`
         );
         const corrects = q.options.filter((o) => gradeAnswer(q, o.value) === "correct");
         assert.equal(corrects.length, 1, `${where}: ${corrects.length} options grade as correct`);

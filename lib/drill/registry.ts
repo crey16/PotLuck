@@ -6,6 +6,10 @@ import { generateRule24 } from "./kinds/rule24";
 import { generatePotodds } from "./kinds/potodds";
 import { generateDecision } from "./kinds/decision";
 import { generateConcepts } from "./kinds/concepts";
+import { generateImplied } from "./kinds/implied";
+import { generateEv } from "./kinds/ev";
+import { generateBluff } from "./kinds/bluff";
+import { generatePreflop } from "./kinds/preflop";
 import { rnd } from "./opts";
 
 export type TabId = "mixed" | DrillKind | "reference";
@@ -35,16 +39,20 @@ export const TAB_LABELS: Record<TabId, string> = {
 };
 
 /**
- * Generators registered so far. Kinds are added here as each is implemented;
- * Mixed mode and the tab strip only offer registered kinds, so a partially
- * built milestone is always runnable.
+ * Every drill kind, all nine implemented. Typed as a total `Record`, so adding
+ * a tenth `DrillKind` without a generator is a compile error rather than a tab
+ * that deals nothing.
  */
-export const GENERATORS: Partial<Record<DrillKind, Generator>> = {
+export const GENERATORS: Record<DrillKind, Generator> = {
   outs: generateOuts,
   rule24: generateRule24,
   potodds: generatePotodds,
   decision: generateDecision,
+  implied: generateImplied,
+  ev: generateEv,
+  bluff: generateBluff,
   concepts: generateConcepts,
+  preflop: generatePreflop,
 };
 
 export const REGISTERED_KINDS = (): DrillKind[] => DRILL_KINDS.filter((k) => GENERATORS[k]);
