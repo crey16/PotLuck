@@ -107,7 +107,7 @@ audit.
   release and verified `attempts_lesson_screen_idx` in production.
 - Applied the non-destructive seed and verified exactly **5 active modules, 20
   active lessons, 33 active scenarios, and 20 active table scenarios**.
-- Both `/api/health` and `/api/health/db` return 200 in production.
+- Both `/api/health` and `/api/health?db=1` return 200 in production.
 - An authenticated 22-check API walkthrough covered lesson answer authority,
   first completion and replay XP, premature/first/repeated daily claims,
   authored and table scenario grading/replay XP, recommendations, activity,
