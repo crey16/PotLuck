@@ -6,6 +6,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { DrillTabs } from "@/components/drill/DrillTabs";
 import { DrillPlayer } from "@/components/drill/DrillPlayer";
 import { OpponentToggle, writeOppModeCookie } from "@/components/drill/OpponentToggle";
+import { ReferenceTab } from "@/components/drill/ReferenceTab";
 import { GENERATORS, pickMixedKind, type TabId } from "@/lib/drill/registry";
 import {
   emptyWindows,
@@ -233,24 +234,30 @@ export function DrillShell({
         <StatTile label="Difficulty" value={difficulty} pips={difficulty} />
       </div>
 
-      <div className="panel">
-        <div className="qhead">
-          <span className="kicker">{live?.question.kicker ?? ""}</span>
-          {live?.question.chip && <span className="chip">{live.question.chip}</span>}
-          <span className="chip">Level {difficulty}</span>
-          <OpponentToggle mode={oppMode} onChange={handleMode} />
+      {tab === "reference" ? (
+        <div className="panel">
+          <ReferenceTab />
         </div>
-        {live && (
-          // Keyed on the deal: a new hand remounts the player, which resets its
-          // chosen-answer state without an effect.
-          <DrillPlayer
-            key={live.dealCount}
-            question={live.question}
-            onAnswered={handleAnswered}
-            onNext={handleNext}
-          />
-        )}
-      </div>
+      ) : (
+        <div className="panel">
+          <div className="qhead">
+            <span className="kicker">{live?.question.kicker ?? ""}</span>
+            {live?.question.chip && <span className="chip">{live.question.chip}</span>}
+            <span className="chip">Level {difficulty}</span>
+            <OpponentToggle mode={oppMode} onChange={handleMode} />
+          </div>
+          {live && (
+            // Keyed on the deal: a new hand remounts the player, which resets its
+            // chosen-answer state without an effect.
+            <DrillPlayer
+              key={live.dealCount}
+              question={live.question}
+              onAnswered={handleAnswered}
+              onNext={handleNext}
+            />
+          )}
+        </div>
+      )}
     </>
   );
 }
