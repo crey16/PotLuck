@@ -1,14 +1,19 @@
 # M4 status — the learning path
 
-Read this before releasing M4 or starting M5. This records what is implemented
-in the current worktree, what was verified locally, and what is still external
-release work.
+Read this before starting M5. This records what shipped for M4, how it was
+verified locally and in production, and the release fixes that later work
+inherits.
 
-**State: local code-complete and production-build clean. Not migrated, seeded,
-committed, pushed, or deployed. No authenticated production walkthrough has
-been claimed.**
+**State: ✅ SHIPPED 2026-07-30.** The production database is migrated and
+seeded, `main` is pushed, and the authenticated desktop/mobile walkthrough is
+complete at **https://potluck-poker.vercel.app**.
 
-## What a user can do after release
+The application release consists of `1144696` (M4), `7e926fa` (public-origin
+server API routing), and `09a8daa` (mobile-safe authenticated header). The
+earlier `672de0a` commit contains the auth/navigation and drill-balance fixes
+that were already in the phase worktree.
+
+## What a user can do
 
 - Open `/learn` and see five ordered modules, exact lesson progress, a daily
   item, two practice labs, and a deterministic next recommendation.
@@ -84,33 +89,51 @@ audit.
 ## Local verification
 
 - Python: full `api/` suite green, **65/65**.
-- TypeScript: full `npm test` suite green, **221/221**, including safe Markdown and a
-  server-render smoke test for the table-decision player.
+- TypeScript: full `npm test` suite green, **226/226**, including safe Markdown,
+  a server-render smoke test for the table-decision player, and five regression
+  checks for server-to-API origin selection.
 - `npx tsc --noEmit`: clean.
 - `npm run lint`: 0 errors; the existing unused `categoryOf` warning in
-  `lib/poker/engine.test.ts` remains unrelated.
+  `lib/poker/engine.test.ts` remains unrelated. A locally ignored `.venv` can
+  add Selenium vendor warnings when it is present.
 - `npm run build`: successful; routes include `/learn`, module, lesson,
   `/learn/practice`, `/learn/table`, and `/daily`.
 - Build warnings remain the known workspace-root/multiple-lockfile warning,
   Next's middleware→proxy deprecation, and Node 20's future Supabase warning.
 
-## Release gates — still outstanding
+## Production release verification
 
-Do these in order; the API starts writing `lesson_screen_index`, so deploying
-it before the migration would break lesson attempts.
+- Applied `supabase/migrations/0002_lesson_screen_attempts.sql` before the app
+  release and verified `attempts_lesson_screen_idx` in production.
+- Applied the non-destructive seed and verified exactly **5 active modules, 20
+  active lessons, 33 active scenarios, and 20 active table scenarios**.
+- Both `/api/health` and `/api/health/db` return 200 in production.
+- An authenticated 22-check API walkthrough covered lesson answer authority,
+  first completion and replay XP, premature/first/repeated daily claims,
+  authored and table scenario grading/replay XP, recommendations, activity,
+  lesson progress, signed-out protection, and owner-versus-second-user RLS.
+- A browser walkthrough covered Home, course map, module, lesson, authored
+  practice, table practice, and daily on desktop. A true 390 px pass then
+  covered Home, all **5 modules**, all **20 lessons**, both practice modes, and
+  daily with no unavailable/error state, no horizontal overflow, and zero
+  severe console entries.
 
-1. Apply `supabase/migrations/0002_lesson_screen_attempts.sql` to production.
-2. Apply `supabase/seed.sql` and verify 5 / 20 / 33 / 20 active content counts.
-3. Deploy the application.
-4. With an authenticated account, complete a new lesson, verify XP/progress,
-   replay it for zero lesson XP, and exercise a wrong-question continue plus a
-   wrong-drill retry.
-5. Submit one authored scenario and one table scenario; verify attempt rows,
-   canonical skill-stat increments, and first-attempt XP behavior.
-6. Complete and retry the daily item; verify one bonus row/award for the ET date
-   and a 409 when calling the bonus before the assigned content.
-7. Repeat the two-account RLS isolation check and inspect mobile layouts before
-   marking M4 shipped.
+The browser pass caught two release-only defects before sign-off. Vercel can
+protect its generated deployment URL, so server-rendered FastAPI reads now use
+the public incoming domain with the stable production domain as fallback. The
+authenticated header also wraps into a compact two-row mobile layout rather
+than widening the document.
+
+## Release gates — complete
+
+1. [x] Production migration applied before application code.
+2. [x] Production seed applied; 5 / 20 / 33 / 20 counts verified.
+3. [x] Application deployed from `main`.
+4. [x] Lesson first-completion, server-derived score, replay, question, and
+   drill-retry behavior verified.
+5. [x] Authored and table scenarios verified with canonical stats and replay XP.
+6. [x] Daily precondition, first claim, repeat claim, and ET activity verified.
+7. [x] Two-user RLS isolation and desktop/390 px browser layouts verified.
 
 Google OAuth and the confirm-email decision remain the independent carried
 items documented in `docs/04-roadmap.md`; neither blocks the email-authenticated

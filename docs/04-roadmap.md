@@ -86,8 +86,10 @@ and `/system` pages, and the split-hero auth page. The app rebranded to
 **PotLuck**: repo `crey16/PotLuck`, folder `~/PycharmProjects/PotLuck`,
 production https://potluck-poker.vercel.app (old URL 307-redirects).
 
-**Note for M4:** the redesign spec contains no lesson screens. The learning
-path needs its own design pass in the same system before implementation.
+**M4 follow-through:** the redesign spec contained no lesson screens, so M4
+received its own approved Industry-system design at
+`docs/superpowers/specs/2026-07-30-milestone-4-learning-path-design.md` before
+implementation.
 
 ## M3 — Range charts ✅ SHIPPED (with the redesign)
 
@@ -97,12 +99,13 @@ path needs its own design pass in the same system before implementation.
 - ✅ Labelled as reference ranges, not solver output — the warning box sits
   beside the page title.
 
-## M4 — The learning path ◐ LOCAL CODE-COMPLETE 2026-07-30 (not deployed)
+## M4 — The learning path ✅ SHIPPED 2026-07-30
 
-The complete learning loop now exists in the worktree and passes local tests
-and a production build. It has deliberately **not** been migrated, seeded, or
-deployed yet. See `docs/07-m4-status.md` for the architecture, verification,
-corrected content decisions, and exact release order.
+The complete learning loop is live at **https://potluck-poker.vercel.app**.
+Production has the lesson-attempt migration and the complete stable content
+seed; authenticated API, RLS, desktop, and true 390 px browser walkthroughs all
+passed. See `docs/07-m4-status.md` for the architecture, content corrections,
+release fixes, and verification record.
 
 - [x] **Content seed:** 5 modules, 20 lessons, 33 authored scenarios, and 20
   table scenarios with explicit stable IDs and non-destructive upserts.
@@ -117,10 +120,10 @@ corrected content decisions, and exact release order.
   next recommendation on Home.
 - [x] **Missing-content fallback:** a weak skill with no matching lesson or
   scenario falls through to the next real item instead of a dead link.
-- [ ] **Release migration:** apply `0002_lesson_screen_attempts.sql` to the
+- [x] **Release migration:** apply `0002_lesson_screen_attempts.sql` to the
   production database.
-- [ ] **Release content:** apply `supabase/seed.sql` after the migration.
-- [ ] **Ship and verify:** deploy, run the authenticated lesson/scenario/table/
+- [x] **Release content:** apply `supabase/seed.sql` after the migration.
+- [x] **Ship and verify:** deploy, run the authenticated lesson/scenario/table/
   daily walkthrough, verify first-completion and replay XP against production,
   and repeat the two-account RLS check before marking M4 shipped.
 
@@ -139,8 +142,9 @@ corrected content decisions, and exact release order.
 
 - [x] Keyboard shortcuts — 1–4 to answer, N/Enter next, R reference, D mixed.
 - [x] Light/dark themes (token remap, cookie-persisted, no flash).
-- [~] Mobile-responsive layout — grids and answer lists collapse, but no
-  device pass has been done; the 13×13 grid under 560px needs a real check.
+- [~] Mobile-responsive layout — M4, Home, and the authenticated header pass a
+  true 390 px device audit; the 13×13 range grid still needs its own real-device
+  check.
 - [ ] Empty states audit, loading skeletons, error boundaries.
 - [ ] Rate limiting on write endpoints.
 
@@ -156,8 +160,8 @@ corrected content decisions, and exact release order.
 
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` appears in no client bundle (`grep` the build output)
 - [ ] RLS is on for every table (`select * from pg_tables where rowsecurity = false`)
-- [ ] A second test account cannot read the first account's attempts
+- [x] A second authenticated user cannot read the first account's attempts
 - [ ] `is_public = false` genuinely hides a profile from search and leaderboard
 - [ ] Cold start on `/api/health` is acceptable
 - [ ] Streak rolls over at midnight **America/New_York**, not UTC
-- [ ] `npx tsx --test lib/poker/*.test.ts` passes
+- [x] The full `npm test` TypeScript suite passes (226/226 at M4 release)
