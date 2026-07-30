@@ -47,7 +47,7 @@ export const generateRule24: Generator = (ctx): DrillQuestion => {
       street: spot.street,
       ...(ctx.oppMode === "shown" ? { villain: spot.villain } : {}),
     },
-    { type: "text", text: drawLine(spot.draw), center: true },
+    { type: "text", text: drawLine(spot.draw, spot.street), center: true },
   ];
 
   return {

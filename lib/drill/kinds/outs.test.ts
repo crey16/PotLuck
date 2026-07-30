@@ -143,7 +143,10 @@ test("generateOuts: carries street (as chip), draw label (with article) and unse
       const spot = q.payload.spot as Spot;
       assert.equal(q.chip, spot.street === "flop" ? "Flop" : "Turn");
       const textBlock = q.body.find((b) => b.type === "text") as { text: string };
-      assert.equal(textBlock.text, drawLine(spot.draw));
+      // Street-aware: a backdoor flush cannot complete with one card to come,
+      // so drawLine drops that clause on the turn. Omitting the street here
+      // would assert the pre-fix text. See lib/drill/notes.test.ts.
+      assert.equal(textBlock.text, drawLine(spot.draw, spot.street));
       // Whatever sentence drawLine builds, it must read as English: the
       // engine's no-draw fallback used to be run through withArticle and
       // rendered "You have a no obvious draw." (finding L-2).
