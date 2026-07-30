@@ -8,7 +8,7 @@ against production.
 
 | Thing | Value |
 |---|---|
-| Production URL | https://hcwk-wizard.vercel.app |
+| Production URL | https://potluck-poker.vercel.app |
 | GitHub | `crey16/PotLuck` (private), branch `main` — push = deploy |
 | Vercel project | `hcwk-wizard` on team `reymatvei-5892s-projects` |
 | Supabase org / project | HCWK / `hcwk-wizard`, ref `ajaryvyorhwnhinzubqd`, region `ca-central-1` |

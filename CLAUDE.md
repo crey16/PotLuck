@@ -138,7 +138,7 @@ project. Run them after any change to `lib/poker`, and keep them green.
 
 ## Current state (updated 2026-07-30)
 
-**M1 is shipped and live at https://hcwk-wizard.vercel.app.** Email signup,
+**M1 is shipped and live at https://potluck-poker.vercel.app.** Email signup,
 the outs drill, and XP/streak persistence are verified in production. Secrets
 and a working test account live in git-ignored `.env.local`. `main` on
 `crey16/PotLuck` auto-deploys to Vercel.

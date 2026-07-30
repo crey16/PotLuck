@@ -5,7 +5,7 @@ problems are the ones that eat days; surface them in milestone 1, not at the end
 
 ## M1 — Skeleton on a live URL ✅ SHIPPED 2026-07-29
 
-**Live at https://hcwk-wizard.vercel.app** — email+password signup, the outs
+**Live at https://potluck-poker.vercel.app** — email+password signup, the outs
 drill, and XP/streak persistence all verified against production (12/12 live
 checks: trigger-created profiles, XP through the FastAPI function, RLS
 two-account isolation, ET streak dates). See `docs/05-m1-status.md` for the
