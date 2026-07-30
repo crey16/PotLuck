@@ -10,8 +10,8 @@
  *
  *   - "shove": the reference calls its variable `pot`, but it means the pot
  *     BEFORE your own bet — ported here as `potBefore` to keep the naming
- *     honest. `potIfCalled = potBefore + 2*bet` exists only for the
- *     explanation text, never for the EV formula itself. The EV is the
+ *     honest. `potIfCalled = potBefore + 2*bet` is used only to build one
+ *     distractor option, never for the EV formula itself. The EV is the
  *     two-branch fold-equity expression: villain folds and you win
  *     potBefore outright, or villain calls and you run your equity against
  *     the bet.

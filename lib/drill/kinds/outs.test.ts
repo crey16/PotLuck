@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { generateOuts } from "./outs";
 import { mulberry32 } from "../rng";
+import { drawLine } from "../notes";
 import { DRAW_OUTS, coreDraw, drawOuts, outsVsHand, type Spot } from "../../poker/engine";
 import type { DrillContext, DrillLevel } from "../contract";
 import { assertCommonShape, assertDeterministic } from "./assertions";
@@ -142,8 +143,12 @@ test("generateOuts: carries street (as chip), draw label (with article) and unse
       const spot = q.payload.spot as Spot;
       assert.equal(q.chip, spot.street === "flop" ? "Flop" : "Turn");
       const textBlock = q.body.find((b) => b.type === "text") as { text: string };
-      const article = /^[aeiou]/i.test(spot.draw) ? "an" : "a";
-      assert.equal(textBlock.text, `You have ${article} ${spot.draw}.`);
+      assert.equal(textBlock.text, drawLine(spot.draw));
+      // Whatever sentence drawLine builds, it must read as English: the
+      // engine's no-draw fallback used to be run through withArticle and
+      // rendered "You have a no obvious draw." (finding L-2).
+      assert.doesNotMatch(textBlock.text, /\ban? no\b/i, `seed ${seed} ${oppMode}: ${textBlock.text}`);
+      assert.doesNotMatch(textBlock.text, /\ba (?=[aeiou])/i, `seed ${seed} ${oppMode}: ${textBlock.text}`);
       const ex = q.explain(q.answer);
       assert.ok(ex.rows.some((r) => r.label === "Unseen cards" && r.value === String(spot.unseen)));
     }

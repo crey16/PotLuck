@@ -24,6 +24,14 @@ export interface ConceptItem {
   options: string[];
   correct: number;
   explain: string;
+  /**
+   * Indices of options that reach the same conclusion as `correct` by other
+   * wording, and so must also grade as right. The reference bank scores a
+   * single index, but one of its items pairs the canonical answer with a
+   * differently-worded option stating the same thing — grading only the
+   * canonical one tells a correct reasoner they were wrong (finding L-7).
+   */
+  alsoAcceptable?: number[];
 }
 
 export const CONCEPTS: ConceptItem[] = [
@@ -143,6 +151,9 @@ export const CONCEPTS: ConceptItem[] = [
       "Raise — 9 outs plus fold equity",
     ],
     correct: 2,
+    // Option 0 opens "Call —" but ends "...which is a fold", i.e. the same
+    // conclusion as option 2. Read to the end it is correct reasoning.
+    alsoAcceptable: [0],
     explain:
       "Nine outs with one card to come is 9×2 ≈ 18–20%. The price demands $40 ÷ $160 = 25%. Without implied odds this is a clear fold — the classic ‘but I have a flush draw!’ trap.",
   },
@@ -216,6 +227,14 @@ export const generateConcepts: Generator = (ctx: DrillContext) => {
     body: [],
     options: opts.map((o) => ({ label: o.label, value: o.value })),
     answer: item.options[item.correct],
+    // Some bank items carry a second option that reaches the right conclusion
+    // by different wording — item 9's "Call — … which is a fold" states the
+    // same fold as the canonical "Fold — …" answer, so a user who reads it to
+    // the end has reasoned correctly and must not be told "Not quite."
+    // (finding L-7). The bank text stays verbatim; only the grading widens.
+    ...(item.alsoAcceptable?.length
+      ? { acceptable: item.alsoAcceptable.map((i) => item.options[i]) }
+      : {}),
     layout: "one",
     explain: () => ({ rows: [], notes }),
     payload: { level: ctx.level, oppMode: ctx.oppMode, conceptId },

@@ -10,7 +10,8 @@
  */
 import { dealSpotOnStreet } from "./outs";
 import { hitByRiver, hitOnRiver, ruleOf2And4, ruleOf4Corrected } from "../../poker/math";
-import { buildOpts, pct, withArticle } from "../opts";
+import { buildOpts, pct } from "../opts";
+import { drawLine } from "../notes";
 import type {
   DrillContext, DrillQuestion, ExplainNote, Generator, ViewBlock,
 } from "../contract";
@@ -46,7 +47,7 @@ export const generateRule24: Generator = (ctx): DrillQuestion => {
       street: spot.street,
       ...(ctx.oppMode === "shown" ? { villain: spot.villain } : {}),
     },
-    { type: "text", text: `You have ${withArticle(spot.draw)}.`, center: true },
+    { type: "text", text: drawLine(spot.draw), center: true },
   ];
 
   return {

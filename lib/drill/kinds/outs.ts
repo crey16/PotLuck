@@ -12,7 +12,8 @@ import {
   dealDrawSpot, dealVsHandSpot, deadOuts, describeOuts, cardStr,
   type Spot, type Street,
 } from "../../poker/engine";
-import { intOptsInRange, pct, withArticle } from "../opts";
+import { intOptsInRange, pct } from "../opts";
+import { drawLine } from "../notes";
 import type {
   DrillContext, DrillQuestion, ExplainNote, Generator, ViewBlock,
 } from "../contract";
@@ -56,7 +57,7 @@ export const generateOuts: Generator = (ctx): DrillQuestion => {
       street: spot.street,
       ...(ctx.oppMode === "shown" ? { villain: spot.villain } : {}),
     },
-    { type: "text", text: `You have ${withArticle(spot.draw)}.`, center: true },
+    { type: "text", text: drawLine(spot.draw), center: true },
   ];
 
   const chanceLabel =

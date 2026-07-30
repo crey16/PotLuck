@@ -9,9 +9,11 @@
  * including the clamp to [0.2, 2] and the Math.max(5, roundTo(...,5)) bet.
  */
 import { dealSpotOnStreet } from "./outs";
-import { deadOuts, describeOuts, cardStr } from "../../poker/engine";
+import { describeOuts } from "../../poker/engine";
 import { requiredEquity, evOfCall, ruleOf2And4 } from "../../poker/math";
 import { pick, money, pct, signedMoney, roundTo } from "../opts";
+import { betSizePill } from "../money";
+import { deadOutsNote } from "../notes";
 import type {
   DrillQuestion, ExplainNote, ExplainRow, Generator, ViewBlock,
 } from "../contract";
@@ -19,26 +21,47 @@ import type {
 const POT_BEFORE_CHOICES = [60, 80, 100, 120, 150, 200];
 const FRAC_CHOICES = [0.33, 0.5, 0.75, 1, 1.5];
 
+/**
+ * The `close` path derives the bet from the hero's own equity so the
+ * required-equity line sits near it, on purpose (see file comment). Without
+ * a floor this can land the two numbers on top of each other — sometimes
+ * exactly equal — producing an undecidable coin-flip spot that still feeds
+ * XP, streaks and adaptive difficulty (final-review finding L-1). Re-roll
+ * the pot/bet with fresh randomness until the margin clears 1.5 points;
+ * bounded so a pathological equity can never spin forever.
+ */
+const MIN_MARGIN = 0.015;
+const MAX_DEAL_ATTEMPTS = 50;
+
 export const generateDecision: Generator = (ctx): DrillQuestion => {
   const street = ctx.rng() < 0.5 ? "flop" : "turn";
   const spot = dealSpotOnStreet(ctx, street);
   const eq = spot.equity;
 
-  const potBefore = pick(POT_BEFORE_CHOICES, ctx.rng);
-  const close = ctx.rng() < 0.6;
-  let frac: number;
-  if (close) {
-    const r = Math.min(0.45, Math.max(0.05, eq + (ctx.rng() - 0.5) * 0.06));
-    frac = r / (1 - 2 * r);
-  } else {
-    frac = pick(FRAC_CHOICES, ctx.rng);
-  }
-  frac = Math.min(2, Math.max(0.2, frac));
-  const bet = Math.max(5, roundTo(potBefore * frac, 5));
+  let potBefore = 0;
+  let bet = 0;
+  let pot = 0;
+  let call = 0;
+  let req = 0;
+  for (let attempt = 0; attempt < MAX_DEAL_ATTEMPTS; attempt++) {
+    potBefore = pick(POT_BEFORE_CHOICES, ctx.rng);
+    const close = ctx.rng() < 0.6;
+    let frac: number;
+    if (close) {
+      const r = Math.min(0.45, Math.max(0.05, eq + (ctx.rng() - 0.5) * 0.06));
+      frac = r / (1 - 2 * r);
+    } else {
+      frac = pick(FRAC_CHOICES, ctx.rng);
+    }
+    frac = Math.min(2, Math.max(0.2, frac));
+    bet = Math.max(5, roundTo(potBefore * frac, 5));
 
-  const pot = potBefore + bet;
-  const call = bet;
-  const req = requiredEquity(pot, call);
+    pot = potBefore + bet;
+    call = bet;
+    req = requiredEquity(pot, call);
+    if (Math.abs(eq - req) >= MIN_MARGIN) break;
+  }
+
   const answer = eq >= req ? "call" : "fold";
   const ev = evOfCall(eq, pot, call);
 
@@ -55,7 +78,7 @@ export const generateDecision: Generator = (ctx): DrillQuestion => {
       items: [
         { label: "Pot now", value: money(pot) },
         { label: "To call", value: money(call) },
-        { label: "Bet size", value: `${Math.round(frac * 100)}% pot` },
+        betSizePill({ potBefore, bet }),
       ],
     },
   ];
@@ -107,18 +130,8 @@ export const generateDecision: Generator = (ctx): DrillQuestion => {
       ];
 
       if (ctx.oppMode === "shown") {
-        const dead = deadOuts(spot.hero, spot.villain!, spot.board);
-        if (dead.length) {
-          notes.push({
-            tone: "warn",
-            title: `Dead outs (${dead.length}).`,
-            text:
-              dead.map((d) => `${cardStr(d.card)} gives you ${d.you} but hands them ${d.them}`).join("; ") +
-              ". These complete your draw and still lose, so they never counted. This is the most " +
-              "expensive miscount in poker — always check what the card does for them before you " +
-              "add it to your total.",
-          });
-        }
+        const note = deadOutsNote(spot.hero, spot.villain!, spot.board);
+        if (note) notes.push(note);
       }
 
       notes.push({

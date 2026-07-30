@@ -123,10 +123,16 @@ test("7. acceptable is used only by preflop; when set, gradeAnswer/isRight treat
           const where = `${kind} L${level} ${oppMode} seed ${seed}`;
           const q = generate({ level, oppMode, rng: mulberry32(seed) });
 
-          if (kind !== "preflop") {
+          // Only two kinds legitimately have more than one right answer:
+          // preflop (mixed strategies — every action the solver takes at
+          // >= 20%) and concepts (one bank item pairs the canonical answer
+          // with a differently-worded option stating the same conclusion).
+          // Any other kind offering an alternative means two options grade
+          // as right when exactly one should.
+          if (kind !== "preflop" && kind !== "concepts") {
             assert.ok(
               q.acceptable === undefined || q.acceptable.length === 0,
-              `${where}: non-preflop kind has non-empty acceptable`
+              `${where}: ${kind} has non-empty acceptable`
             );
           }
 

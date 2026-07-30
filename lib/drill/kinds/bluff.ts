@@ -16,6 +16,7 @@
  */
 import { breakEvenFoldRate, minDefenceFrequency, bluffSizeForFoldRate } from "../../poker/math";
 import { pick, roundTo, buildOpts, money } from "../opts";
+import { dealPotSpot, betSizePill } from "../money";
 import type {
   DrillContext, DrillQuestion, ExplainNote, ExplainRow, Generator, ViewBlock,
 } from "../contract";
@@ -24,20 +25,14 @@ type BluffMode = "be" | "mdf" | "size";
 
 /** Level tables — copied exactly from reference lines 861-863. */
 function dealPot(ctx: DrillContext): { potBefore: number; frac: number; bet: number } {
-  const { level, rng } = ctx;
-  const potBefore = level === 1
-    ? pick([60, 80, 100, 120], rng)
-    : pick([75, 95, 130, 185, 240], rng);
-  const frac = pick(
-    level === 1 ? [0.5, 0.75, 1] : [0.33, 0.5, 0.66, 0.75, 1, 1.5, 2],
-    rng
-  );
-  const bet = roundTo(potBefore * frac, 5) || 5;
-  return { potBefore, frac, bet };
+  const { level } = ctx;
+  const potChoices = level === 1 ? [60, 80, 100, 120] : [75, 95, 130, 185, 240];
+  const fracChoices = level === 1 ? [0.5, 0.75, 1] : [0.33, 0.5, 0.66, 0.75, 1, 1.5, 2];
+  return dealPotSpot(ctx, potChoices, fracChoices, 5);
 }
 
 function buildBreakEven(ctx: DrillContext): DrillQuestion {
-  const { potBefore, frac, bet } = dealPot(ctx);
+  const { potBefore, bet } = dealPot(ctx);
   const be = breakEvenFoldRate(potBefore, bet);
   const target = +(be * 100).toFixed(1);
 
@@ -57,7 +52,7 @@ function buildBreakEven(ctx: DrillContext): DrillQuestion {
       items: [
         { label: "Pot", value: money(potBefore) },
         { label: "Your bluff", value: money(bet) },
-        { label: "Bet size", value: Math.round(frac * 100) + "% pot" },
+        betSizePill({ potBefore, bet }),
       ],
     },
   ];
@@ -106,7 +101,7 @@ function buildBreakEven(ctx: DrillContext): DrillQuestion {
 }
 
 function buildMdf(ctx: DrillContext): DrillQuestion {
-  const { potBefore, frac, bet } = dealPot(ctx);
+  const { potBefore, bet } = dealPot(ctx);
   const m = minDefenceFrequency(potBefore, bet);
   const target = +(m * 100).toFixed(1);
   const be = breakEvenFoldRate(potBefore, bet);
@@ -126,7 +121,7 @@ function buildMdf(ctx: DrillContext): DrillQuestion {
       items: [
         { label: "Pot", value: money(potBefore) },
         { label: "Their bet", value: money(bet) },
-        { label: "Bet size", value: Math.round(frac * 100) + "% pot" },
+        betSizePill({ potBefore, bet }),
       ],
     },
   ];
@@ -175,7 +170,11 @@ function buildMdf(ctx: DrillContext): DrillQuestion {
 
 function buildSize(ctx: DrillContext): DrillQuestion {
   const { potBefore } = dealPot(ctx);
-  const need = pick([0.33, 0.4, 0.5, 0.6, 0.67], ctx.rng);
+  // 0.33/0.67 (finding L-13): bluffSizeForFoldRate(0.33) rounds to 49% pot,
+  // contradicting the explain note's "1/2 pot needs 33%". The note's
+  // thresholds are exact fractions (1/3, 1/2, 3/4, 1× pot), so the fold
+  // rates fed in here must be too, or the rounded answer drifts off them.
+  const need = pick([1 / 3, 0.4, 0.5, 0.6, 2 / 3], ctx.rng);
   const size = bluffSizeForFoldRate(need);
   const target = Math.round(size * 100);
 

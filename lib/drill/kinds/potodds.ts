@@ -13,6 +13,7 @@
  */
 import { requiredEquity, asOdds } from "../../poker/math";
 import { pick, roundTo, buildOpts, money } from "../opts";
+import { dealPotSpot } from "../money";
 import type {
   DrillContext, DrillQuestion, ExplainNote, Generator, ViewBlock,
 } from "../contract";
@@ -31,14 +32,13 @@ function dealPotOddsSpot(ctx: DrillContext): PotOddsSpot {
   let extra = 0;
 
   if (level === 1) {
-    potBefore = pick([60, 80, 100, 120, 200], rng);
-    bet = roundTo(potBefore * pick([0.5, 1, 0.75], rng), 5);
+    ({ potBefore, bet } = dealPotSpot(ctx, [60, 80, 100, 120, 200], [0.5, 1, 0.75], 5));
   } else if (level === 2) {
-    potBefore = pick([65, 85, 110, 135, 175, 240], rng);
-    bet = roundTo(potBefore * pick([0.33, 0.5, 0.66, 0.75, 1, 1.25], rng), 5);
+    ({ potBefore, bet } = dealPotSpot(
+      ctx, [65, 85, 110, 135, 175, 240], [0.33, 0.5, 0.66, 0.75, 1, 1.25], 5
+    ));
   } else {
-    potBefore = pick([73, 118, 146, 214, 325], rng);
-    bet = roundTo(potBefore * pick([0.4, 0.6, 0.85, 1.1, 1.5], rng), 1);
+    ({ potBefore, bet } = dealPotSpot(ctx, [73, 118, 146, 214, 325], [0.4, 0.6, 0.85, 1.1, 1.5], 1));
     if (rng() < 0.5) extra = roundTo(bet * pick([0.2, 0.3], rng), 1);
   }
 
@@ -67,9 +67,15 @@ export const generatePotodds: Generator = (ctx): DrillQuestion => {
   const body: ViewBlock[] = [
     {
       type: "money",
+      // On a raise spot the hero's own `extra` is part of `pot` but not part of
+      // `call`, so without a pill for it the strip reads as broken arithmetic
+      // ("$214 + $128 = $380") — in the one drill whose whole lesson is that
+      // committed money is dead money that improves your price. Villain also
+      // raised *to* `bet` rather than betting it (finding CC-1c).
       items: [
         { label: "Pot before bet", value: money(potBefore) },
-        { label: "Villain bets", value: money(bet) },
+        ...(extra > 0 ? [{ label: "You already bet", value: money(extra) }] : []),
+        { label: extra > 0 ? "Villain raises to" : "Villain bets", value: money(bet) },
         { label: "Pot now", value: money(pot) },
         { label: "To call", value: money(call) },
       ],
