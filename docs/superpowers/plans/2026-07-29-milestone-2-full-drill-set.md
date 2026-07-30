@@ -1002,12 +1002,80 @@ export const generateOuts: Generator = (ctx): DrillQuestion => {
 };
 ```
 
-If `dealDrawSpot` / `dealVsHandSpot` do not accept an `rng` option, add it as an optional field on `DrawSpotOptions` defaulting to `Math.random` — a one-line, backwards-compatible change to `lib/poker/engine.ts`. Re-run `npx tsx --test lib/poker/engine.test.ts` afterwards and confirm 14/14 still pass.
+`DrawSpotOptions` already has an optional `rng` field (`lib/poker/engine.ts:363-370`), so pass `ctx.rng` straight through. No engine change is needed for this task — if you find yourself editing `lib/poker/`, stop and report instead.
 
 - [ ] **Step 5: Run it to confirm it passes**
 
 Run: `npx tsx --test lib/drill/kinds/outs.test.ts`
 Expected: PASS, 11 tests. If the `DRAW_OUTS` agreement test fails in level 3, the spot dealer is falling back to a loose deal — fix the generator to reject and re-deal in unknown mode, never the test.
+
+- [ ] **Step 5b: Create the shared invariant assertions the eight later kinds reuse**
+
+Create `lib/drill/kinds/assertions.ts`. The filename deliberately does not match the `*.test.ts` glob, so it is a helper rather than a test file. Every generator task calls these instead of copying the same four tests eight times.
+
+```ts
+import assert from "node:assert/strict";
+import { mulberry32 } from "../rng.js";
+import { gradeAnswer } from "../grade.js";
+import type { DrillKind, DrillLevel, Generator, OppMode } from "../contract.js";
+
+const LEVELS: DrillLevel[] = [1, 2, 3];
+const MODES: OppMode[] = ["unknown", "shown"];
+
+/**
+ * The invariants every question of every kind must satisfy, checked across
+ * levels, opponent modes and seeds. Called from each kind's test file so the
+ * rules live in one place and a new rule reaches all nine kinds at once.
+ */
+export function assertCommonShape(
+  generate: Generator,
+  kind: DrillKind,
+  opts: { seeds?: number } = {}
+): void {
+  const seeds = opts.seeds ?? 40;
+  for (const level of LEVELS) {
+    for (const oppMode of MODES) {
+      for (let seed = 1; seed <= seeds; seed++) {
+        const where = `${kind} L${level} ${oppMode} seed ${seed}`;
+        const q = generate({ level, oppMode, rng: mulberry32(seed) });
+
+        assert.equal(q.kind, kind, where);
+        assert.ok(q.prompt.length > 0, `${where}: empty prompt`);
+        assert.ok(q.kicker.length > 0, `${where}: empty kicker`);
+
+        // Options: distinct values, non-empty labels, arity matching layout,
+        // and exactly one that grades as the canonical correct answer.
+        assert.equal(new Set(q.options.map((o) => o.value)).size, q.options.length, `${where}: duplicate option values`);
+        for (const o of q.options) assert.ok(o.label.length > 0, `${where}: empty option label`);
+        assert.equal(q.options.length, q.layout === "two" ? 2 : 4, `${where}: ${q.options.length} options for layout ${q.layout}`);
+        const corrects = q.options.filter((o) => gradeAnswer(q, o.value) === "correct");
+        assert.equal(corrects.length, 1, `${where}: ${corrects.length} options grade as correct`);
+
+        // The explanation must actually explain something.
+        const ex = q.explain(q.answer);
+        assert.ok(ex.rows.length + ex.notes.length > 0, `${where}: empty explanation`);
+
+        // Payload: carries the context and survives the trip to Postgres.
+        assert.equal(q.payload.level, level, `${where}: payload level`);
+        assert.equal(q.payload.oppMode, oppMode, `${where}: payload oppMode`);
+        assert.deepEqual(JSON.parse(JSON.stringify(q.payload)), q.payload, `${where}: payload is not JSON-clean`);
+      }
+    }
+  }
+}
+
+/** Same seed, same question — the property every generator test relies on. */
+export function assertDeterministic(generate: Generator, seed = 31): void {
+  const ctx = () => ({ level: 2 as DrillLevel, oppMode: "unknown" as OppMode, rng: mulberry32(seed) });
+  const a = generate(ctx());
+  const b = generate(ctx());
+  assert.deepEqual(a.payload, b.payload);
+  assert.equal(a.answer, b.answer);
+  assert.deepEqual(a.options, b.options);
+}
+```
+
+Then in `lib/drill/kinds/outs.test.ts`, replace the first shape test and the determinism test with calls to these two helpers, keeping every outs-specific test as it is. Re-run `npx tsx --test lib/drill/kinds/outs.test.ts` and confirm it still passes.
 
 - [ ] **Step 6: Create the registry**
 
@@ -2096,6 +2164,20 @@ These eight tasks are independent. Dispatch them in parallel once Task 2 has lan
 
 **Every one of these tasks follows the same six steps.** They are written out per task below only where the code differs; the shared procedure is:
 
+0. Open the test file with the two shared invariant helpers from `lib/drill/kinds/assertions.ts` (created in Task 2), then add the kind-specific tests:
+
+```ts
+import { assertCommonShape, assertDeterministic } from "./assertions.js";
+
+test("<kind>: satisfies the shared question invariants", () => {
+  assertCommonShape(generateX, "<kind>");
+});
+
+test("<kind>: deterministic under a seed", () => {
+  assertDeterministic(generateX);
+});
+```
+
 1. Write the test file first, in full.
 2. Run `npx tsx --test lib/drill/kinds/<kind>.test.ts` and confirm it fails with a missing module.
 3. Write the generator.
@@ -2123,45 +2205,7 @@ These eight tasks are independent. Dispatch them in parallel once Task 2 has lan
 - Every generator takes its randomness from `ctx.rng`. No `Math.random()` anywhere in `lib/drill/`.
 - Every payload includes `level: ctx.level` and `oppMode: ctx.oppMode`, and must be JSON-round-trippable.
 - Prose (prompts, subs, notes) is copied from the reference so the pedagogy survives the port. Straight-quote it or keep the curly quotes consistently; don't mix.
-- Each test file must include these four tests, adapted to the kind. Written out once here; each task's test file repeats them with its own generator:
-
-```ts
-test("<kind>: shape is well formed across levels and modes", () => {
-  for (const level of [1, 2, 3] as DrillLevel[]) {
-    for (const oppMode of ["unknown", "shown"] as const) {
-      for (let seed = 1; seed <= 40; seed++) {
-        const q = generate({ level, oppMode, rng: mulberry32(seed) });
-        assert.equal(q.kind, "<kind>");
-        assert.ok(q.options.length >= 2 && q.options.length <= 4);
-        assert.equal(new Set(q.options.map((o) => o.value)).size, q.options.length);
-        assert.equal(q.options.filter((o) => o.value === q.answer).length, 1);
-        assert.equal(q.options.length, q.layout === "two" ? 2 : 4);
-        assert.ok(q.prompt.length > 0);
-        assert.ok(q.explain(q.answer).rows.length > 0 || q.explain(q.answer).notes.length > 0);
-      }
-    }
-  }
-});
-
-test("<kind>: payload carries level and oppMode and survives JSON", () => {
-  const q = generate({ level: 3, oppMode: "shown", rng: mulberry32(7) });
-  assert.equal(q.payload.level, 3);
-  assert.equal(q.payload.oppMode, "shown");
-  assert.deepEqual(JSON.parse(JSON.stringify(q.payload)), q.payload);
-});
-
-test("<kind>: the answer is re-derivable from the payload alone", () => {
-  /* recompute from payload using lib/poker/math and assert it equals q.answer —
-     the kind-specific version is spelled out in each task below */
-});
-
-test("<kind>: deterministic under a seed", () => {
-  const a = generate({ level: 2, oppMode: "unknown", rng: mulberry32(31) });
-  const b = generate({ level: 2, oppMode: "unknown", rng: mulberry32(31) });
-  assert.deepEqual(a.payload, b.payload);
-  assert.equal(a.answer, b.answer);
-});
-```
+- The shared invariants (option arity vs layout, exactly one correct option, non-empty explanation, payload carries `level`/`oppMode` and is JSON-clean, determinism under a seed) come from `assertCommonShape` and `assertDeterministic` — do not re-implement them per kind. On top of those, every kind's test file must add a **"the answer is re-derivable from the payload alone"** test: recompute the answer from the JSON-round-tripped payload using `lib/poker/math.ts`, and assert it equals `q.answer`. That test is what keeps eight independently written generators honest about the betting convention, and its kind-specific form is spelled out in each task below.
 
 ---
 
@@ -2756,7 +2800,8 @@ test("preflop: the answer is the highest-frequency action for the dealt hand", (
     const { scenarioId, hand } = q.payload as { scenarioId: string; hand: string };
     const sc = getScenario(scenarioId)!;
     const f = cellFrequency(sc, hand);
-    const best = sc.actions.map((a) => a.key).sort((x, y) => f[y] - f[x])[0];
+    // Scenario.actions is Array<[Action, string]> — [key, label] tuples.
+    const best = sc.actions.map(([key]) => key).sort((x, y) => f[y] - f[x])[0];
     assert.equal(q.answer, best, `seed ${seed}: ${hand} in ${scenarioId}`);
   }
 });
@@ -2768,7 +2813,7 @@ test("preflop: acceptable holds every action at >= 20% frequency, excluding the 
     const sc = getScenario(scenarioId)!;
     const f = cellFrequency(sc, hand);
     const expected = sc.actions
-      .map((a) => a.key)
+      .map(([key]) => key)
       .filter((k) => f[k] >= MIX_THRESHOLD && k !== q.answer)
       .sort();
     assert.deepEqual([...(q.acceptable ?? [])].sort(), expected, `seed ${seed}: ${hand}`);
@@ -2839,8 +2884,8 @@ test("preflop: the explanation shows every action's frequency and labels the ran
   const q = generatePreflop({ level: 2, oppMode: "unknown", rng: mulberry32(3) });
   const ex = q.explain(q.answer);
   const sc = getScenario((q.payload as { scenarioId: string }).scenarioId)!;
-  for (const a of sc.actions) {
-    assert.ok(ex.rows.some((r) => r.label === a.label), `missing row for ${a.label}`);
+  for (const [, label] of sc.actions) {
+    assert.ok(ex.rows.some((r) => r.label === label), `missing row for ${label}`);
   }
   assert.ok(ex.rows.some((r) => r.label === "Hand"));
   assert.ok(ex.blocks?.some((b) => b.type === "grid"));
@@ -2856,7 +2901,7 @@ test("preflop: payload is JSON-clean and re-grades to the same answer", () => {
     const p = JSON.parse(JSON.stringify(q.payload)) as { scenarioId: string; hand: string };
     const f = cellFrequency(getScenario(p.scenarioId)!, p.hand);
     const sc = getScenario(p.scenarioId)!;
-    const best = sc.actions.map((a) => a.key).sort((x, y) => f[y] - f[x])[0];
+    const best = sc.actions.map(([key]) => key).sort((x, y) => f[y] - f[x])[0];
     assert.equal(best, q.answer);
   }
 });
@@ -2868,7 +2913,7 @@ test("preflop: payload is JSON-clean and re-grades to the same answer", () => {
 
 Run: `grep -n "export interface Scenario" -A 20 lib/poker/ranges.ts`
 
-The reference uses `sc.acts` as `[key, label]` pairs; our `Scenario` may name the field `actions` with `{key, label}` objects. **Use the real field names from `lib/poker/ranges.ts`** and adjust the test file above to match before implementing — that file is the tested engine and does not change to suit the port.
+Confirmed shape (`lib/poker/ranges.ts:46-54`): `Scenario` is `{ id, name, description, actions: Array<[Action, string]>, r, c? }`. The reference calls this field `acts`; ours is `actions`, and it holds `[key, label]` tuples — destructure them (`sc.actions.map(([key, label]) => …)`), never `a.key`. Also note `description`, not the reference's `desc`. `lib/poker/ranges.ts` is the tested engine and does not change to suit the port.
 
 - [ ] **Step 4: Write the generator**
 
