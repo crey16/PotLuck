@@ -768,11 +768,18 @@ img { display: block; max-width: 100%; }
 .daily-mini-card > span { font: 11px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--color-accent-700); }
 .learn-section-head { margin-bottom: var(--space-8); }
 .learn-labs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin: calc(var(--space-8) * -0.25) 0 var(--space-8); }
-.learn-lab-card { padding: var(--space-5); color: var(--color-text); text-decoration: none; }
+.learn-lab-card {
+  display: flex; flex-direction: column;
+  padding: var(--space-6); color: var(--color-text); text-decoration: none;
+}
 .learn-lab-card:hover { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 5%, transparent); }
-.learn-lab-card h2 { margin: 5px 0; font-size: 25px; text-transform: uppercase; }
-.learn-lab-card p { margin: 0 0 var(--space-4); color: color-mix(in srgb, var(--color-text) 63%, transparent); font-size: 13px; }
-.learn-lab-card > span { color: var(--color-accent-700); font: 10px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.learn-lab-card h2 { margin: var(--space-2) 0; font-size: 25px; text-transform: uppercase; }
+.learn-lab-card p { margin: 0; color: color-mix(in srgb, var(--color-text) 63%, transparent); font-size: 13px; }
+.learn-lab-card > span {
+  margin-top: auto; padding-top: var(--space-6);
+  color: var(--color-accent-700); font: 10px var(--font-mono);
+  letter-spacing: .08em; text-transform: uppercase;
+}
 .learn-empty { padding: var(--space-8); }
 .learn-empty h1, .learn-empty h2 { margin: 5px 0; }
 .learn-empty p { color: color-mix(in srgb, var(--color-text) 65%, transparent); }
@@ -908,7 +915,11 @@ img { display: block; max-width: 100%; }
 .daily-meta { display: flex; gap: var(--space-2); margin-bottom: var(--space-6); }
 .daily-meta span { border: 1px solid var(--color-divider); padding: 4px 7px; font: 10px var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
 .daily-feature > .btn { margin-top: var(--space-6); }
-.daily-note { text-align: center; font: 10.5px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 52%, transparent); }
+.daily-note {
+  margin: var(--space-3) auto 0; text-align: center;
+  font: 10.5px var(--font-mono); letter-spacing: .06em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 52%, transparent);
+}
 
 .scenario-page { padding-top: var(--space-4); }
 .scenario-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-8); margin-bottom: var(--space-6); }
