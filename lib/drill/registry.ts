@@ -2,6 +2,10 @@ import type { DrillKind, Generator } from "./contract";
 import type { Rng } from "../poker/engine";
 import { DRILL_KINDS } from "./contract";
 import { generateOuts } from "./kinds/outs";
+import { generateRule24 } from "./kinds/rule24";
+import { generatePotodds } from "./kinds/potodds";
+import { generateDecision } from "./kinds/decision";
+import { generateConcepts } from "./kinds/concepts";
 import { rnd } from "./opts";
 
 export type TabId = "mixed" | DrillKind | "reference";
@@ -37,6 +41,10 @@ export const TAB_LABELS: Record<TabId, string> = {
  */
 export const GENERATORS: Partial<Record<DrillKind, Generator>> = {
   outs: generateOuts,
+  rule24: generateRule24,
+  potodds: generatePotodds,
+  decision: generateDecision,
+  concepts: generateConcepts,
 };
 
 export const REGISTERED_KINDS = (): DrillKind[] => DRILL_KINDS.filter((k) => GENERATORS[k]);

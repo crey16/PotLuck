@@ -2710,7 +2710,7 @@ test("bluff: all three modes appear, with break-even the most common", () => {
 ### Task 10: OMC mistakes (concepts) drill
 
 **Files:** Create `lib/drill/kinds/concepts.ts`, `lib/drill/kinds/concepts.test.ts`. Modify `lib/drill/registry.ts`.
-**Reference:** lines 925–978 — a 16-item bank (`CONCEPTS`) and `Q.concepts`.
+**Reference:** lines 925–978 — a 15-item bank (`CONCEPTS`) and `Q.concepts`.
 **Interfaces:** Produces `export const generateConcepts: Generator`, `export const CONCEPTS: ConceptItem[]`.
 
 This one has no poker math to get wrong, but it has a trap the reference itself contains: **item index 9 (line 953–955) has `a:2`, not `a:0`** — its correct answer is the third option, and options 0 and 2 say nearly the same thing. Port the bank with an explicit correct index per item; do not assume index 0.
@@ -2721,7 +2721,7 @@ Include the four shared tests, plus:
 
 ```ts
 test("concepts: the bank is fully populated and internally consistent", () => {
-  assert.equal(CONCEPTS.length, 16);
+  assert.equal(CONCEPTS.length, 15);
   for (const [i, item] of CONCEPTS.entries()) {
     assert.ok(item.prompt.length > 10, `item ${i}: prompt`);
     assert.equal(item.options.length, 4, `item ${i}: four options`);
@@ -2777,7 +2777,7 @@ test("concepts: the whole bank is reachable", () => {
 ```
 
 - [ ] **Step 2: Run it and confirm it fails.**
-- [ ] **Step 3: Write the generator.** Port the 16 items from lines 925–971 as `{ prompt, options, correct, explain }`, then `Q.concepts` from 972–978. Shuffle the options with `ctx.rng`, and set `answer` to the shuffled index of the correct option (or, more robustly, use the option *text* as the value — either is fine as long as the test above passes). Payload: `{ level, oppMode, conceptId }`.
+- [ ] **Step 3: Write the generator.** Port the 15 items from lines 925–971 as `{ prompt, options, correct, explain }`, then `Q.concepts` from 972–978. Shuffle the options with `ctx.rng`, and set `answer` to the shuffled index of the correct option (or, more robustly, use the option *text* as the value — either is fine as long as the test above passes). Payload: `{ level, oppMode, conceptId }`.
 - [ ] **Step 4: Run the test file** → PASS.
 - [ ] **Step 5: Register; `npm test`; `npx tsc --noEmit`.**
 - [ ] **Step 6: Commit** — `git commit -m "feat: add the OMC mistakes drill"`

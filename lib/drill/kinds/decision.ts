@@ -13,7 +13,7 @@ import { deadOuts, describeOuts, cardStr } from "../../poker/engine";
 import { requiredEquity, evOfCall, ruleOf2And4 } from "../../poker/math";
 import { pick, money, pct, signedMoney, roundTo } from "../opts";
 import type {
-  DrillContext, DrillQuestion, ExplainNote, ExplainRow, Generator, ViewBlock,
+  DrillQuestion, ExplainNote, ExplainRow, Generator, ViewBlock,
 } from "../contract";
 
 const POT_BEFORE_CHOICES = [60, 80, 100, 120, 150, 200];
@@ -77,7 +77,9 @@ export const generateDecision: Generator = (ctx): DrillQuestion => {
     ],
     answer,
     layout: "two",
-    explain: (chosen) => {
+    // This drill's feedback is the same whichever side you picked — the work
+    // table shows the price and the margin either way — so `chosen` is unused.
+    explain: () => {
       const rows: ExplainRow[] = [
         { label: "Your draw", value: spot.draw },
         { label: `Outs — ${describeOuts(spot.outCards)}`, value: String(spot.outs) },
