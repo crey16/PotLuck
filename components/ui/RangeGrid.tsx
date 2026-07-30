@@ -4,6 +4,7 @@ import {
   handAt,
   rangePercent,
 } from "@/lib/poker/ranges";
+import { rangeCellAppearance } from "@/components/ui/rangeCell";
 
 export interface RangeGridProps {
   scenarioId: string;
@@ -12,7 +13,8 @@ export interface RangeGridProps {
 
 /** Value steps of one hue, per the redesign: raise/3-bet is the dark accent,
  *  call the light accent, fold transparent with a hairline border. Split
- *  cells are mixed frequencies, filled bottom-up. */
+ *  cells are mixed frequencies, filled bottom-up — see rangeCell.ts for why
+ *  those carry their own modifier class. */
 const RAISE = "var(--color-accent-800)";
 const CALL = "var(--color-accent-300)";
 
@@ -20,27 +22,17 @@ export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
   const scenario = getScenario(scenarioId);
   if (!scenario) return null;
 
-  const cells: { hand: string; bg: string; dim: boolean; pick: boolean; title: string }[] = [];
+  const cells: { hand: string; bg: string; mod: string; pick: boolean; title: string }[] = [];
   for (let i = 0; i < 13; i++) {
     for (let j = 0; j < 13; j++) {
       const hand = handAt(i, j);
       const f = cellFrequency(scenario, hand);
-      const rp = f.r * 100;
-      const cp = (f.r + f.c) * 100;
-      const dim = f.f >= 0.999;
-      const bg = dim
-        ? "transparent"
-        : f.r >= 0.999
-          ? RAISE
-          : f.c >= 0.999
-            ? CALL
-            : `linear-gradient(to top, ${RAISE} 0 ${rp.toFixed(1)}%, ` +
-              `${CALL} ${rp.toFixed(1)}% ${cp.toFixed(1)}%, transparent ${cp.toFixed(1)}% 100%)`;
+      const { background, className } = rangeCellAppearance(f);
       const title =
         `${hand} — ${Math.round(f.r * 100)}% ${scenario.c ? "3-bet" : "raise"}` +
         (scenario.c ? `, ${Math.round(f.c * 100)}% call` : "") +
         `, ${Math.round(f.f * 100)}% fold`;
-      cells.push({ hand, bg, dim, pick: hand === highlight, title });
+      cells.push({ hand, bg: background, mod: className, pick: hand === highlight, title });
     }
   }
 
@@ -74,7 +66,7 @@ export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
         {cells.map((c) => (
           <div
             key={c.hand}
-            className={`gc${c.dim ? " dim" : ""}${c.pick ? " pick" : ""}`}
+            className={`gc${c.mod ? ` ${c.mod}` : ""}${c.pick ? " pick" : ""}`}
             style={{ background: c.bg }}
             title={c.title}
           >

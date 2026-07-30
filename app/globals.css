@@ -500,6 +500,18 @@ img { display: block; max-width: 100%; }
   color: color-mix(in srgb, var(--color-text) 45%, transparent);
   background: transparent; border: 1px solid var(--color-divider);
 }
+/* A mixed-frequency cell is filled bottom-up, so its label crosses from the
+   fill onto open background — two opposite luminances. `.gc`'s reverse-out
+   colour is only right on a fully filled cell and left these labels drawn in
+   the background colour ON the background, invisible in BOTH themes. Draw
+   them in the text colour with a background-coloured halo, which stays
+   readable over the fill and over the page. */
+.gc.mixed {
+  color: var(--color-text);
+  text-shadow:
+    0 0 2px var(--color-bg), 0 0 2px var(--color-bg),
+    0 0 4px var(--color-bg);
+}
 .gc.pick { outline: 2px solid var(--color-text); outline-offset: -1px; z-index: 2; }
 @media (max-width: 560px) { .gc { font-size: 8px; } }
 
