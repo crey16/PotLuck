@@ -60,6 +60,29 @@ test("decision: most spots are close ones, so the drill is not trivially one-sid
   assert.ok(calls > 40 && calls < 160, `lopsided: ${calls}/200 calls`);
 });
 
+test("decision: answers are near-balanced on both streets at every level", () => {
+  // The walkthrough bug: turn spots with small draws could never be calls
+  // (a 20%-pot minimum bet already prices out ≤6-out draws), so the drill
+  // felt like "the answer is always fold". Guard the balance per street,
+  // at the lowest level, where small draws are most common.
+  for (const level of [1, 2, 3] as const) {
+    const byStreet = { flop: { call: 0, fold: 0 }, turn: { call: 0, fold: 0 } };
+    for (let seed = 1; seed <= 400; seed++) {
+      const q = generateDecision({ level, oppMode: "unknown", rng: mulberry32(seed) });
+      const street = q.chip === "Flop" ? "flop" : "turn";
+      byStreet[street][q.answer as "call" | "fold"]++;
+    }
+    for (const street of ["flop", "turn"] as const) {
+      const { call, fold } = byStreet[street];
+      const rate = call / (call + fold);
+      assert.ok(
+        rate >= 0.35 && rate <= 0.65,
+        `L${level} ${street}: ${call}/${call + fold} calls (${(rate * 100).toFixed(0)}%)`
+      );
+    }
+  }
+});
+
 test("decision: face-up mode lists dead outs when there are any", () => {
   let found = 0;
   for (let seed = 1; seed <= 200 && found < 3; seed++) {

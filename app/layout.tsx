@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Barlow, Barlow_Condensed } from "next/font/google";
 import { SiteHeader } from "@/components/ui/SiteHeader";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUserId } from "@/lib/supabase/server";
 import { supabaseConfigured } from "@/lib/supabase/env";
 import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 import "./globals.css";
@@ -23,20 +23,18 @@ const barlowCondensed = Barlow_Condensed({
 
 export const metadata: Metadata = {
   title: "PotLuck",
-  description: "Poker math trainer — drills, range charts, and the formulas behind them.",
+  description: "Learn poker decisions, drill the math, and explore practical reference ranges.",
 };
 
 async function fetchHeaderProfile() {
   if (!supabaseConfigured()) return null;
+  const userId = await getAuthUserId();
+  if (!userId) return null;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
   const { data: profile } = await supabase
     .from("profiles")
     .select("username, display_name, level, streak_count")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
   return profile;
 }

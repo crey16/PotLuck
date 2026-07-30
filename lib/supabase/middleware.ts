@@ -44,10 +44,15 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Do not run code between createServerClient and supabase.auth.getUser().
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Do not run code between createServerClient and the auth check below.
+  //
+  // `getClaims()`, not `getUser()`: the project signs JWTs with ES256, so a
+  // valid token verifies locally against a cached JWKS — no auth-server round
+  // trip on every request, which was the biggest fixed cost on page loads. An
+  // expired token still triggers a real network refresh inside getClaims, so
+  // this keeps the middleware's session-refresh job intact.
+  const { data, error } = await supabase.auth.getClaims();
+  const user = error ? null : (data?.claims ?? null);
 
   if (shouldRedirectToLogin(request.nextUrl.pathname, Boolean(user))) {
     const url = request.nextUrl.clone();

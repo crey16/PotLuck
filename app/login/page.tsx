@@ -34,6 +34,7 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [resetSentTo, setResetSentTo] = useState<string | null>(null);
+  const [confirmSentTo, setConfirmSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(
     searchParams.get("error") === "auth_callback"
       ? "Something went wrong finishing sign-in. Please try again."
@@ -62,6 +63,7 @@ function LoginForm() {
     setMode(m);
     setError(null);
     setResetSentTo(null);
+    setConfirmSentTo(null);
   }
 
   async function handleGoogle() {
@@ -93,21 +95,46 @@ function LoginForm() {
       return;
     }
 
-    const { error: authError } =
-      mode === "signin"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({
-            email,
-            password,
-            options: username.trim() ? { data: { username: username.trim() } } : undefined,
-          });
-    setPending(false);
-    if (authError) {
-      setError(authError.message);
-      return;
+    if (mode === "signin") {
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      setPending(false);
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
+    } else {
+      const { data, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: username.trim() ? { data: { username: username.trim() } } : undefined,
+      });
+      setPending(false);
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
+      // Supabase obfuscates duplicate signups: it "succeeds" with a user that
+      // has no identities. Without this check the user is told nothing and no
+      // account or session exists.
+      if (data.user && data.user.identities?.length === 0) {
+        setError("An account with this email already exists — sign in instead.");
+        setMode("signin");
+        return;
+      }
+      // No session means confirm-email is on for the project: the account
+      // exists but can't sign in until the link is clicked. Say so instead of
+      // navigating into a redirect back to this page.
+      if (!data.session) {
+        setConfirmSentTo(email);
+        return;
+      }
     }
-    router.push(next);
-    router.refresh();
+    // Full document navigation, not router.push: the session cookie was just
+    // written, and a hard request guarantees middleware and every server
+    // component see it. It also recovers from transient RSC-fetch failures
+    // (observed 503s on client navigations right after auth) that leave a
+    // soft navigation stranded on this page.
+    window.location.assign(next);
   }
 
   return (
@@ -256,8 +283,25 @@ function LoginForm() {
               style={{ minHeight: 42, letterSpacing: ".05em" }}
               disabled={pending}
             >
-              {mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link"}
+              {pending
+                ? mode === "signin"
+                  ? "Signing in…"
+                  : mode === "signup"
+                    ? "Creating account…"
+                    : "Sending…"
+                : mode === "signin"
+                  ? "Sign in"
+                  : mode === "signup"
+                    ? "Create account"
+                    : "Send reset link"}
             </button>
+
+            {mode === "signup" && confirmSentTo && (
+              <div className="note" style={{ fontSize: 13 }}>
+                <b>Account created.</b> Check {confirmSentTo} for a confirmation link, then sign
+                in.
+              </div>
+            )}
 
             {mode === "forgot" && resetSentTo && (
               <div className="note" style={{ fontSize: 13 }}>

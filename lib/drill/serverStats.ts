@@ -3,7 +3,7 @@
  * Everything here is read via the user's own Supabase session (RLS scopes the
  * rows), fails soft to empty data, and is never imported from the client.
  */
-import { createClient } from "../supabase/server";
+import { createClient, getAuthUserId } from "../supabase/server";
 import { supabaseConfigured } from "../supabase/env";
 import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
 import { levelFromHistory, WINDOW_SIZE } from "./difficulty";
@@ -111,15 +111,13 @@ export function aggregateKinds(
 /** Just the per-kind aggregates — what the drill switcher needs. */
 export async function fetchKindStats(): Promise<Record<DrillKind, KindStat>> {
   if (!supabaseConfigured()) return emptyKinds();
+  const userId = await getAuthUserId();
+  if (!userId) return emptyKinds();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return emptyKinds();
   const { data } = await supabase
     .from("attempts")
     .select("drill_kind, is_correct")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .not("drill_kind", "is", null)
     .order("created_at", { ascending: false })
     .limit(5000);
@@ -128,11 +126,9 @@ export async function fetchKindStats(): Promise<Record<DrillKind, KindStat>> {
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
   if (!supabaseConfigured()) return EMPTY;
+  const userId = await getAuthUserId();
+  if (!userId) return EMPTY;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return EMPTY;
 
   const since = new Date();
   since.setDate(since.getDate() - 7 * 12);
@@ -142,23 +138,23 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     supabase
       .from("profiles")
       .select("username, display_name, xp, level, streak_count, created_at")
-      .eq("id", user.id)
+      .eq("id", userId)
       .single(),
     supabase
       .from("skill_stats")
       .select("skill_tag, total_attempts, correct_attempts")
-      .eq("user_id", user.id),
+      .eq("user_id", userId),
     supabase
       .from("attempts")
       .select("drill_kind, is_correct")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .not("drill_kind", "is", null)
       .order("created_at", { ascending: false })
       .limit(5000),
     supabase
       .from("user_daily_activity")
       .select("date, xp_earned")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .gte("date", sinceIso)
       .order("date", { ascending: true }),
   ]);

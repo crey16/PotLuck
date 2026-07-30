@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
@@ -34,3 +35,19 @@ export async function createClient() {
     }
   );
 }
+
+/**
+ * The signed-in user's id, or null — request-cached so the layout and the
+ * page share one check per request instead of each paying for their own.
+ *
+ * Uses `getClaims()`, not `getUser()`: the project signs JWTs with ES256, so
+ * the token is verified locally against a module-cached JWKS — no round trip
+ * to the auth server on the render path. Middleware already revalidated and
+ * refreshed the session for this request; this only needs to read it safely.
+ */
+export const getAuthUserId = cache(async (): Promise<string | null> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data) return null;
+  return data.claims.sub ?? null;
+});

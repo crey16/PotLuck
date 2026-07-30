@@ -29,14 +29,23 @@ const FRAC_CHOICES = [0.33, 0.5, 0.75, 1, 1.5];
  * XP, streaks and adaptive difficulty (final-review finding L-1). Re-roll
  * the pot/bet with fresh randomness until the margin clears 1.5 points;
  * bounded so a pathological equity can never spin forever.
+ *
+ * The intended answer is drawn 50/50 up front, because the price alone can't
+ * balance the drill: the 20%-pot minimum bet already prices out every draw
+ * under ~14.3% equity, so a turn gutshot can never be a call no matter the
+ * sizing. When the dealt spot can't support the intended side, re-deal the
+ * spot itself (every PRICE_ATTEMPTS_PER_SPOT price rolls) rather than
+ * silently accepting a fold — otherwise the drill converges on "always fold".
  */
 const MIN_MARGIN = 0.015;
-const MAX_DEAL_ATTEMPTS = 50;
+const MAX_DEAL_ATTEMPTS = 60;
+const PRICE_ATTEMPTS_PER_SPOT = 12;
 
 export const generateDecision: Generator = (ctx): DrillQuestion => {
   const street = ctx.rng() < 0.5 ? "flop" : "turn";
-  const spot = dealSpotOnStreet(ctx, street);
-  const eq = spot.equity;
+  const wantCall = ctx.rng() < 0.5;
+  let spot = dealSpotOnStreet(ctx, street);
+  let eq = spot.equity;
 
   let potBefore = 0;
   let bet = 0;
@@ -44,6 +53,10 @@ export const generateDecision: Generator = (ctx): DrillQuestion => {
   let call = 0;
   let req = 0;
   for (let attempt = 0; attempt < MAX_DEAL_ATTEMPTS; attempt++) {
+    if (attempt > 0 && attempt % PRICE_ATTEMPTS_PER_SPOT === 0) {
+      spot = dealSpotOnStreet(ctx, street);
+      eq = spot.equity;
+    }
     potBefore = pick(POT_BEFORE_CHOICES, ctx.rng);
     const close = ctx.rng() < 0.6;
     let frac: number;
@@ -59,9 +72,12 @@ export const generateDecision: Generator = (ctx): DrillQuestion => {
     pot = potBefore + bet;
     call = bet;
     req = requiredEquity(pot, call);
-    if (Math.abs(eq - req) >= MIN_MARGIN) break;
+    if (Math.abs(eq - req) >= MIN_MARGIN && (eq >= req) === wantCall) break;
   }
 
+  // Derived from the final numbers, not from wantCall: if the attempt budget
+  // ran out the spot may have landed on the other side, and the shown answer
+  // must always agree with the shown math.
   const answer = eq >= req ? "call" : "fold";
   const ev = evOfCall(eq, pot, call);
 
