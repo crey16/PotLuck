@@ -74,11 +74,18 @@ export const CONCEPTS: ConceptItem[] = [
       "Two outs is about 8% to the river — you need roughly 11:1 to call. Wishful out-counting is the single most common live-poker math leak.",
   },
   {
-    prompt: "Which of these is NOT a real out when you hold J♥T♥ on Q♥9♥2♠ against A♥K♠?",
-    options: ["The K♥", "The 8♠", "The J♠", "The T♦"],
+    // Villain must hold TWO hearts for the hero's flush outs to be dead. The
+    // earlier version had them on A♥K♠ and called the K♥ dead "because it gives
+    // villain Broadway" — villain cannot make Broadway without a jack and a ten,
+    // and the K♥ actually gives the HERO a king-high straight flush. The
+    // evaluator says that spot has no dead outs at all and that all four listed
+    // options were real outs, so the question had no correct answer. Verified
+    // against outsVsHand/deadOuts — see concepts.test.ts.
+    prompt: "Which of these is NOT a real out when you hold J♥T♥ on Q♥9♥2♠ against A♥K♥?",
+    options: ["The 7♥", "The 8♠", "The J♠", "The K♠"],
     correct: 0,
     explain:
-      "The K♥ completes your flush but also gives villain Broadway (AKQJT). Cards that improve you and improve them more are dead outs — always sanity-check your outs against villain’s likely hand.",
+      "The 7♥ completes your flush, but villain holds A♥K♥ — their flush is bigger, so yours never wins. Cards that improve you and improve them more are dead outs. Note the 8♥ is still a real out: it makes you a straight flush.",
   },
   {
     prompt: "What does ‘equity’ mean in poker?",
