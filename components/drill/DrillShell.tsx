@@ -11,6 +11,7 @@ import { GENERATORS, pickMixedKind, type TabId } from "@/lib/drill/registry";
 import {
   emptyWindows,
   levelFromHistory,
+  mergeSeededWindows,
   nextLevel,
   pushResult,
   type DrillWindows,
@@ -105,13 +106,19 @@ export function DrillShell({
 
   const latestRequestId = useRef(0);
   const nextDealCount = useRef(1);
-  // Seeding is a first-paint restoration only. Once the session has real
-  // progress (the user answered before the GET resolved), the server
-  // snapshot predates that answer and must not overwrite it — otherwise the
-  // answer's effect on adaptive difficulty silently vanishes while score/XP
-  // still reflect it. Set synchronously at the top of handleAnswered, so any
-  // seeding .then() that resolves afterward sees it and bails.
-  const hasAnswered = useRef(false);
+  // Seeding is a first-paint restoration only. A kind the user has already
+  // answered this session must keep its local window: the server snapshot
+  // predates that answer, so applying it there would roll the answer back
+  // while Score and XP still show it — an invisible loss. Tracked per kind
+  // rather than as one flag, because a single early answer must not discard
+  // the seed for the other eight drills.
+  const answeredKinds = useRef<Set<DrillKind>>(new Set());
+  // The seeding effect runs once on mount but deals using whatever tab/mode is
+  // current when it resolves. Refs rather than effect deps: adding them would
+  // re-fetch history on every tab switch. Updated in the handlers below (the
+  // only places these change) rather than during render, which React forbids.
+  const tabRef = useRef(initialTab);
+  const oppModeRef = useRef(initialOppMode);
 
   // Seed difficulty from history. This is the one legitimate exception to
   // "no useEffect that sets state" in this component: it reads from the
@@ -124,20 +131,35 @@ export function DrillShell({
   useEffect(() => {
     let cancelled = false;
     void fetchDrillState().then((seeded) => {
-      if (cancelled || !seeded || hasAnswered.current) return;
-      setWindows(seeded);
-      setLevels(() => {
-        const next: Levels = {};
+      if (cancelled || !seeded) return;
+      const answered = answeredKinds.current;
+      setWindows((local) => mergeSeededWindows(seeded, local, answered));
+      const restored: Levels = {};
+      setLevels((prev) => {
         for (const kind of DRILL_KINDS) {
-          next[kind] = levelFromHistory(seeded[kind]);
+          restored[kind] = answered.has(kind)
+            ? (prev[kind] ?? 1)
+            : levelFromHistory(seeded[kind]);
         }
-        return next;
+        return restored;
       });
+      // The first hand was dealt in the state initialiser, before any history
+      // existed, so it is always a level-1 hand and the Difficulty tile reads
+      // 1 — even for a level-3 user. Re-deal once, so restored difficulty
+      // applies to the hand actually on screen rather than the next one. Only
+      // safe while nothing has been answered: re-dealing under the user would
+      // discard a question they were mid-way through.
+      if (answered.size === 0 && nextDealCount.current === 1) {
+        setLive(makeLive(tabRef.current, oppModeRef.current, restored, seed, nextDealCount.current++));
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+    // `seed` is a prop fixed for the lifetime of this page load (one seed per
+    // request), so this still runs exactly once — listing it just keeps the
+    // dependency honest rather than suppressing the lint rule.
+  }, [seed]);
 
   /** Deal the next hand. Called only from event handlers. */
   const deal = useCallback(
@@ -149,6 +171,7 @@ export function DrillShell({
 
   const handleSelectTab = useCallback(
     (next: TabId) => {
+      tabRef.current = next;
       setTab(next);
       deal(next, oppMode, levels);
     },
@@ -158,6 +181,7 @@ export function DrillShell({
   const handleMode = useCallback(
     (mode: OppMode) => {
       writeOppModeCookie(mode);
+      oppModeRef.current = mode;
       setOppMode(mode);
       // The dealt spot depends on the mode, so re-deal rather than relabel.
       deal(tab, mode, levels);
@@ -171,9 +195,11 @@ export function DrillShell({
 
   const handleAnswered = useCallback(
     (chosen: OptionValue, ok: boolean) => {
-      hasAnswered.current = true;
       if (!live) return;
       const { kind, difficulty, question } = live;
+      // Recorded before any await so a seeding .then() resolving later sees it
+      // and keeps this kind's local window instead of overwriting it.
+      answeredKinds.current.add(kind);
 
       // Difficulty is recomputed once per answer, from that kind's own window.
       const nextWindow = pushResult(windows[kind] ?? [], ok);

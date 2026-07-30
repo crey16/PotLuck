@@ -6,8 +6,9 @@ const nextConfig: NextConfig = {
     //
     // The port is overridable via API_PORT because 8000 is a popular default —
     // if another local service already holds it, this rewrite silently sends
-    // this app's API calls into that service, which is baffling to debug. Set
-    // API_PORT here and pass the same value to uvicorn's --port.
+    // this app's API calls into that service, which is baffling to debug.
+    // package.json's `api` / `api:bare` scripts read the same variable, so
+    // `API_PORT=8011 npm run dev:all` moves both sides together.
     if (process.env.NODE_ENV === "development") {
       const apiPort = process.env.API_PORT ?? "8000";
       return [

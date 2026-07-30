@@ -10,7 +10,7 @@ import datetime
 import pytest
 from pydantic import ValidationError
 
-from api.index import AttemptIn, DRILL_STATE_SQL, SKILL_STATS_SQL
+from api.index import AttemptIn, DRILL_STATE_SQL, DRILL_WINDOW_SIZE, SKILL_STATS_SQL
 from api.progress import next_streak, recalc_level, today_et
 
 
@@ -133,7 +133,7 @@ def test_drill_state_sql_windows_the_last_ten_per_kind():
     sql = " ".join(DRILL_STATE_SQL.split()).lower()
     assert "row_number() over (partition by drill_kind" in sql
     assert "order by created_at desc, id desc" in sql
-    assert "rn <= 10" in sql
+    assert f"rn <= {DRILL_WINDOW_SIZE}" in sql
     assert "drill_kind is not null" in sql
     # RLS is belt; the explicit predicate is braces
     assert "user_id = %s" in sql

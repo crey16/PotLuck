@@ -41,18 +41,18 @@ test("safeNext: accepts a same-origin relative path", () => {
 });
 
 test("safeNext: rejects absolute URLs", () => {
-  assert.equal(safeNext("https://evil.com"), "/drill/outs");
-  assert.equal(safeNext("http://evil.com/path"), "/drill/outs");
+  assert.equal(safeNext("https://evil.com"), "/drill");
+  assert.equal(safeNext("http://evil.com/path"), "/drill");
 });
 
 test("safeNext: rejects protocol-relative URLs", () => {
-  assert.equal(safeNext("//evil.com"), "/drill/outs");
-  assert.equal(safeNext("//evil.com/path"), "/drill/outs");
+  assert.equal(safeNext("//evil.com"), "/drill");
+  assert.equal(safeNext("//evil.com/path"), "/drill");
 });
 
 test("safeNext: rejects non-path-starting strings", () => {
-  assert.equal(safeNext("evil.com"), "/drill/outs");
-  assert.equal(safeNext("javascript:alert(1)"), "/drill/outs");
+  assert.equal(safeNext("evil.com"), "/drill");
+  assert.equal(safeNext("javascript:alert(1)"), "/drill");
 });
 
 test("safeNext: rejects backslash open-redirect payloads", () => {
@@ -60,11 +60,11 @@ test("safeNext: rejects backslash open-redirect payloads", () => {
   // both resolve to "https://evil.com/" once handed to the browser's URL
   // parser (e.g. via router.push). Neither starts with "//", so the old
   // check let them through — see CLAUDE.md-adjacent review notes.
-  assert.equal(safeNext("/\\evil.com"), "/drill/outs");
-  assert.equal(safeNext("/\\\\evil.com"), "/drill/outs");
+  assert.equal(safeNext("/\\evil.com"), "/drill");
+  assert.equal(safeNext("/\\\\evil.com"), "/drill");
 });
 
-test("safeNext: defaults to /drill/outs for null/empty", () => {
-  assert.equal(safeNext(null), "/drill/outs");
-  assert.equal(safeNext(""), "/drill/outs");
+test("safeNext: defaults to /drill for null/empty", () => {
+  assert.equal(safeNext(null), "/drill");
+  assert.equal(safeNext(""), "/drill");
 });

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nextLevel, pushResult, emptyWindows, levelFromHistory, WINDOW_SIZE } from "./difficulty";
+import {
+  nextLevel, pushResult, emptyWindows, levelFromHistory, mergeSeededWindows, WINDOW_SIZE,
+} from "./difficulty";
 import { DRILL_KINDS } from "./contract";
 import { mulberry32 } from "./rng";
 
@@ -101,4 +103,48 @@ test("levelFromHistory: never returns a value outside 1..3", () => {
     const level = levelFromHistory(window);
     assert.ok(level >= 1 && level <= 3, `level ${level} out of bounds for window ${JSON.stringify(window)}`);
   }
+});
+
+test("mergeSeededWindows: takes the seeded window for kinds not answered this session", () => {
+  const seeded = emptyWindows();
+  seeded.outs = rep(10, true);
+  seeded.potodds = rep(8, true);
+  const local = emptyWindows();
+  const merged = mergeSeededWindows(seeded, local, []);
+  assert.deepEqual(merged.outs, rep(10, true));
+  assert.deepEqual(merged.potodds, rep(8, true));
+});
+
+test("mergeSeededWindows: keeps the local window for a kind already answered", () => {
+  // The bug this exists for: a blanket overwrite rolled the answer back to the
+  // server snapshot, invisibly, because Score and XP still reflected it.
+  const seeded = emptyWindows();
+  seeded.outs = rep(10, true);
+  seeded.potodds = rep(10, true);
+  const local = emptyWindows();
+  local.outs = [false];
+  const merged = mergeSeededWindows(seeded, local, ["outs"]);
+  assert.deepEqual(merged.outs, [false], "the answered kind must not be overwritten");
+  assert.deepEqual(merged.potodds, rep(10, true), "unanswered kinds must still be seeded");
+});
+
+test("mergeSeededWindows: one early answer does not discard the other eight kinds", () => {
+  const seeded = emptyWindows();
+  for (const kind of DRILL_KINDS) seeded[kind] = rep(10, true);
+  const local = emptyWindows();
+  local.ev = [false];
+  const merged = mergeSeededWindows(seeded, local, ["ev"]);
+  const seededStill = DRILL_KINDS.filter((k) => merged[k].length === 10);
+  assert.equal(seededStill.length, DRILL_KINDS.length - 1);
+  assert.deepEqual(merged.ev, [false]);
+});
+
+test("mergeSeededWindows: covers every drill kind and mutates neither input", () => {
+  const seeded = emptyWindows();
+  const local = emptyWindows();
+  local.bluff = [true];
+  const merged = mergeSeededWindows(seeded, local, ["bluff"]);
+  assert.deepEqual(Object.keys(merged).sort(), [...DRILL_KINDS].sort());
+  assert.deepEqual(seeded.bluff, [], "seeded must not be mutated");
+  assert.deepEqual(local.bluff, [true], "local must not be mutated");
 });

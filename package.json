@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --test lib/poker/*.test.ts lib/drill/*.test.ts lib/drill/kinds/*.test.ts lib/supabase/*.test.ts components/ui/*.test.ts",
-    "api": "uvicorn api.index:app --port 8000 --reload --env-file .env.local",
-    "api:bare": "uvicorn api.index:app --port 8000 --reload",
+    "api": "uvicorn api.index:app --port ${API_PORT:-8000} --reload --env-file .env.local",
+    "api:bare": "uvicorn api.index:app --port ${API_PORT:-8000} --reload",
     "dev:all": "concurrently \"npm:dev\" \"npm:api\"",
     "dev:all:bare": "concurrently \"npm:dev\" \"npm:api:bare\""
   },

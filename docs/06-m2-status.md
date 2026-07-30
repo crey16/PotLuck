@@ -32,11 +32,14 @@ in parallel and why the poker math is unit-testable without a DOM.
 |---|---|
 | Frozen contract | `lib/drill/contract.ts` |
 | The only grader | `lib/drill/grade.ts` (`gradeAnswer`, `isRight`) |
-| Difficulty rules | `lib/drill/difficulty.ts` (`nextLevel`, `pushResult`, `levelFromHistory`) |
+| Difficulty rules | `lib/drill/difficulty.ts` (`nextLevel`, `pushResult`, `levelFromHistory`, `mergeSeededWindows`) |
 | Shared generator helpers | `lib/drill/opts.ts` (`buildOpts`, `intOptsInRange`, `money`, `pct`, …) |
 | Seeded PRNG | `lib/drill/rng.ts` (`mulberry32`) |
 | Nine generators | `lib/drill/kinds/*.ts`, one `.test.ts` each |
-| Shared test invariants | `lib/drill/kinds/assertions.ts` |
+| Shared test invariants | `lib/drill/kinds/assertions.ts` — including the money-pill reconciliation that catches displayed numbers drifting from the payload |
+| Shared money dealer | `lib/drill/money.ts` (`dealPotSpot`, `betSizePill`) |
+| Shared drill prose | `lib/drill/notes.ts` (`deadOutsNote`, `drawLine`) |
+| TS↔Python drift guard | `api/test_drill_kinds_match_typescript.py` |
 | Registry / tabs | `lib/drill/registry.ts` — `GENERATORS` is a **total** `Record`, so a tenth kind without a generator is a compile error |
 | Cross-kind suite | `lib/drill/registry.test.ts` |
 | Skill-tag map | `api/skills.py` — server-side only |
@@ -49,25 +52,38 @@ in parallel and why the poker math is unit-testable without a DOM.
    restored with `levelFromHistory`, which replays `nextLevel` over growing
    prefixes. A single `nextLevel` call moves one step at most, so it could never
    restore a level the user climbed to over several answers.
-3. **Seeding is first-paint restoration, not ongoing sync.** Once any answer is
-   recorded this session, the server snapshot is stale by definition and is not
-   applied — otherwise an answer given during the fetch round-trip is silently
-   rolled back.
-4. **Opponent mode lives in a cookie**, not `localStorage`, because the dealt
+3. **Seeding is first-paint restoration, not ongoing sync, and it merges per
+   kind.** A kind already answered this session keeps its local window — the
+   server snapshot predates that answer, so applying it there would roll the
+   answer back while Score and XP still showed it. The merge is per kind
+   (`mergeSeededWindows`) rather than all-or-nothing, because the first hand is
+   always instantly answerable while the fetch waits on a session lookup, a
+   Python cold start and a JWKS fetch; a blanket guard let one quick answer pin
+   all nine drills to level 1 for the session. Seeding also re-deals once if
+   nothing has been answered yet, so restored difficulty applies to the hand on
+   screen rather than the next one.
+4. **Restoring from a ten-entry window can demote by one step.**
+   `levelFromHistory` replays from level 1 over the stored ten, while the live
+   path continues from the current level. A level-3 user whose last ten are
+   `TTTTTFFFFF` stays at 3 live (exactly 0.50 does not demote) but restores as
+   2. That is inherent to reconstructing from a bounded window — it is a
+   known trade-off, not a bug.
+5. **Opponent mode lives in a cookie**, not `localStorage`, because the dealt
    spot depends on it and the page is server-rendered. `localStorage` is
    invisible during SSR, so a face-up user was served an unknown-mode *first*
    hand on every load.
-5. **Every hand is reproducible from `(seed, dealCount)`.** The server supplies
+6. **Every hand is reproducible from `(seed, dealCount)`.** The server supplies
    one seed per page load; the client derives each hand from
    `mulberry32(seed + dealCount)`. This removed all SSR/hydration mismatch and
    the mount effect — and it is what M3's "freeze N hands" challenges need.
-6. **XP stays flat at 10 per correct answer**, computed only in `api/index.py`.
+7. **XP stays flat at 10 per correct answer**, computed only in `api/index.py`.
    The drill's session Score (`10 × difficulty + streak bonus`) is display-only
    and never persisted, so difficulty cannot be farmed once leaderboards land.
-7. **`acceptable` is data, not a predicate.** Only preflop uses it (mixed
-   strategies: every action the scenario takes at ≥20%). Being data means M3 can
-   re-grade server-side from `drill_payload`.
-8. **Client-reported `is_correct` is still trusted.** Unchanged from M1.
+8. **`acceptable` is data, not a predicate.** Preflop uses it for mixed
+   strategies (every action the scenario takes at ≥20%), and one concepts bank
+   item uses it where a second option states the same conclusion in different
+   words. Being data means M3 can re-grade server-side from `drill_payload`.
+9. **Client-reported `is_correct` is still trusted.** Unchanged from M1.
    Re-grade server-side when leaderboards make XP competitive — `drill_payload`
    already carries everything needed. Note one shape change: M1 wrote the bare
    `Spot` at the payload root; M2 nests it under `spot` alongside
@@ -96,8 +112,9 @@ have no lesson content yet.
 
 ## Verification
 
-- **183 TypeScript tests + 28 pytest**, `tsc` clean, `npm run lint` 0 errors,
-  `npm run build` compiles.
+- **187 TypeScript tests + 32 pytest**, `tsc` clean, `npm run lint` 0 errors
+  (one pre-existing warning in `lib/poker/engine.test.ts`), `npm run build`
+  compiles.
 - **`lib/drill/registry.test.ts`** walks all nine kinds × 3 levels × 2 opponent
   modes × seeds asserting the shared contract: exactly one option grades
   correct, option arity matches layout, payloads carry `level`/`oppMode` and are
@@ -147,11 +164,12 @@ visible from the code.
    to a bare 401 with no detail. Fix:
    `export SSL_CERT_FILE=$(.venv/bin/python -c "import certifi; print(certifi.where())")`.
    Production is unaffected.
-3. **The dev API proxy port is now `API_PORT`** (default 8000). If another local
+3. **The dev API proxy port is `API_PORT`** (default 8000). If another local
    service holds 8000, the dev rewrite in `next.config.ts` silently routes this
-   app's `/api` calls into that service. Run
-   `API_PORT=8011 npm run dev` alongside
-   `.venv/bin/uvicorn api.index:app --port 8011 --env-file .env.local`.
+   app's `/api` calls into that service — which is how a poker drill ends up
+   talking to somebody else's API and failing in ways that make no sense. Both
+   sides read the same variable, so one value moves them together:
+   `API_PORT=8011 npm run dev:all`.
 
 ## Process notes worth carrying forward
 

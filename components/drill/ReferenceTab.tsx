@@ -224,14 +224,16 @@ export function ReferenceTab() {
         come back in. Switch to this once counting your own draw is automatic.
       </p>
       <p>
-        <b>Range charts</b> and <b>Preflop drill</b> use standard 6-max preflop ranges. Those are
-        solver-shaped reference ranges, not live solver output — treat them as a study aid, not a
-        source of truth.
+        The <b>Preflop drill</b> uses standard 6-max preflop ranges. Those are solver-shaped
+        reference ranges, not live solver output — treat them as a study aid, not a source of
+        truth.
       </p>
 
       <h3>Shortcuts</h3>
       <p>
-        Press <b>A–D</b> or <b>1–4</b> to answer, <b>N</b> or <b>Enter</b> for the next hand.
+        Press the number beside an answer to pick it — <b>1</b> and <b>2</b> where a drill offers
+        two choices, <b>1</b>–<b>4</b> where it offers four. Then <b>N</b> or <b>Enter</b> for the
+        next hand.
       </p>
     </div>
   );

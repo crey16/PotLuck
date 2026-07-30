@@ -61,7 +61,15 @@ SKILL_STATS_SQL = """
         correct_attempts = skill_stats.correct_attempts + excluded.correct_attempts
 """
 
-DRILL_STATE_SQL = """
+# Must equal WINDOW_SIZE in lib/drill/difficulty.ts. The client slices the
+# window it receives to its own WINDOW_SIZE, so if these drift the server
+# returns one length while the client assumes another — silently truncating or
+# under-filling the window with no error anywhere. test_progress.py asserts the
+# SQL against this constant, and test_drill_kinds_match_typescript.py pins it
+# against the TypeScript value.
+DRILL_WINDOW_SIZE = 10
+
+DRILL_STATE_SQL = f"""
     select drill_kind, is_correct
     from (
       select drill_kind, is_correct,
@@ -70,15 +78,8 @@ DRILL_STATE_SQL = """
       from attempts
       where user_id = %s and drill_kind is not null
     ) t
-    where rn <= 10
+    where rn <= {DRILL_WINDOW_SIZE}
     order by drill_kind, rn desc
-"""
-
-DRILL_TOTALS_SQL = """
-    select drill_kind, count(*), count(*) filter (where is_correct)
-    from attempts
-    where user_id = %s and drill_kind is not null
-    group by drill_kind
 """
 
 
@@ -213,10 +214,9 @@ def drill_state(user_id: str = Depends(current_user_id)) -> Any:
     history", which simply starts every drill at level 1.
     """
     windows: dict[str, list[bool]] = {kind: [] for kind in DRILL_KINDS}
-    totals: dict[str, dict[str, int]] = {}
 
     # No try/except + rollback here, unlike record_attempt above: this
-    # handler only reads (two selects, then a commit to close the
+    # handler only reads (one select, then a commit to close the
     # transaction cleanly). Read-only means no partial-write risk, so there
     # is nothing to roll back. If this function ever grows a write, add the
     # same try/except + rollback guard record_attempt uses.
@@ -226,11 +226,6 @@ def drill_state(user_id: str = Depends(current_user_id)) -> Any:
             for kind, is_correct in cur.fetchall():
                 if kind in windows:
                     windows[kind].append(bool(is_correct))
-
-            cur.execute(DRILL_TOTALS_SQL, (user_id,))
-            for kind, total, correct in cur.fetchall():
-                if kind in windows:
-                    totals[kind] = {"total": int(total), "correct": int(correct)}
         conn.commit()
 
-    return {"windows": windows, "totals": totals}
+    return {"windows": windows}

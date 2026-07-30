@@ -49,3 +49,30 @@ export function levelFromHistory(window: boolean[]): DrillLevel {
   }
   return level;
 }
+
+/**
+ * Fold server history into the session's windows, per kind.
+ *
+ * Seeding is first-paint restoration, not ongoing sync: the server snapshot is
+ * a moment in the past, so a kind the user has already answered this session
+ * must keep its local window — applying the snapshot there would roll that
+ * answer back, and because Score and XP still show it the loss is invisible.
+ *
+ * The earlier guard was all-or-nothing: a single early answer discarded the
+ * seed for all nine kinds, and since the first hand is always a level-1 hand
+ * that is instantly answerable while the fetch waits on a session lookup, a
+ * cold start and a JWKS fetch, a quick answer could silently pin every drill
+ * to level 1 for the whole session. Merging per kind keeps the other eight.
+ */
+export function mergeSeededWindows(
+  seeded: DrillWindows,
+  local: DrillWindows,
+  answeredKinds: Iterable<DrillKind>
+): DrillWindows {
+  const keepLocal = new Set(answeredKinds);
+  const merged = {} as DrillWindows;
+  for (const kind of DRILL_KINDS) {
+    merged[kind] = keepLocal.has(kind) ? local[kind] : seeded[kind];
+  }
+  return merged;
+}
