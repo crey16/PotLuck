@@ -133,5 +133,9 @@ export const generatePreflop: Generator = (ctx): DrillQuestion => {
       hand,
       cards,
     },
+    // A repeat is the same hand meeting the same scenario, whatever the suits
+    // dealt — this is what makes the anti-repeat window sweep the 13×13 grid
+    // instead of re-serving the borderline hands it just asked about.
+    signature: `${scenario.id}|${hand}`,
   };
 };

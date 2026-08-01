@@ -1,10 +1,10 @@
-import type { DrillKind, OptionValue } from "@/lib/drill/contract";
+import type { AttemptKind, OptionValue } from "@/lib/drill/contract";
 import { createClient } from "@/lib/supabase/client";
 import { supabaseConfigured } from "@/lib/supabase/env";
 
 /** One answered question, from DrillShell. */
 export interface DrillResult {
-  kind: DrillKind;
+  kind: AttemptKind;
   payload: Record<string, unknown>;
   answer: OptionValue;
   correct: boolean;
@@ -12,7 +12,7 @@ export interface DrillResult {
 
 /** Body shape expected by `AttemptIn` in api/index.py. Names must match exactly. */
 export interface AttemptRequestBody {
-  drill_kind: DrillKind;
+  drill_kind: AttemptKind;
   drill_payload: Record<string, unknown>;
   answer: string;
   is_correct: boolean;

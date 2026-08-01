@@ -185,3 +185,50 @@ test("intOptsInRange: works when hi - lo + 1 === n (exact fit)", () => {
   assert.ok(opts.includes(2));
   assert.deepEqual([...opts].sort(), [1, 2, 3, 4]);
 });
+
+// — M5 sampling helpers —
+
+import { sampleInt, sampleStepped } from "./opts";
+
+test("sampleInt: stays in [lo, hi] and reaches both ends", () => {
+  const seen = new Set<number>();
+  const rng = mulberry32(7);
+  for (let i = 0; i < 500; i++) {
+    const v = sampleInt(3, 9, rng);
+    assert.ok(Number.isInteger(v) && v >= 3 && v <= 9, `out of range: ${v}`);
+    seen.add(v);
+  }
+  assert.equal(seen.size, 7, "500 draws should reach every value in [3, 9]");
+});
+
+test("sampleStepped: stays in [lo, hi], lands on the step grid", () => {
+  const rng = mulberry32(11);
+  for (let i = 0; i < 500; i++) {
+    const v = sampleStepped(60, 260, 5, rng);
+    assert.ok(v >= 60 && v <= 260, `out of range: ${v}`);
+    assert.equal(v % 5, 0, `off the step grid: ${v}`);
+  }
+});
+
+test("sampleStepped: fractional steps stay in range and near the grid", () => {
+  const rng = mulberry32(13);
+  for (let i = 0; i < 500; i++) {
+    const v = sampleStepped(0.3, 1.3, 0.05, rng);
+    assert.ok(v >= 0.3 && v <= 1.3, `out of range: ${v}`);
+    const steps = v / 0.05;
+    assert.ok(Math.abs(steps - Math.round(steps)) < 1e-9, `off the grid: ${v}`);
+  }
+});
+
+test("sampleStepped: is deterministic for a given seed", () => {
+  const a = sampleStepped(60, 260, 5, mulberry32(21));
+  const b = sampleStepped(60, 260, 5, mulberry32(21));
+  assert.equal(a, b);
+});
+
+test("sampleStepped: produces far more distinct values than a pick-table", () => {
+  const rng = mulberry32(17);
+  const seen = new Set<number>();
+  for (let i = 0; i < 200; i++) seen.add(sampleStepped(60, 260, 5, rng));
+  assert.ok(seen.size > 25, `only ${seen.size} distinct values in 200 draws`);
+});

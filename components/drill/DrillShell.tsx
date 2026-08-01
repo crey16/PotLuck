@@ -15,6 +15,7 @@ import {
   type Levels,
 } from "@/lib/drill/difficulty";
 import { mulberry32 } from "@/lib/drill/rng";
+import { generateFresh, pushSignature, questionSignature } from "@/lib/drill/antirepeat";
 import { fetchDrillState } from "@/lib/drill/drillState";
 import {
   type DrillKind, type DrillLevel, type DrillQuestion, type OppMode, type OptionValue,
@@ -55,17 +56,26 @@ interface Live {
   dealCount: number;
 }
 
+/** Per-kind rolling windows of recently answered question signatures (M5). */
+type RecentByKind = Partial<Record<DrillKind, readonly string[]>>;
+
 /**
  * Pure deal: picks the kind for the tab, reads that kind's stored difficulty,
  * and generates from a seed derived from the deal count. No state writes, so it
  * is safe to call from a state initialiser and from event handlers alike.
+ *
+ * `recentByKind` is the anti-repeat memory: a colliding question is re-rolled
+ * by continuing the same seeded rng stream, so the deal stays deterministic in
+ * (seed, dealCount, window). The first deal always runs with an empty window —
+ * on the server and on the client alike — so hydration still matches.
  */
 function makeLive(
   tab: TabId,
   oppMode: OppMode,
   levels: Levels,
   seed: number,
-  dealCount: number
+  dealCount: number,
+  recentByKind: RecentByKind
 ): Live | null {
   if (tab === "reference") return null;
   const rng = mulberry32(seed + dealCount);
@@ -73,8 +83,9 @@ function makeLive(
   const generate = GENERATORS[kind];
   if (!generate) return null;
   const difficulty = levels[kind] ?? 1;
+  const recent = new Set(recentByKind[kind] ?? []);
   return {
-    question: generate({ level: difficulty, oppMode, rng }),
+    question: generateFresh(generate, { level: difficulty, oppMode, rng }, recent),
     kind,
     difficulty,
     dealCount,
@@ -100,7 +111,7 @@ export function DrillShell({
   // Dealt in a state initialiser, not an effect: makeLive is pure and seeded,
   // so the server and the client render the same first hand.
   const [live, setLive] = useState<Live | null>(() =>
-    makeLive(initialTab, initialOppMode, {}, seed, 0)
+    makeLive(initialTab, initialOppMode, {}, seed, 0, {})
   );
 
   const [right, setRight] = useState(0);
@@ -109,6 +120,10 @@ export function DrillShell({
   const [best, setBest] = useState(0);
 
   const nextDealCount = useRef(1);
+  // Anti-repeat memory (M5): signatures of the questions answered this session,
+  // per kind. A ref, not state — deals read it synchronously in event handlers
+  // and nothing renders from it.
+  const recentRef = useRef<RecentByKind>({});
   // Seeding is a first-paint restoration only. A kind the user has already
   // answered this session must keep its local window: the server snapshot
   // predates that answer, so applying it there would roll the answer back
@@ -139,7 +154,9 @@ export function DrillShell({
       // it synchronously (see the sibling comment in the pre-redesign shell).
       const restored = seededLevels(seeded, {}, answered);
       if (answered.size === 0 && nextDealCount.current === 1) {
-        setLive(makeLive(tabRef.current, oppModeRef.current, restored, seed, nextDealCount.current++));
+        setLive(
+          makeLive(tabRef.current, oppModeRef.current, restored, seed, nextDealCount.current++, recentRef.current)
+        );
       }
     });
     return () => {
@@ -150,7 +167,7 @@ export function DrillShell({
   /** Deal the next hand. Called only from event handlers. */
   const deal = useCallback(
     (forTab: TabId, mode: OppMode, lv: Levels) => {
-      setLive(makeLive(forTab, mode, lv, seed, nextDealCount.current++));
+      setLive(makeLive(forTab, mode, lv, seed, nextDealCount.current++, recentRef.current));
     },
     [seed]
   );
@@ -196,6 +213,14 @@ export function DrillShell({
       // Recorded before any await so a seeding .then() resolving later sees it
       // and keeps this kind's local window instead of overwriting it.
       answeredKinds.current.add(kind);
+
+      // Remember the answered question so the next deals avoid re-serving it.
+      // Answer time, not deal time: the handler always runs before the next
+      // deal, and a question abandoned via a tab switch is fine to see again.
+      recentRef.current = {
+        ...recentRef.current,
+        [kind]: pushSignature(recentRef.current[kind] ?? [], questionSignature(question)),
+      };
 
       // Difficulty is recomputed once per answer, from that kind's own window.
       const nextWindow = pushResult(windows[kind] ?? [], ok);

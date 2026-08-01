@@ -12,8 +12,8 @@
  * leak this drill teaches.
  */
 import { requiredEquity, asOdds } from "../../poker/math";
-import { pick, roundTo, buildOpts, money } from "../opts";
-import { dealPotSpot } from "../money";
+import { roundTo, buildOpts, money, sampleStepped } from "../opts";
+import { dealPotRangeSpot } from "../money";
 import type {
   DrillContext, DrillQuestion, ExplainNote, Generator, ViewBlock,
 } from "../contract";
@@ -24,7 +24,12 @@ interface PotOddsSpot {
   extra: number;
 }
 
-/** Level tables — copied exactly from reference lines 667-670. */
+/**
+ * M5: continuous per-level ranges instead of the reference's 5×3 tables.
+ * The level semantics survive the widening — L1 stays "clean numbers"
+ * (pots on tens, quarter-pot fractions), L2 mixes sizings on a 5% grid,
+ * L3 adds awkward single-dollar pots and the raise/dead-money spots.
+ */
 function dealPotOddsSpot(ctx: DrillContext): PotOddsSpot {
   const { level, rng } = ctx;
   let potBefore: number;
@@ -32,14 +37,18 @@ function dealPotOddsSpot(ctx: DrillContext): PotOddsSpot {
   let extra = 0;
 
   if (level === 1) {
-    ({ potBefore, bet } = dealPotSpot(ctx, [60, 80, 100, 120, 200], [0.5, 1, 0.75], 5));
+    ({ potBefore, bet } = dealPotRangeSpot(
+      ctx, { lo: 60, hi: 220, step: 10 }, { lo: 0.5, hi: 1, step: 0.25 }, 5
+    ));
   } else if (level === 2) {
-    ({ potBefore, bet } = dealPotSpot(
-      ctx, [65, 85, 110, 135, 175, 240], [0.33, 0.5, 0.66, 0.75, 1, 1.25], 5
+    ({ potBefore, bet } = dealPotRangeSpot(
+      ctx, { lo: 60, hi: 260, step: 5 }, { lo: 0.3, hi: 1.3, step: 0.05 }, 5
     ));
   } else {
-    ({ potBefore, bet } = dealPotSpot(ctx, [73, 118, 146, 214, 325], [0.4, 0.6, 0.85, 1.1, 1.5], 1));
-    if (rng() < 0.5) extra = roundTo(bet * pick([0.2, 0.3], rng), 1);
+    ({ potBefore, bet } = dealPotRangeSpot(
+      ctx, { lo: 70, hi: 340, step: 1 }, { lo: 0.35, hi: 1.6, step: 0.05 }, 1
+    ));
+    if (rng() < 0.5) extra = roundTo(bet * sampleStepped(0.15, 0.35, 0.05, rng), 1);
   }
 
   return { potBefore, bet, extra };
@@ -140,5 +149,6 @@ export const generatePotodds: Generator = (ctx): DrillQuestion => {
       pot,
       call,
     },
+    signature: `${potBefore}|${bet}|${extra}`,
   };
 };

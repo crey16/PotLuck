@@ -113,5 +113,6 @@ export const generateRule24: Generator = (ctx): DrillQuestion => {
       };
     },
     payload: { level: ctx.level, oppMode: ctx.oppMode, street, spot },
+    signature: `${spot.hero.join(",")}|${spot.board.join(",")}`,
   };
 };

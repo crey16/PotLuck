@@ -24,12 +24,18 @@ SKILL_TAGS: dict[str, str] = {
     "rule24": "equity_estimation",
     "implied": "implied_odds",
     "ev": "expected_value",
+    # M6 play mode — one attempt per postflop decision
+    "play": "postflop_play",
 }
 
 DRILL_KINDS: tuple[str, ...] = (
     "outs", "rule24", "potodds", "decision", "implied",
     "ev", "bluff", "concepts", "preflop",
 )
+
+# The nine drills plus the play mode: everything AttemptIn accepts.
+# Mirrors ATTEMPT_KINDS in lib/drill/contract.ts.
+ATTEMPT_KINDS: tuple[str, ...] = DRILL_KINDS + ("play",)
 
 
 def skill_tag_for(kind: str) -> str:

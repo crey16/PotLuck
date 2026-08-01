@@ -11,15 +11,12 @@
 import { dealSpotOnStreet } from "./outs";
 import { describeOuts } from "../../poker/engine";
 import { requiredEquity, evOfCall, ruleOf2And4 } from "../../poker/math";
-import { pick, money, pct, signedMoney, roundTo } from "../opts";
+import { money, pct, signedMoney, roundTo, sampleStepped } from "../opts";
 import { betSizePill } from "../money";
 import { deadOutsNote } from "../notes";
 import type {
   DrillQuestion, ExplainNote, ExplainRow, Generator, ViewBlock,
 } from "../contract";
-
-const POT_BEFORE_CHOICES = [60, 80, 100, 120, 150, 200];
-const FRAC_CHOICES = [0.33, 0.5, 0.75, 1, 1.5];
 
 /**
  * The `close` path derives the bet from the hero's own equity so the
@@ -57,14 +54,15 @@ export const generateDecision: Generator = (ctx): DrillQuestion => {
       spot = dealSpotOnStreet(ctx, street);
       eq = spot.equity;
     }
-    potBefore = pick(POT_BEFORE_CHOICES, ctx.rng);
+    // M5: sampled ranges instead of the fixed six-pot / five-fraction tables.
+    potBefore = sampleStepped(60, 220, 5, ctx.rng);
     const close = ctx.rng() < 0.6;
     let frac: number;
     if (close) {
       const r = Math.min(0.45, Math.max(0.05, eq + (ctx.rng() - 0.5) * 0.06));
       frac = r / (1 - 2 * r);
     } else {
-      frac = pick(FRAC_CHOICES, ctx.rng);
+      frac = sampleStepped(0.3, 1.5, 0.05, ctx.rng);
     }
     frac = Math.min(2, Math.max(0.2, frac));
     bet = Math.max(5, roundTo(potBefore * frac, 5));
@@ -169,5 +167,6 @@ export const generateDecision: Generator = (ctx): DrillQuestion => {
       pot,
       call,
     },
+    signature: `${spot.hero.join(",")}|${spot.board.join(",")}|${potBefore}|${bet}`,
   };
 };

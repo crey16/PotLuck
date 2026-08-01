@@ -13,7 +13,7 @@
  * unrepresentable. Level tables are genuinely different per drill and stay
  * local to each generator — only the pick/round/pill mechanics are shared.
  */
-import { pick, roundTo } from "./opts";
+import { pick, roundTo, sampleStepped } from "./opts";
 import type { DrillContext } from "./contract";
 
 export interface PotSpot {
@@ -32,6 +32,32 @@ export function dealPotSpot(
   const potBefore = pick(potChoices, ctx.rng);
   const rawFrac = pick(fracChoices, ctx.rng);
   const bet = Math.max(step, roundTo(potBefore * rawFrac, step));
+  return { potBefore, bet, frac: bet / potBefore };
+}
+
+/** An inclusive sampling range, rounded to `step`. */
+export interface Range {
+  lo: number;
+  hi: number;
+  step: number;
+}
+
+/**
+ * The M5 replacement for the `pick([...])` level tables: pot and bet fraction
+ * are each sampled from a continuous range instead of 3–6 literals, so the
+ * space of distinct spots per level is hundreds instead of ~15 and a session
+ * stops repeating itself. Same two-rng-call shape as dealPotSpot, and `frac`
+ * is still recomputed from the rounded bet (finding CC-1 stays fixed).
+ */
+export function dealPotRangeSpot(
+  ctx: DrillContext,
+  pot: Range,
+  frac: Range,
+  betStep = 5
+): PotSpot {
+  const potBefore = sampleStepped(pot.lo, pot.hi, pot.step, ctx.rng);
+  const rawFrac = sampleStepped(frac.lo, frac.hi, frac.step, ctx.rng);
+  const bet = Math.max(betStep, roundTo(potBefore * rawFrac, betStep));
   return { potBefore, bet, frac: bet / potBefore };
 }
 

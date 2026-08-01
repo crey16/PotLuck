@@ -1,0 +1,22 @@
+[package]
+name = "potluck-solver"
+version = "0.1.0"
+edition = "2021"
+
+# Offline tooling only — this crate never ships to production. It solves one
+# flop of the configured spot and exports quantized strategy/EV-loss data for
+# the /play mode. postflop-solver is AGPL-3.0; its *output data* is ours, and
+# the binary itself stays on the dev machine.
+[dependencies]
+# The archived crate's optional bincode (save/load) integration no longer
+# compiles against any published bincode 2.x. We never save solver state —
+# every solve is exported straight to JSON — so turn the feature off and keep
+# rayon for multithreaded solving.
+postflop-solver = { git = "https://github.com/b-inary/postflop-solver", default-features = false, features = ["rayon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+flate2 = "1"
+
+[profile.release]
+lto = true

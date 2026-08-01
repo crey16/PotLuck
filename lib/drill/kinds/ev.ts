@@ -17,7 +17,7 @@
  *     the bet.
  */
 import { evOfCall, requiredEquity } from "../../poker/math";
-import { pick, roundTo, buildOpts, money, pct, signedMoney } from "../opts";
+import { roundTo, buildOpts, money, pct, signedMoney, sampleInt, sampleStepped } from "../opts";
 import type {
   DrillContext, DrillQuestion, ExplainNote, Generator, ViewBlock,
 } from "../contract";
@@ -26,25 +26,40 @@ type EvSpot =
   | { mode: "call"; potBefore: number; bet: number; pot: number; call: number; equity: number }
   | { mode: "shove"; potBefore: number; bet: number; foldRate: number; equityWhenCalled: number };
 
+/**
+ * M5: continuous ranges instead of the reference's 3–6 literal tables.
+ * Equity/fold-rate are sampled as whole percents because every prompt and
+ * explanation renders them with toFixed(0) — a fractional percent would
+ * make the shown working disagree with the payload.
+ */
 function dealEvSpot(ctx: DrillContext): EvSpot {
   const { level, rng } = ctx;
 
   if (rng() < 0.55) {
     const potBefore =
-      level === 1 ? pick([80, 100, 120], rng) : pick([95, 140, 165, 220], rng);
-    const bet = roundTo(potBefore * pick([0.5, 0.75, 1], rng), 5);
+      level === 1
+        ? sampleStepped(70, 140, 10, rng)
+        : sampleStepped(80, 240, 5, rng);
+    const frac =
+      level === 1
+        ? sampleStepped(0.5, 1, 0.25, rng)
+        : sampleStepped(0.4, 1.2, 0.05, rng);
+    const bet = roundTo(potBefore * frac, 5);
     const pot = potBefore + bet;
     const call = bet;
-    const equity = +(
-      pick(level === 1 ? [0.2, 0.25, 0.3, 0.35, 0.4] : [0.18, 0.22, 0.27, 0.31, 0.38, 0.44], rng)
-    ).toFixed(2);
+    const equity =
+      (level === 1 ? sampleInt(20, 40, rng) : sampleInt(16, 46, rng)) / 100;
     return { mode: "call", potBefore, bet, pot, call, equity };
   }
 
-  const potBefore = pick([60, 80, 100, 140], rng);
-  const bet = roundTo(potBefore * pick([0.5, 0.75, 1], rng), 5);
-  const foldRate = pick([0.4, 0.5, 0.55, 0.6, 0.65], rng);
-  const equityWhenCalled = +(pick([0.2, 0.25, 0.3, 0.35], rng)).toFixed(2);
+  const potBefore = sampleStepped(60, 150, 10, rng);
+  const frac =
+    level === 1
+      ? sampleStepped(0.5, 1, 0.25, rng)
+      : sampleStepped(0.4, 1.2, 0.05, rng);
+  const bet = roundTo(potBefore * frac, 5);
+  const foldRate = sampleInt(35, 70, rng) / 100;
+  const equityWhenCalled = sampleInt(18, 38, rng) / 100;
   return { mode: "shove", potBefore, bet, foldRate, equityWhenCalled };
 }
 
@@ -128,6 +143,7 @@ export const generateEv: Generator = (ctx): DrillQuestion => {
         call,
         equity: e,
       },
+      signature: `call|${potBefore}|${bet}|${e}`,
     };
   }
 
@@ -204,5 +220,6 @@ export const generateEv: Generator = (ctx): DrillQuestion => {
       foldRate,
       equityWhenCalled,
     },
+    signature: `shove|${potBefore}|${bet}|${foldRate}|${equityWhenCalled}`,
   };
 };

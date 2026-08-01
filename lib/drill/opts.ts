@@ -22,6 +22,24 @@ export function shuffled<T>(arr: readonly T[], rng: Rng): T[] {
 
 export const roundTo = (v: number, step: number): number => Math.round(v / step) * step;
 
+/** Uniform integer in [lo, hi], inclusive of both ends. */
+export const sampleInt = (lo: number, hi: number, rng: Rng): number =>
+  lo + Math.floor(rng() * (hi - lo + 1));
+
+/**
+ * A value sampled uniformly from [lo, hi] and rounded to `step`, clamped so
+ * the rounding can never push it outside the range. Replaces the M2-era
+ * `pick([...])` level tables: same one-rng-call determinism, but the space of
+ * possible spots is every step in the range instead of 3–6 literals — the M5
+ * fix for questions repeating within a session.
+ */
+export function sampleStepped(lo: number, hi: number, step: number, rng: Rng): number {
+  const v = roundTo(lo + rng() * (hi - lo), step);
+  // Clamp AFTER rounding: an off-step bound then yields the bound itself at
+  // worst, never a value outside [lo, hi].
+  return Math.min(hi, Math.max(lo, v));
+}
+
 /** "a gutshot" / "an open-ended straight draw". */
 export const withArticle = (label: string): string =>
   (/^[aeiou]/i.test(label) ? "an " : "a ") + label;

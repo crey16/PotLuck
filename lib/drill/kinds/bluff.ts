@@ -15,20 +15,19 @@
  * exactly that.
  */
 import { breakEvenFoldRate, minDefenceFrequency, bluffSizeForFoldRate } from "../../poker/math";
-import { pick, roundTo, buildOpts, money } from "../opts";
-import { dealPotSpot, betSizePill } from "../money";
+import { pick, roundTo, buildOpts, money, sampleInt } from "../opts";
+import { dealPotRangeSpot, betSizePill } from "../money";
 import type {
   DrillContext, DrillQuestion, ExplainNote, ExplainRow, Generator, ViewBlock,
 } from "../contract";
 
 type BluffMode = "be" | "mdf" | "size";
 
-/** Level tables — copied exactly from reference lines 861-863. */
+/** M5: continuous per-level ranges instead of the reference's fixed tables. */
 function dealPot(ctx: DrillContext): { potBefore: number; frac: number; bet: number } {
-  const { level } = ctx;
-  const potChoices = level === 1 ? [60, 80, 100, 120] : [75, 95, 130, 185, 240];
-  const fracChoices = level === 1 ? [0.5, 0.75, 1] : [0.33, 0.5, 0.66, 0.75, 1, 1.5, 2];
-  return dealPotSpot(ctx, potChoices, fracChoices, 5);
+  return ctx.level === 1
+    ? dealPotRangeSpot(ctx, { lo: 60, hi: 140, step: 10 }, { lo: 0.5, hi: 1, step: 0.25 }, 5)
+    : dealPotRangeSpot(ctx, { lo: 70, hi: 260, step: 5 }, { lo: 0.3, hi: 2, step: 0.05 }, 5);
 }
 
 function buildBreakEven(ctx: DrillContext): DrillQuestion {
@@ -97,6 +96,7 @@ function buildBreakEven(ctx: DrillContext): DrillQuestion {
       potBefore,
       bet,
     },
+    signature: `be|${potBefore}|${bet}`,
   };
 }
 
@@ -165,16 +165,19 @@ function buildMdf(ctx: DrillContext): DrillQuestion {
       potBefore,
       bet,
     },
+    signature: `mdf|${potBefore}|${bet}`,
   };
 }
 
 function buildSize(ctx: DrillContext): DrillQuestion {
   const { potBefore } = dealPot(ctx);
-  // 0.33/0.67 (finding L-13): bluffSizeForFoldRate(0.33) rounds to 49% pot,
-  // contradicting the explain note's "1/2 pot needs 33%". The note's
-  // thresholds are exact fractions (1/3, 1/2, 3/4, 1× pot), so the fold
-  // rates fed in here must be too, or the rounded answer drifts off them.
-  const need = pick([1 / 3, 0.4, 0.5, 0.6, 2 / 3], ctx.rng);
+  // M5: any whole-percent fold rate in [25, 67] — except that a displayed
+  // "33%" or "67%" must be the exact third (finding L-13): the prompt renders
+  // toFixed(0), and bluffSizeForFoldRate(0.33) is 49% pot while the explain
+  // note's rule of thumb says a displayed 33% needs 1/2 pot. Snapping those
+  // two keeps the shown number, the answer and the note in agreement.
+  const raw = sampleInt(25, 67, ctx.rng);
+  const need = raw === 33 ? 1 / 3 : raw === 67 ? 2 / 3 : raw / 100;
   const size = bluffSizeForFoldRate(need);
   const target = Math.round(size * 100);
 
@@ -234,6 +237,7 @@ function buildSize(ctx: DrillContext): DrillQuestion {
       potBefore,
       foldRate: need,
     },
+    signature: `size|${potBefore}|${need.toFixed(4)}`,
   };
 }
 

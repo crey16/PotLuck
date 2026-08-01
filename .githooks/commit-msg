@@ -1,0 +1,10 @@
+#!/bin/sh
+
+commit_message_file=$1
+
+if grep -Eiq '^[[:space:]]*co-authored-by:[[:space:]].*(claude|codex|anthropic|openai)' "$commit_message_file"; then
+  echo "Commit rejected: AI co-author trailers are not allowed in this repository." >&2
+  exit 1
+fi
+
+exit 0

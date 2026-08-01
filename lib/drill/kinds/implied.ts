@@ -20,14 +20,11 @@
  */
 import { dealSpotOnStreet } from "./outs";
 import { impliedOddsNeeded, requiredEquity } from "../../poker/math";
-import { pick, shuffled, roundTo, money, pct, buildOpts } from "../opts";
+import { pick, shuffled, roundTo, money, pct, buildOpts, sampleStepped } from "../opts";
 import type { Spot } from "../../poker/engine";
 import type {
   DrillContext, DrillQuestion, ExplainNote, ExplainRow, Generator, ViewBlock,
 } from "../contract";
-
-const POT_BEFORE_CHOICES = [80, 100, 120, 160, 200];
-const BET_FRAC_CHOICES = [0.75, 1, 1.25, 1.5];
 
 interface ImpliedMathSpot {
   spot: Spot;
@@ -49,8 +46,9 @@ function dealImpliedMathSpot(ctx: DrillContext): ImpliedMathSpot {
   for (let attempt = 0; attempt < 50; attempt++) {
     const spot = dealSpotOnStreet(ctx, "turn");
     const eq = spot.equity;
-    const potBefore = pick(POT_BEFORE_CHOICES, ctx.rng);
-    let bet = roundTo(potBefore * pick(BET_FRAC_CHOICES, ctx.rng), 5);
+    // M5: sampled ranges instead of the fixed five-pot / four-fraction tables.
+    const potBefore = sampleStepped(70, 240, 10, ctx.rng);
+    let bet = roundTo(potBefore * sampleStepped(0.7, 1.6, 0.05, ctx.rng), 5);
     if (impliedOddsNeeded(eq, potBefore + bet, bet) <= 0) {
       bet = roundTo(potBefore * 1.75, 5);
     }
@@ -159,6 +157,7 @@ function buildMathQuestion(ctx: DrillContext): DrillQuestion {
       pot,
       call,
     },
+    signature: `math|${spot.hero.join(",")}|${spot.board.join(",")}|${potBefore}|${bet}`,
   };
 }
 
@@ -277,6 +276,8 @@ function buildConceptQuestion(ctx: DrillContext): DrillQuestion {
     layout: "one",
     explain: () => ({ rows: [], notes }),
     payload: { level: ctx.level, oppMode: ctx.oppMode, mode: "concept", conceptId },
+    // A repeat is the same bank item coming back, whatever the option shuffle.
+    signature: `concept|${conceptId}`,
   };
 }
 

@@ -72,8 +72,8 @@ inherits, and the local-dev traps.
   an SMTP story. Nothing in the app trusts the address; Supabase's default sender
   is rate-limited and lands in spam often enough to lose a friend at the signup
   step, and an unverified signup that works beats a confirmation mail that never
-  arrives. Revisit in M5, when public profiles and challenges give a reason to
-  care who owns an address.
+  arrives. Revisit in M7 (Social), when public profiles and challenges give a
+  reason to care who owns an address.
 
 ## Redesign + rebrand ✅ SHIPPED 2026-07-30 (unplanned, between M2 and M3)
 
@@ -127,7 +127,88 @@ release fixes, and verification record.
   daily walkthrough, verify first-completion and replay XP against production,
   and repeat the two-account RLS check before marking M4 shipped.
 
-## M5 — Social
+## M5 — Drill variety (kill the repeats) ✅ SHIPPED 2026-07-30
+
+**Why:** drill questions repeat within a session. They are already generated
+algorithmically (seeded RNG, nine generators), but each generator samples from
+a tiny hardcoded table — pot odds level 1 is 5 pot sizes × 3 bet fractions
+(15 combos), preflop is 8 fixed scenarios. Decision: fix this **algorithmically**
+— widen the parameter space and add anti-repeat memory. Not AI-generated:
+questions stay deterministic, engine-verified, and free, per the correctness
+rules in `CLAUDE.md` (no hand-authored numbers, no plausible-but-wrong math).
+
+- [x] **Continuous sampling.** `sampleInt` / `sampleStepped` in
+  `lib/drill/opts.ts` and `dealPotRangeSpot` in `lib/drill/money.ts`; potodds,
+  ev, bluff, decision and implied now sample pots/fractions/equities from
+  per-level ranges. Level semantics preserved (L1 stays clean numbers; the
+  bluff size drill still snaps a displayed 33%/67% to the exact third,
+  finding L-13).
+- [x] **Anti-repeat memory.** `lib/drill/antirepeat.ts`: every question carries
+  a `signature` (what makes it "the same question" to a player — coarser than
+  the payload), `generateFresh` re-rolls collisions against a 24-deep per-kind
+  window by continuing the same seeded rng stream (deals stay deterministic),
+  and DrillShell records signatures at answer time so the SSR first deal is
+  untouched. Session-level; seeding from `attempts` rows deferred until it
+  proves needed.
+- [x] **Preflop coverage.** Signature is `scenario|hand`, so the window forces
+  the drill across the 13×13 grid instead of re-serving the same borderline
+  hands; the existing pure-fold re-roll stays.
+- [x] **Tests:** `lib/drill/variety.test.ts` simulates real sessions per kind ×
+  level × seed and asserts zero repeats inside the window, grid sweep for
+  preflop, and clean-number invariants for L1. Plus unit tests for the
+  helpers. 249 TS + 65 pytest green, build clean.
+- Skipped as not worth it now: prompt-wording template variants (pure surface
+  variety; revisit if generated spots still feel samey in play).
+
+**Done when:** a 50-question session in any single drill kind shows no repeated
+spot. **Met** for the eight generated drills (verified in variety.test.ts).
+The OMC-mistakes drill has a fixed 15-item bank, so its guarantee is the
+strongest possible: the bank fully cycles before anything repeats.
+
+## M6 — Play mode (GTO Wizard-style hand play) ✅ SHIPPED 2026-07-31
+
+**Live at `/play`:** full BTN-vs-BB single-raised-pot hands against real
+solver output, street by street, graded per decision by EV loss (correct /
+also-fine / inaccuracy / blunder), with GTO mixes + equity shown after every
+choice, end-of-hand review, showdowns settled by the app's own evaluator,
+and session stats. See `docs/08-m5-m6-status.md` for the full architecture,
+the verification record, and the traps.
+
+- [x] **Solver pipeline (offline, `solver/`).** Rust exporter on the
+  `postflop-solver` crate (AGPL, never deployed): BTN open 2.5bb / BB call,
+  100bb, simplified tree (33/66/66% bets, one 2.5x raise size), solved to
+  <0.3% pot exploitability per flop. **The sizing spike redirected the whole
+  design:** a full strategy-tree export measured 739 MB gzipped PER FLOP, so
+  the pipeline instead pre-generates **scripted hand instances** — hero hand
+  + bot hand sampled from the solved ranges, hero's full choice tree with
+  bot responses sampled from its strategy — at ~200 bytes gz per playable
+  hand. 25 texture-diverse flops × 200 instances = 5,000 playable hands in
+  ~10 MB of static JSON (`public/solves/srp-btn-bb/`); no Supabase needed.
+- [x] **Data + grading.** Ranges derive FROM `lib/poker/ranges.ts`
+  (`solver/gen-ranges.ts`), so /play, /ranges and the preflop drill agree.
+  Grading is client-side from the shipped per-hand freq/EV-loss data
+  (`lib/play/verdict.ts`), consistent with how the nine drills grade; the
+  planned server-side grading was unnecessary once the data model became
+  per-instance.
+- [x] **Play UI.** `components/play/PlayShell.tsx` + `app/play/page.tsx` +
+  nav entry: felt with face-down bot (revealed at showdown), action feed,
+  keyboard-driven, Industry design system throughout.
+- [x] **Preflop integration.** Every hand starts with the hero's own preflop
+  decision, graded against the reference ranges; the hand then continues
+  down the solved line with a note when the pick left it.
+- [x] **Persistence.** One attempt per decision, new kind `play` (skill tag
+  `postflop_play`), pinned across TS/pydantic/skills by the parity tests.
+- [ ] **Expand coverage** (later): 3-bet pots, more position pairs, more
+  flops, paced bot-action animations.
+
+**Done when:** you can play 20 consecutive full hands in the starter spot with
+per-decision solver grading and a session accuracy summary. **Met and
+exceeded** — `solver/validate.ts` walks all 129,855 hero decision paths in
+the shipped data with zero problems, `solver/simulate-session.ts` plays 20-
+and 50-hand sessions clean, and the flow is browser-verified end-to-end
+(both hero positions, attempt writes 200).
+
+## M7 — Social
 
 1. **Friends** — port the four endpoints; search by username, never email.
 2. **Leaderboards** — global and friends, by XP / streak / accuracy. Subscribe
@@ -138,7 +219,7 @@ release fixes, and verification record.
    Start with friend-to-friend and a 7-day expiry.
 5. **Activity feed** — meaningful events only.
 
-## M6 — Polish (partly absorbed by the redesign)
+## M8 — Polish (partly absorbed by the redesign)
 
 - [x] Keyboard shortcuts — 1–4 to answer, N/Enter next, R reference, D mixed.
 - [x] Light/dark themes (token remap, cookie-persisted, no flash).
@@ -150,8 +231,10 @@ release fixes, and verification record.
 
 ## Deliberately not in v1
 
-- Postflop solver browsing. Real solving is a different class of problem and not
-  replicable client-side.
+- ~~Postflop solver browsing.~~ **Reversed 2026-07-30:** the M6 play mode uses
+  real solver data via offline **precomputed** solutions. Runtime solving and
+  free-form solver *browsing* remain out of scope — production only reads
+  precomputed strategy trees.
 - Hand history import / tracker integration.
 - Payments.
 - Native mobile. The Expo app still works against the same API; revisit later.

@@ -119,5 +119,6 @@ export const generateOuts: Generator = (ctx): DrillQuestion => {
       };
     },
     payload: { level: ctx.level, oppMode: ctx.oppMode, spot },
+    signature: `${spot.hero.join(",")}|${spot.board.join(",")}|${ctx.oppMode === "shown" ? spot.villain!.join(",") : ""}`,
   };
 };

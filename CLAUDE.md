@@ -150,11 +150,20 @@ on `crey16/PotLuck` auto-deploys to Vercel.
 dashboard, drill switcher + session rail, standalone /ranges /reference
 /system pages, redesigned auth, light/dark themes, keyboard shortcuts.
 
-**M4 (the learning path — lessons, modules, scenarios, recommendations,
-daily) is NOT started and is the next milestone.** The DB tables exist but
-are empty; no lesson API routes or UI exist; the redesign spec has no lesson
-screens, so M4 needs a design pass first. Google OAuth provider config and
-the confirm-email decision are still open.
+**M4 (the learning path) shipped 2026-07-30** — 5 modules, 20 lessons,
+authored + table scenarios, recommendations and /daily; see
+`docs/07-m4-status.md`.
+
+**M5 (drill variety) and M6 (the /play mode) shipped 2026-07-30.** M5:
+continuous per-level sampling in the generators plus a per-kind anti-repeat
+signature window (`lib/drill/antirepeat.ts`) — sessions no longer repeat
+spots. M6: `/play` plays full BTN-vs-BB single-raised-pot hands against real
+precomputed solver output (scripted instances in `public/solves/`, offline
+Rust pipeline in `solver/`), graded per decision by EV loss, recorded as
+attempt kind `play`. Read `docs/08-m5-m6-status.md` before touching either —
+the exporter has three learned-the-hard-way EV/runout rules. Google OAuth
+provider config (deliberately skipped for now) and the confirm-email
+decision are still open; M7 Social is next.
 
 Read `docs/06-m2-status.md` before touching M2 code — it carries the settled
 decisions M3 inherits and three local-dev traps that each cost real time

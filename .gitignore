@@ -48,3 +48,7 @@ __pycache__/
 
 # ide
 .idea/
+
+# Offline solver tooling (M6) — build artifacts and solve outputs stay local
+solver/target/
+solver/out/

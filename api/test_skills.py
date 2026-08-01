@@ -1,8 +1,12 @@
-from api.skills import DRILL_KINDS, SKILL_TAGS, skill_tag_for
+from api.skills import ATTEMPT_KINDS, DRILL_KINDS, SKILL_TAGS, skill_tag_for
 
 
-def test_every_drill_kind_has_a_tag():
-    assert set(SKILL_TAGS) == set(DRILL_KINDS)
+def test_every_attempt_kind_has_a_tag():
+    assert set(SKILL_TAGS) == set(ATTEMPT_KINDS)
+
+
+def test_attempt_kinds_are_the_drills_plus_play():
+    assert set(ATTEMPT_KINDS) == set(DRILL_KINDS) | {"play"}
 
 
 def test_nine_kinds():

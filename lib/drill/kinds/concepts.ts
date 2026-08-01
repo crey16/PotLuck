@@ -245,5 +245,7 @@ export const generateConcepts: Generator = (ctx: DrillContext) => {
     layout: "one",
     explain: () => ({ rows: [], notes }),
     payload: { level: ctx.level, oppMode: ctx.oppMode, conceptId },
+    // A repeat is the same bank item coming back, whatever the option shuffle.
+    signature: `c|${conceptId}`,
   };
 };

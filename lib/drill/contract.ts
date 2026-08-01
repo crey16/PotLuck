@@ -14,6 +14,16 @@ export const DRILL_KINDS: DrillKind[] = [
   "ev", "bluff", "concepts", "preflop",
 ];
 
+/**
+ * Everything an attempts row may carry as drill_kind: the nine multiple-
+ * choice drills plus the M6 play mode, which records one attempt per
+ * decision but is not a Generator-backed drill tab. api/skills.py and the
+ * AttemptIn literal mirror this list — test_drill_kinds_match_typescript.py
+ * pins all three together.
+ */
+export type AttemptKind = DrillKind | "play";
+export const ATTEMPT_KINDS: AttemptKind[] = [...DRILL_KINDS, "play"];
+
 /** "unknown" = you see only your cards and the board. "shown" = villain is face-up. */
 export type OppMode = "unknown" | "shown";
 
@@ -70,6 +80,15 @@ export interface DrillQuestion {
   /** Written to attempts.drill_payload. Must be JSON-serialisable and
    *  sufficient to re-derive `answer`. Always carries level and oppMode. */
   payload: Record<string, unknown>;
+  /**
+   * What makes this question "the same question" to a player — the key the
+   * anti-repeat window deduplicates on. Coarser than `payload` on purpose:
+   * a concept question is a repeat whenever the same bank item comes up,
+   * whatever the shuffle; a preflop question whenever the same hand meets the
+   * same scenario, whatever the dealt suits. Falls back to the JSON payload
+   * when absent (see lib/drill/antirepeat.ts).
+   */
+  signature?: string;
 }
 
 export type Generator = (ctx: DrillContext) => DrillQuestion;
