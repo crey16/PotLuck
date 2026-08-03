@@ -108,6 +108,14 @@ def pack_availability() -> dict[str, Any]:
         "solve_files_present": listed,
         "verified": False,
     }
+    if not _SOLVE_DIR.is_dir():
+        # Name what the bundle actually contains so a packaging fault can be
+        # fixed without serverless log access.
+        try:
+            status["bundle_root"] = str(_ROOT)
+            status["bundle_entries"] = sorted(p.name for p in _ROOT.iterdir())[:40]
+        except OSError as exc:
+            status["bundle_entries"] = f"{type(exc).__name__}: {exc}"
     try:
         catalog = load_catalog()
     except Exception as exc:  # surfaced to an authenticated caller only
