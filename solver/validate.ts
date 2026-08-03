@@ -19,7 +19,7 @@ import { parseAction } from "../lib/play/actions";
 import type { PlayInstance, SolveFile, SolveManifest } from "../lib/play/types";
 
 // Run from the repo root: npx tsx solver/validate.ts
-const DIR = join(process.cwd(), "public", "solves", "srp-btn-bb");
+const DIR = join(process.cwd(), "solver", "pack", "srp-btn-bb");
 
 let files = 0, instances = 0, paths = 0, problems = 0;
 

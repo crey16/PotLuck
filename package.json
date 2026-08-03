@@ -11,7 +11,10 @@
     "api": "uvicorn api.index:app --port ${API_PORT:-8000} --reload --env-file .env.local",
     "api:bare": "uvicorn api.index:app --port ${API_PORT:-8000} --reload",
     "dev:all": "concurrently \"npm:dev\" \"npm:api\"",
-    "dev:all:bare": "concurrently \"npm:dev\" \"npm:api:bare\""
+    "dev:all:bare": "concurrently \"npm:dev\" \"npm:api:bare\"",
+    "sync:solves": "node scripts/sync-solve-pack.mjs",
+    "prebuild": "node scripts/sync-solve-pack.mjs",
+    "predev": "node scripts/sync-solve-pack.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

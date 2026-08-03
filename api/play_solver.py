@@ -23,7 +23,7 @@ PREFLOP_GRADING_VERSION = "reference-ranges:v1"
 SPOT = "srp-btn-bb"
 
 _ROOT = Path(__file__).resolve().parents[1]
-_SOLVE_DIR = _ROOT / "public" / "solves" / SPOT
+_SOLVE_DIR = _ROOT / "solver" / "pack" / SPOT
 _FLOP_RE = re.compile(r"^(?:[2-9TJQKA][shdc]){3}$")
 _PATH_RE = re.compile(r"^(?:root|preflop|\d+(?:\.\d+)*)$")
 _SOURCE_HAND_RE = re.compile(
@@ -84,10 +84,12 @@ def compute_pack_content_hash(catalog: dict[str, Any]) -> str:
 def pack_availability() -> dict[str, Any]:
     """Report whether the immutable pack is readable in this runtime.
 
-    Vercel serves ``public/`` as Next.js static assets, which are not part of
-    the Python function bundle; ``vercel.json`` must include the solve files
-    explicitly.  A missing bundle is an operational fault, not a client error,
-    so surface it directly instead of as an opaque 500.
+    Vercel promotes ``public/`` to static assets and strips it from the Python
+    function bundle, and ``includeFiles`` does not apply to Next.js projects.
+    The canonical pack therefore lives under ``solver/pack/``, which ships with
+    the function; ``public/solves`` is a build-time copy for the browser.  A
+    missing pack is an operational fault, not a client error, so surface it
+    directly instead of as an opaque 500.
     """
     manifest_path = _SOLVE_DIR / "index.json"
     catalog_path = _SOLVE_DIR / "catalog.json"

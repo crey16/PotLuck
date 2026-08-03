@@ -167,10 +167,10 @@ class PlayStatusUpdateIn(BaseModel):
 def _guard_pack() -> dict[str, Any]:
     """Fail fast, and legibly, when the solve pack is not in this bundle.
 
-    The pack lives under ``public/``, which Vercel deploys as Next.js static
-    assets rather than as part of the Python function.  ``vercel.json``
-    includes it explicitly; if that ever regresses, callers should see an
-    unambiguous 503 rather than a generic internal error.
+    The canonical pack lives under ``solver/pack/`` precisely so it ships with
+    this function; ``public/`` is stripped from the bundle.  If that ever
+    regresses, callers should see an unambiguous 503 rather than a generic
+    internal error.
     """
     try:
         return load_catalog()
