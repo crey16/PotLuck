@@ -107,15 +107,22 @@ export function FriendsShell() {
     };
   }, []);
 
-  // Debounced search.
-  useEffect(() => {
-    const q = query.trim();
-    if (!q) {
+  // Debounced search. Synchronous state changes happen in the change
+  // handler (house rule: no setState inside useEffect); the effect only
+  // owns the timer and the async fetch.
+  function handleQueryChange(next: string) {
+    setQuery(next);
+    if (!next.trim()) {
       setResults([]);
       setSearching(false);
-      return;
+    } else {
+      setSearching(true);
     }
-    setSearching(true);
+  }
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) return;
     const seq = ++searchSeq.current;
     const timer = setTimeout(() => {
       searchUsers(q)
@@ -303,7 +310,7 @@ export function FriendsShell() {
         <input
           style={inputStyle}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => handleQueryChange(e.target.value)}
           placeholder="Search by username"
           aria-label="Search by username"
         />

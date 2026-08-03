@@ -84,13 +84,13 @@ export async function fetchProfileByUsername(
 export async function fetchProfileById(
   supabase: SupabaseClient,
   userId: string
-): Promise<LeaderboardRow | null> {
+): Promise<(LeaderboardRow & { is_public: boolean }) | null> {
   const { data } = await supabase
     .from("profiles")
-    .select(LEADERBOARD_COLUMNS)
+    .select(`${LEADERBOARD_COLUMNS}, is_public`)
     .eq("id", userId)
     .maybeSingle();
-  return (data as LeaderboardRow | null) ?? null;
+  return (data as (LeaderboardRow & { is_public: boolean }) | null) ?? null;
 }
 
 /** Empty for a non-friend — RLS on skill_stats is own-or-friend. */
