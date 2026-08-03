@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from api.db import get_connection
 from api.deps import current_user_id
 from api.daily import router as daily_router
+from api.friends import router as friends_router
 from api.learning import (
     LessonAttemptIn,
     record_lesson_attempt,
@@ -29,6 +30,7 @@ app = FastAPI()
 app.include_router(learning_router)
 app.include_router(scenarios_router)
 app.include_router(daily_router)
+app.include_router(friends_router)
 
 XP_CORRECT_ANSWER = 10
 
