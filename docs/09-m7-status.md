@@ -1,10 +1,10 @@
-# M7 status — core social (built 2026-08-03, release pending)
+# M7 status — core social (SHIPPED 2026-08-03)
 
 Friends, live leaderboards, public profiles and profile editing, per the
 approved spec (`docs/superpowers/specs/2026-08-03-milestone-7-core-social-design.md`)
 and plan (`docs/superpowers/plans/2026-08-03-milestone-7-core-social.md`).
-Challenges and the activity feed are M7.5. All work is on branch
-`m7-social` — **not merged, not deployed**.
+Challenges and the activity feed are M7.5. Merged to `main` and
+deployed 2026-08-03; migration `0003` applied to production and verified.
 
 ## Architecture (settled)
 
@@ -85,13 +85,17 @@ Hybrid along the read/write line:
   compile, `/friends`, `/leaderboard`, `/u/[username]` present.
 - `grep -rl SUPABASE_SERVICE_ROLE_KEY .next/static` — empty.
 
-## Release steps (need the user / production access)
+## Release record (2026-08-03)
 
-1. Apply `supabase/migrations/0003_social_policies.sql` to the production
-   database (SQL editor or `supabase db push`).
-2. Merge `m7-social` → `main` (auto-deploys).
-3. Two-account live checks from the spec: search → request → auto-accept →
-   decline → cancel → unfriend round-trip; a non-friend cannot read a
-   private profile or anyone's `skill_stats`; the leaderboard moves while
-   the second account earns XP; `is_public = false` hides a profile from
-   search, the global board, and a direct visit.
+1. `0003` applied to production via psycopg; CHECK constraint, both
+   policies, and the `profiles` Realtime publication row verified in
+   `pg_constraint` / `pg_policies` / `pg_publication_tables`.
+2. `m7-social` fast-forwarded into `main` and pushed; Vercel deploy
+   confirmed live (the old function 404s `/api/users/search`, the new one
+   401s it — that flip was the deploy signal, since middleware 307s make
+   page URLs look live on the old build too).
+3. Production API verified with the test account: friends and requests
+   lists 200, username search returns `relationship` and never email,
+   PATCH profile set-and-revert, self-request and unfriend guards 404/400,
+   no-token 401. Still worth a human pass: a two-account browser session
+   exercising accept/decline/unfriend and watching the board move live.

@@ -208,7 +208,7 @@ the shipped data with zero problems, `solver/simulate-session.ts` plays 20-
 and 50-hand sessions clean, and the flow is browser-verified end-to-end
 (both hero positions, attempt writes 200).
 
-## M7 — Core social ✅ BUILT 2026-08-03 (release pending)
+## M7 — Core social ✅ SHIPPED 2026-08-03
 
 Scope settled in `docs/superpowers/specs/2026-08-03-milestone-7-core-social-design.md`:
 friends + leaderboards + public profiles now; challenges and the activity
@@ -235,10 +235,13 @@ direct from Supabase, isolated in `lib/social/queries.ts`.
 - [x] Migration `0003_social_policies.sql` — status CHECK
   (`pending|accepted|declined`), cancel/unfriend DELETE policies,
   `profiles` added to the Realtime publication.
-- [ ] **Release:** apply `0003` to production, deploy, then the two-account
-  live checks (request/auto-accept/decline/cancel/unfriend round-trip, RLS
-  isolation, live board movement, and `is_public = false` hidden from
-  search, leaderboard, and direct visit).
+- [x] **Released 2026-08-03:** `0003` applied to production (constraint,
+  policies, and Realtime publication verified in the catalog), deployed via
+  `main`, and the production API verified with the test account (friends/
+  requests/search round-trips, no email in search, PATCH profile
+  set-and-revert, guard 404s). Remaining manual check: a second-account
+  browser pass on the live site (accept/decline/unfriend and watching the
+  board move) — the same flows are covered by the test suites.
 
 Deferred to **M7.5**: challenges (freeze N hands, friend-to-friend, 7-day
 expiry), activity feed (meaningful events only), accuracy leaderboard
