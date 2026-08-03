@@ -12,11 +12,11 @@
  *     solve or the export is wrong)
  *   - bet/raise codes parse and tb never decreases along a path
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { timeline, boardFrom, holeCards } from "../lib/play/timeline";
 import { parseAction } from "../lib/play/actions";
-import type { PlayInstance, SolveFile } from "../lib/play/types";
+import type { PlayInstance, SolveFile, SolveManifest } from "../lib/play/types";
 
 // Run from the repo root: npx tsx solver/validate.ts
 const DIR = join(process.cwd(), "public", "solves", "srp-btn-bb");
@@ -60,10 +60,24 @@ function walkAll(file: SolveFile, inst: PlayInstance, id: string) {
   }
 }
 
-for (const name of readdirSync(DIR)) {
-  if (!name.endsWith(".json") || name === "index.json") continue;
-  const file = JSON.parse(readFileSync(join(DIR, name), "utf8")) as SolveFile;
+const manifest = JSON.parse(
+  readFileSync(join(DIR, "index.json"), "utf8")
+) as SolveManifest;
+
+// The manifest is the published pack boundary. Metadata files such as the M8
+// catalog are intentionally not solve files, while a listed solve must exist
+// and contain the exact declared instance count.
+for (const entry of manifest.flops) {
+  const file = JSON.parse(
+    readFileSync(join(DIR, `${entry.flop}.json`), "utf8")
+  ) as SolveFile;
   files++;
+  if (file.flop !== entry.flop) {
+    fail(`${entry.flop}: solve metadata says ${file.flop}`);
+  }
+  if (file.instances.length !== entry.instances) {
+    fail(`${entry.flop}: manifest declares ${entry.instances}, file has ${file.instances.length}`);
+  }
   file.instances.forEach((inst, i) => {
     instances++;
     walkAll(file, inst, `${file.flop}#${i}`);

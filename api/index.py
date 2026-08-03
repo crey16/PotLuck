@@ -18,6 +18,7 @@ from api.deps import current_user_id
 from api.daily import router as daily_router
 from api.friends import router as friends_router
 from api.profile import router as profile_router
+from api.play import router as play_router
 from api.learning import (
     LessonAttemptIn,
     record_lesson_attempt,
@@ -33,6 +34,7 @@ app.include_router(scenarios_router)
 app.include_router(daily_router)
 app.include_router(friends_router)
 app.include_router(profile_router)
+app.include_router(play_router)
 
 XP_CORRECT_ANSWER = 10
 
@@ -104,6 +106,17 @@ def record_attempt(
 ) -> dict:
     if isinstance(body, LessonAttemptIn):
         return record_lesson_attempt(body, user_id)
+
+    # M8 play history is server-authoritative.  Keep ``play`` in AttemptIn so
+    # the shared drill-kind vocabulary and old rows remain readable, but never
+    # accept a new client-graded/unlinked play attempt through the generic
+    # endpoint.  The decision route derives the grade and writes its linked
+    # attempt atomically.
+    if body.drill_kind == "play":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "submit play decisions through /api/play/hands/{hand_id}/decisions",
+        )
 
     xp_earned = XP_CORRECT_ANSWER if body.is_correct else 0
     today = today_et()

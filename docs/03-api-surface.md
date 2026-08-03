@@ -94,6 +94,26 @@ entirely and select from Supabase in a server component.
 
 ## New endpoints
 
+### Durable play history — M8 implemented, release pending
+
+All routes are authenticated. The browser supplies identities and choices;
+the API resolves the immutable solve pack, derives the grade and alternatives,
+and writes the normalized coaching record and linked XP attempt atomically.
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/play/sessions` | Create/recover an idempotent session with a frozen supported configuration |
+| POST | `/play/sessions/{session_id}/hands` | Create/recover a solve-backed hand |
+| POST | `/play/hands/{hand_id}/decisions` | Validate the next node/action and persist server-derived grading + XP |
+| PATCH | `/play/hands/{hand_id}` | Complete only a terminal branch, or abandon an interrupted hand |
+| PATCH | `/play/sessions/{session_id}` | Complete or abandon a session; safely closes unfinished hands on abandonment |
+| GET | `/play/sessions` | Recent owner-scoped sessions and trusted quality totals |
+| GET | `/play/sessions/{session_id}/hands` | Recent owner-scoped hands |
+| GET | `/play/hands/{hand_id}` | Full reloadable hand, decision, and action-alternative review |
+
+Generic `POST /progress/attempts` rejects `drill_kind = play`; play XP must flow
+through the authoritative decision transaction.
+
 ### Leaderboards — ✅ shipped in M7, as direct Supabase reads (no endpoint)
 
 The M7 decision: the `leaderboard` view is `security_invoker` and RLS-safe,

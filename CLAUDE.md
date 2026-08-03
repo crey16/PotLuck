@@ -136,7 +136,7 @@ flow, and where each skill earns its keep here:
 The 14 tests in `lib/poker/engine.test.ts` are the regression suite for the whole
 project. Run them after any change to `lib/poker`, and keep them green.
 
-## Current state (updated 2026-07-30)
+## Current state (updated 2026-08-03)
 
 **M1, M2 and M3 are shipped and live at https://potluck-poker.vercel.app**
 (the old hcwk-wizard URL redirects). All nine drills + Mixed behind one
@@ -163,7 +163,7 @@ Rust pipeline in `solver/`), graded per decision by EV loss, recorded as
 attempt kind `play`. Read `docs/08-m5-m6-status.md` before touching either —
 the exporter has three learned-the-hard-way EV/runout rules. Google OAuth
 provider config (deliberately skipped for now) and the confirm-email
-decision are still open; M7 Social is next.
+decision are still open.
 
 **M7 core social shipped 2026-08-03.** Friends (`/friends`, `api/friends.py`), live leaderboards
 (`/leaderboard`, Realtime on `profiles`), public profiles (`/u/[username]`,
@@ -172,6 +172,17 @@ go through FastAPI; RLS-secured reads go direct from Supabase and live
 ONLY in `lib/social/queries.ts`. Migration `0003_social_policies.sql`
 is applied to production. Challenges + activity feed are
 M7.5. See `docs/09-m7-status.md`.
+
+**M8 durable play history is implemented and locally verified; production
+release is pending.** `supabase/migrations/0004_m8_play_history.sql` adds the
+normalized, owner-readable play lifecycle and immutable solve-pack catalog.
+Authenticated play decisions now go through `api/play.py`, which re-derives
+grades from versioned data and writes the linked XP event atomically; generic
+`/progress/attempts` rejects play writes. `/play/history` reloads sessions and
+complete hand review. Legacy M6 attempts use a separate unverified archive
+identity and are excluded from coaching-quality aggregates. Read
+`docs/10-m8-play-data-contract.md` and `docs/11-m8-status.md` before changing
+play persistence.
 
 Read `docs/06-m2-status.md` before touching M2 code — it carries the settled
 decisions M3 inherits and three local-dev traps that each cost real time

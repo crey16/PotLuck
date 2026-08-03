@@ -8,9 +8,16 @@ verbatim from StackSchool's `routes/progress.py::_update_streak` /
 import datetime
 
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
-from api.index import AttemptIn, DRILL_STATE_SQL, DRILL_WINDOW_SIZE, SKILL_STATS_SQL
+from api.index import (
+    AttemptIn,
+    DRILL_STATE_SQL,
+    DRILL_WINDOW_SIZE,
+    SKILL_STATS_SQL,
+    record_attempt,
+)
 from api.progress import next_streak, recalc_level, today_et
 
 
@@ -119,6 +126,19 @@ def test_attempt_in_accepts_every_real_drill_kind():
 def test_attempt_in_caps_the_answer_length():
     with pytest.raises(ValidationError):
         AttemptIn(drill_kind="outs", drill_payload={}, answer="x" * 300, is_correct=True)
+
+
+def test_generic_attempt_endpoint_rejects_client_graded_play_rows():
+    body = AttemptIn(
+        drill_kind="play",
+        drill_payload={"client_claimed_loss": 0},
+        answer="X",
+        is_correct=True,
+    )
+    with pytest.raises(HTTPException) as raised:
+        record_attempt(body, "user-id")
+    assert raised.value.status_code == 409
+    assert "/api/play/hands/{hand_id}/decisions" in raised.value.detail
 
 
 def test_skill_stats_sql_increments_rather_than_overwriting():

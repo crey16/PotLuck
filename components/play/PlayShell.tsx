@@ -6,8 +6,9 @@
  *
  * All game logic lives in lib/play (pure, tested); this component is the
  * session shell: load a scripted instance, walk its timeline, collect the
- * hero's choices, show verdicts, record attempts, keep session stats.
+ * hero's choices, persist server-graded decisions, and keep page stats.
  */
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Felt, Seat, Divider } from "@/components/ui/Felt";
 import { PlayingCard } from "@/components/ui/PlayingCard";
@@ -16,8 +17,19 @@ import { OptionButton, type OptionButtonState } from "@/components/ui/OptionButt
 import { WorkTable, WorkRow } from "@/components/ui/FeedbackPanel";
 import { money } from "@/lib/drill/opts";
 import { mulberry32 } from "@/lib/drill/rng";
-import { recordAttempt } from "@/lib/drill/recordAttempt";
 import { whoIsAhead, type Card } from "@/lib/poker/engine";
+import {
+  buildPlayDecisionBody,
+  createPlayDecision,
+  createPlayHand,
+  createPlaySession,
+  newPlayClientId,
+  updatePlayHand,
+  type PlayApiError,
+  type PlayDecisionReview,
+  type PlayHandSummary,
+  type PlaySession,
+} from "@/lib/play/api";
 import { fetchManifest, fetchSolve, handId, pickHand, SPOT } from "@/lib/play/load";
 import { actionDisplay, moneyExact, parseAction, signedMoneyExact } from "@/lib/play/actions";
 import { preflopDecision, type PreflopDecision } from "@/lib/play/preflop";
@@ -46,14 +58,17 @@ interface LoadedHand {
   solve: SolveFile;
   inst: PlayInstance;
   index: number;
+  clientHandId: string;
 }
 
 interface DecisionRecord {
+  clientDecisionId: string;
   phase: "preflop" | "postflop";
   street: string;
   label: string;
   verdict: Verdict;
-  lossDollars: number;
+  /** Null for reference-graded preflop: its EV is unknown, never zero. */
+  lossDollars: number | null;
 }
 
 interface SessionStats {
@@ -65,6 +80,8 @@ interface SessionStats {
 }
 
 const EMPTY_STATS: SessionStats = { hands: 0, decisions: 0, right: 0, evLost: 0, blunders: 0 };
+
+type PersistenceMode = "connecting" | "remote" | "local" | "unavailable";
 
 /** The scripted feed line for a bot action code. */
 function botLine(code: string, bot: string): string {
@@ -101,6 +118,23 @@ export function PlayShell({ seed }: PlayShellProps) {
   const [hand, setHand] = useState<LoadedHand | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // M8 durable history. Authenticated play waits for the server to create the
+  // normalized session/hand before accepting a decision. Signed-out/local dev
+  // still works, but is explicitly labelled as local-only.
+  const [persistenceMode, setPersistenceMode] = useState<PersistenceMode>("connecting");
+  const [remoteSession, setRemoteSession] = useState<PlaySession | null>(null);
+  const [remoteHand, setRemoteHand] = useState<PlayHandSummary | null>(null);
+  const [persistenceBusy, setPersistenceBusy] = useState<string | null>("Connecting history");
+  const [persistenceError, setPersistenceError] = useState<string | null>(null);
+  const [sessionAttempt, setSessionAttempt] = useState(0);
+  const [handAttempt, setHandAttempt] = useState(0);
+  const sessionClientIdRef = useRef<string | null>(null);
+  const retryDecisionRef = useRef<(() => Promise<void>) | null>(null);
+  const completionAttemptedRef = useRef<string | null>(null);
+  // State updates disable the buttons on the next render; this ref also closes
+  // the tiny same-tick double-click window before React commits that render.
+  const decisionLockRef = useRef(false);
+
   // Preflop step: null = not answered yet.
   const [preflopChosen, setPreflopChosen] = useState<string | null>(null);
   const [preflopDone, setPreflopDone] = useState(false);
@@ -130,7 +164,17 @@ export function PlayShell({ seed }: PlayShellProps) {
       const cached = solveCache.current.get(pick.flop);
       const ready = (solve: SolveFile) => {
         dealingRef.current = false;
-        setHand({ solve, inst: solve.instances[pick.index], index: pick.index });
+        setHand({
+          solve,
+          inst: solve.instances[pick.index],
+          index: pick.index,
+          clientHandId: newPlayClientId(),
+        });
+        setRemoteHand(null);
+        setPersistenceError(null);
+        retryDecisionRef.current = null;
+        completionAttemptedRef.current = null;
+        decisionLockRef.current = false;
         setPreflopChosen(null);
         setPreflopDone(false);
         setChosen([]);
@@ -171,6 +215,60 @@ export function PlayShell({ seed }: PlayShellProps) {
       cancelled = true;
     };
   }, [dealNext]);
+
+  // Start one normalized practice session. The client UUID is retained across
+  // retries, so a timeout after a successful insert cannot create a duplicate.
+  useEffect(() => {
+    if (remoteSession) return;
+    let cancelled = false;
+    if (!sessionClientIdRef.current) sessionClientIdRef.current = newPlayClientId();
+    void createPlaySession(sessionClientIdRef.current)
+      .then((session) => {
+        if (cancelled) return;
+        setRemoteSession(session);
+        setPersistenceMode("remote");
+        setPersistenceBusy(null);
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        const error = reason as PlayApiError;
+        const message = reason instanceof Error ? reason.message : String(reason);
+        setPersistenceBusy(null);
+        if (error.status === 401 || message === "Supabase is not configured.") {
+          setPersistenceMode("local");
+          setPersistenceError(message);
+        } else {
+          setPersistenceMode("unavailable");
+          setPersistenceError(message);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [remoteSession, sessionAttempt]);
+
+  // Link every dealt scripted instance to its durable hand row before the
+  // player can act. The same client UUID is reused when the user retries.
+  useEffect(() => {
+    if (persistenceMode !== "remote" || !remoteSession || !hand) return;
+    if (remoteHand?.client_hand_id === hand.clientHandId) return;
+    let cancelled = false;
+    void createPlayHand(
+      remoteSession.id,
+      hand.clientHandId,
+      hand.solve.flop,
+      hand.index
+    )
+      .then((savedHand) => {
+        if (cancelled) return;
+        setRemoteHand(savedHand);
+        setPersistenceBusy(null);
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        setPersistenceBusy(null);
+        setPersistenceError(reason instanceof Error ? reason.message : String(reason));
+      });
+    return () => { cancelled = true; };
+  }, [persistenceMode, remoteSession, hand, remoteHand, handAttempt]);
 
   const inst = hand?.inst ?? null;
   const startPot = hand?.solve.pot ?? 55;
@@ -242,95 +340,204 @@ export function PlayShell({ seed }: PlayShellProps) {
     return rows;
   }, [inst, preflopDone, events, botName]);
 
+  const currentRemoteReady = Boolean(
+    hand && remoteHand && remoteHand.client_hand_id === hand.clientHandId
+  );
+  const canAct =
+    persistenceMode === "local" ||
+    (persistenceMode === "remote" && currentRemoteReady && !persistenceBusy && !persistenceError);
+
   const recordDecision = useCallback(
-    (rec: DecisionRecord, payload: Record<string, unknown>, answer: string) => {
+    (rec: DecisionRecord) => {
       const right = isRightVerdict(rec.verdict);
       setReview((r) => [...r, rec]);
       setStats((s) => ({
         ...s,
         decisions: s.decisions + 1,
         right: s.right + (right ? 1 : 0),
-        evLost: s.evLost + rec.lossDollars,
+        evLost: s.evLost + (rec.lossDollars ?? 0),
         blunders: s.blunders + (rec.verdict === "blunder" ? 1 : 0),
       }));
-      void recordAttempt({ kind: "play", payload, answer, correct: right });
     },
     []
   );
 
+  const reconcileDecision = useCallback(
+    (local: DecisionRecord, saved: PlayDecisionReview) => {
+      const savedVerdict: Verdict = saved.verdict === "ungraded" ? local.verdict : saved.verdict;
+      const savedLoss = saved.ev_loss_bb === null ? null : saved.ev_loss_bb * 10;
+      setReview((records) => records.map((record) =>
+        record.clientDecisionId === local.clientDecisionId
+          ? { ...record, verdict: savedVerdict, lossDollars: savedLoss }
+          : record
+      ));
+      const localRight = isRightVerdict(local.verdict);
+      const savedRight = isRightVerdict(savedVerdict);
+      setStats((statsNow) => ({
+        ...statsNow,
+        right: statsNow.right + Number(savedRight) - Number(localRight),
+        evLost: statsNow.evLost + (savedLoss ?? 0) - (local.lossDollars ?? 0),
+        blunders:
+          statsNow.blunders + Number(savedVerdict === "blunder") - Number(local.verdict === "blunder"),
+      }));
+    },
+    []
+  );
+
+  const persistDecision = useCallback(
+    (local: DecisionRecord, nodePath: string, chosenActionCode: string) => {
+      if (persistenceMode === "local") return;
+      if (persistenceMode !== "remote" || !remoteHand) return;
+      const savedHandId = remoteHand.id;
+      const body = buildPlayDecisionBody(local.clientDecisionId, nodePath, chosenActionCode);
+      const submit = async () => {
+        setPersistenceBusy("Saving decision");
+        setPersistenceError(null);
+        try {
+          const saved = await createPlayDecision(savedHandId, body);
+          reconcileDecision(local, saved);
+          retryDecisionRef.current = null;
+          setPersistenceBusy(null);
+        } catch (reason) {
+          setPersistenceBusy(null);
+          setPersistenceError(reason instanceof Error ? reason.message : String(reason));
+          retryDecisionRef.current = submit;
+        }
+      };
+      void submit();
+    },
+    [persistenceMode, remoteHand, reconcileDecision]
+  );
+
   const handlePreflop = useCallback(
     (key: string) => {
-      if (!inst || !preflop || !hand || preflopChosen !== null) return;
+      if (
+        !inst || !preflop || !hand || preflopChosen !== null ||
+        !canAct || decisionLockRef.current
+      ) return;
+      decisionLockRef.current = true;
       setPreflopChosen(key);
+      const clientDecisionId = newPlayClientId();
       const verdict: Verdict =
         key === preflop.answer
           ? "correct"
           : preflop.acceptable.includes(key)
             ? "acceptable"
             : "blunder";
-      recordDecision(
-        {
-          phase: "preflop",
-          street: "Preflop",
-          label:
-            preflop.options.find((o) => o.key === key)?.label ?? key,
-          verdict,
-          lossDollars: 0,
-        },
-        {
-          spot: SPOT, flop: hand.solve.flop, instance: hand.index, phase: "preflop",
-          hero: inst.hero, hand: inst.hand, notation: preflop.notation, chosen: key,
-        },
-        key
-      );
+      const local: DecisionRecord = {
+        clientDecisionId,
+        phase: "preflop",
+        street: "Preflop",
+        label: preflop.options.find((o) => o.key === key)?.label ?? key,
+        verdict,
+        lossDollars: null,
+      };
+      recordDecision(local);
+      persistDecision(local, "preflop", key);
     },
-    [inst, preflop, hand, preflopChosen, recordDecision]
+    [inst, preflop, hand, preflopChosen, canAct, recordDecision, persistDecision]
   );
 
   const handleAction = useCallback(
     (i: number) => {
-      if (!inst || !hand || !atDecision || pendingAction !== null) return;
+      if (
+        !inst || !hand || !atDecision || pendingAction !== null ||
+        !canAct || decisionLockRef.current
+      ) return;
+      decisionLockRef.current = true;
       setPendingAction(i);
       const node = atDecision.node;
+      const clientDecisionId = newPlayClientId();
       const verdict = verdictAt(node, i);
-      recordDecision(
-        {
-          phase: "postflop",
-          street: STREET_NAME[node.st],
-          label: actionDisplay(parseAction(node.a[i]), {
-            pot: potAfter(startPot, node.tb),
-            toCall: toCallAt(node, inst.hero),
-          }),
-          verdict,
-          lossDollars: lossDollars(node.l[i]),
-        },
-        {
-          spot: SPOT, flop: hand.solve.flop, instance: hand.index, phase: "postflop",
-          hero: inst.hero, hand: inst.hand, path: atDecision.key, street: node.st,
-          chosen: node.a[i], freq: node.f[i], loss: node.l[i],
-        },
-        node.a[i]
-      );
+      const local: DecisionRecord = {
+        clientDecisionId,
+        phase: "postflop",
+        street: STREET_NAME[node.st],
+        label: actionDisplay(parseAction(node.a[i]), {
+          pot: potAfter(startPot, node.tb),
+          toCall: toCallAt(node, inst.hero),
+        }),
+        verdict,
+        lossDollars: lossDollars(node.l[i]),
+      };
+      recordDecision(local);
+      persistDecision(local, atDecision.key || "root", node.a[i]);
     },
-    [inst, hand, atDecision, pendingAction, startPot, recordDecision]
+    [inst, hand, atDecision, pendingAction, canAct, startPot, recordDecision, persistDecision]
   );
 
   const handleContinue = useCallback(() => {
+    if (persistenceMode === "remote" && (persistenceBusy || persistenceError)) return;
     if (!preflopDone) {
-      if (preflopChosen !== null) setPreflopDone(true);
+      if (preflopChosen !== null) {
+        decisionLockRef.current = false;
+        setPreflopDone(true);
+      }
       return;
     }
     if (pendingAction !== null) {
+      decisionLockRef.current = false;
       setChosen((c) => [...c, pendingAction]);
       setPendingAction(null);
     }
-  }, [preflopDone, preflopChosen, pendingAction]);
+  }, [persistenceMode, persistenceBusy, persistenceError, preflopDone, preflopChosen, pendingAction]);
+
+  const completeRemoteHand = useCallback(async () => {
+    if (!remoteHand) return;
+    const savedHandId = remoteHand.id;
+    setPersistenceBusy("Finalizing hand");
+    setPersistenceError(null);
+    try {
+      const completed = await updatePlayHand(savedHandId, "completed");
+      setRemoteHand(completed);
+      retryDecisionRef.current = null;
+      setPersistenceBusy(null);
+    } catch (reason) {
+      setPersistenceBusy(null);
+      setPersistenceError(reason instanceof Error ? reason.message : String(reason));
+      retryDecisionRef.current = async () => {
+        completionAttemptedRef.current = null;
+        setPersistenceError(null);
+      };
+    }
+  }, [remoteHand]);
+
+  // Completion is a separate server validation: a collection of decisions is
+  // not called complete until its stored path reaches this instance's terminal.
+  useEffect(() => {
+    if (
+      !over || persistenceMode !== "remote" || !remoteHand ||
+      remoteHand.status !== "incomplete" || persistenceBusy || persistenceError ||
+      completionAttemptedRef.current === remoteHand.id
+    ) return;
+    completionAttemptedRef.current = remoteHand.id;
+    void completeRemoteHand();
+  }, [over, persistenceMode, remoteHand, persistenceBusy, persistenceError, completeRemoteHand]);
+
+  const canDealNext =
+    persistenceMode === "local" ||
+    (persistenceMode === "remote" && remoteHand?.status === "completed");
 
   const handleNextHand = useCallback(() => {
-    if (!manifest || dealingRef.current) return;
+    if (!manifest || dealingRef.current || !canDealNext) return;
     setStats((s) => ({ ...s, hands: s.hands + 1 }));
     dealNext(manifest);
-  }, [manifest, dealNext]);
+  }, [manifest, canDealNext, dealNext]);
+
+  const retryPersistence = useCallback(() => {
+    if (retryDecisionRef.current) {
+      void retryDecisionRef.current();
+    } else if (persistenceMode === "unavailable") {
+      setPersistenceMode("connecting");
+      setPersistenceBusy("Connecting history");
+      setPersistenceError(null);
+      setSessionAttempt((attempt) => attempt + 1);
+    } else if (persistenceMode === "remote") {
+      setPersistenceBusy("Saving dealt hand");
+      setPersistenceError(null);
+      setHandAttempt((attempt) => attempt + 1);
+    }
+  }, [persistenceMode]);
 
   // Keyboard: 1..n pick an action, Enter/N continue or next hand.
   useEffect(() => {
@@ -502,7 +709,7 @@ export function PlayShell({ seed }: PlayShellProps) {
                 </h2>
                 <div className={`opts ${preflop.options.length === 2 ? "two" : "grid3"}`}>
                   {preflop.options.map((o, i) => {
-                    let state: OptionButtonState = "idle";
+                    let state: OptionButtonState = canAct ? "idle" : "disabled";
                     if (preflopChosen !== null) {
                       if (o.key === preflop.answer || preflop.acceptable.includes(o.key)) state = "correct";
                       else if (o.key === preflopChosen) state = "wrong";
@@ -527,8 +734,12 @@ export function PlayShell({ seed }: PlayShellProps) {
                     </div>
                     <div className="body">
                       <div className="actions">
-                        <button className="btn btn-primary blueprint btn-caps" onClick={handleContinue}>
-                          See the flop
+                        <button
+                          className="btn btn-primary blueprint btn-caps"
+                          disabled={persistenceMode === "remote" && Boolean(persistenceBusy || persistenceError)}
+                          onClick={handleContinue}
+                        >
+                          {persistenceBusy === "Saving decision" ? "Saving…" : "See the flop"}
                           <span className="keyhint">N</span>
                         </button>
                       </div>
@@ -548,7 +759,7 @@ export function PlayShell({ seed }: PlayShellProps) {
                 </h2>
                 <div className={`opts ${atDecision.node.a.length === 2 ? "two" : "grid3"}`}>
                   {atDecision.node.a.map((code, i) => {
-                    let state: OptionButtonState = "idle";
+                    let state: OptionButtonState = canAct ? "idle" : "disabled";
                     if (pendingNode) {
                       const v = verdictAt(pendingNode, i);
                       if (i === pendingAction) state = isRightVerdict(v) ? "correct" : "wrong";
@@ -596,8 +807,12 @@ export function PlayShell({ seed }: PlayShellProps) {
                         />
                       </WorkTable>
                       <div className="actions">
-                        <button className="btn btn-primary blueprint btn-caps" onClick={handleContinue}>
-                          Continue
+                        <button
+                          className="btn btn-primary blueprint btn-caps"
+                          disabled={persistenceMode === "remote" && Boolean(persistenceBusy || persistenceError)}
+                          onClick={handleContinue}
+                        >
+                          {persistenceBusy === "Saving decision" ? "Saving…" : "Continue"}
                           <span className="keyhint">N</span>
                         </button>
                         <span className="hint">or Enter</span>
@@ -617,19 +832,35 @@ export function PlayShell({ seed }: PlayShellProps) {
                 </div>
                 <div className="body">
                   <WorkTable>
-                    {review.map((r, i) => (
+                    {review.map((r) => (
                       <WorkRow
-                        key={i}
+                        key={r.clientDecisionId}
                         label={`${r.street} — ${r.label}`}
-                        value={`${VERDICT_WORD[r.verdict]}${r.lossDollars > 0 ? ` · −${moneyExact(r.lossDollars)}` : ""}`}
+                        value={`${VERDICT_WORD[r.verdict]}${
+                          r.lossDollars === null
+                            ? " · EV unknown"
+                            : r.lossDollars > 0 ? ` · −${moneyExact(r.lossDollars)}` : ""
+                        }`}
                       />
                     ))}
                   </WorkTable>
                   <div className="actions">
-                    <button className="btn btn-primary blueprint btn-caps" onClick={handleNextHand}>
-                      Next hand
+                    <button
+                      className="btn btn-primary blueprint btn-caps"
+                      disabled={!canDealNext}
+                      onClick={handleNextHand}
+                    >
+                      {persistenceBusy === "Finalizing hand" ? "Finalizing…" : "Next hand"}
                       <span className="keyhint">N</span>
                     </button>
+                    {remoteHand?.status === "completed" && (
+                      <Link
+                        className="btn btn-secondary btn-caps"
+                        href={`/play/history/${encodeURIComponent(remoteHand.id)}`}
+                      >
+                        Open saved review
+                      </Link>
+                    )}
                     <span className="hint">or Enter</span>
                   </div>
                 </div>
@@ -642,7 +873,7 @@ export function PlayShell({ seed }: PlayShellProps) {
           <div className="session-box">
             <div className="head">
               <span>This session</span>
-              <span>resets on reload</span>
+              <span>page stats</span>
             </div>
             <div className="cells">
               <div className="cell" style={{ borderRight: "1px solid var(--color-divider)", borderBottom: "1px solid var(--color-divider)" }}>
@@ -665,6 +896,44 @@ export function PlayShell({ seed }: PlayShellProps) {
             <div className="foot">
               <span>Blunders</span>
               <span>{stats.blunders}</span>
+            </div>
+          </div>
+
+          <div className="blueprint" style={{ padding: "var(--space-4)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: "var(--space-2)" }}>
+              <div className="mono-label" style={{ letterSpacing: ".12em" }}>Hand history</div>
+              <span
+                className={`tag ${persistenceMode === "remote" ? "tag-neutral" : "tag-outline"} tag-mono`}
+                style={{ marginLeft: "auto" }}
+              >
+                {remoteHand?.status === "completed"
+                  ? "saved"
+                  : persistenceMode === "remote" ? (persistenceBusy ? "saving" : "connected")
+                    : persistenceMode === "local" ? "local only" : "unavailable"}
+              </span>
+            </div>
+            <p
+              style={{
+                fontSize: 12.5, margin: "0 0 var(--space-3)",
+                color: "color-mix(in srgb, var(--color-text) 70%, transparent)",
+              }}
+            >
+              {persistenceMode === "remote"
+                ? (persistenceBusy ?? "Every choice is graded and stored by the authenticated API.")
+                : persistenceMode === "local"
+                  ? "This hand works locally, but it will not be available after a reload."
+                  : "Play is paused until durable history reconnects."}
+            </p>
+            {persistenceError && persistenceMode !== "local" && (
+              <div className="note critl" style={{ margin: "0 0 var(--space-3)", fontSize: 12.5 }}>
+                {persistenceError}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+              <Link className="btn btn-secondary btn-caps" href="/play/history">Recent hands</Link>
+              {persistenceError && persistenceMode !== "local" && (
+                <button className="btn btn-secondary btn-caps" onClick={retryPersistence}>Retry save</button>
+              )}
             </div>
           </div>
 
