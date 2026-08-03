@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { fetchDashboardStats, type SkillStat } from "@/lib/drill/serverStats";
+import { fetchDashboardStats } from "@/lib/drill/serverStats";
+import {
+  ActivityHeatmap,
+  SkillRow,
+  buildHeatmapWeeks,
+} from "@/components/social/ProfileWidgets";
 import { KIND_LABELS, TAB_ORDER, drillHref } from "@/lib/drill/registry";
 import type { DrillKind } from "@/lib/drill/contract";
 import { supabaseConfigured } from "@/lib/supabase/env";
@@ -38,14 +43,6 @@ const TAG_TO_KIND: Record<string, DrillKind> = {
   expected_value: "ev",
 };
 
-function heatFill(xp: number): string | null {
-  if (xp <= 0) return null;
-  if (xp >= 100) return "var(--color-accent)";
-  if (xp >= 60) return "color-mix(in srgb, var(--color-accent) 75%, transparent)";
-  if (xp >= 30) return "color-mix(in srgb, var(--color-accent) 50%, transparent)";
-  return "color-mix(in srgb, var(--color-accent) 25%, transparent)";
-}
-
 function learningHref(recommendation: Recommendation): string {
   if (recommendation.type === "lesson" && recommendation.module_id && recommendation.lesson_id) {
     return `/learn/${recommendation.module_id}/${recommendation.lesson_id}`;
@@ -66,44 +63,6 @@ function Pips({ level }: { level: number }) {
       {[1, 2, 3].map((i) => (
         <span key={i} className={i <= level ? "on" : undefined} />
       ))}
-    </div>
-  );
-}
-
-function SkillRow({ skill, weak }: { skill: SkillStat; weak: boolean }) {
-  return (
-    <div className={`skill-row${weak ? " weak" : ""}`}>
-      <span className="name" style={weak ? { display: "flex", alignItems: "center", gap: 6 } : undefined}>
-        {weak && (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" strokeWidth="1.5">
-            <path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a1.9 1.9 0 0 0 1.7 2.9h15.8a1.9 1.9 0 0 0 1.7-2.9L13.7 3.9a1.9 1.9 0 0 0-3.4 0z" />
-          </svg>
-        )}
-        {skill.label}
-      </span>
-      <span
-        className="meter thin"
-        style={weak ? { borderColor: "var(--warn)" } : undefined}
-      >
-        <i
-          className={weak ? "hatch" : undefined}
-          style={
-            weak
-              ? {
-                  width: `${skill.accuracy}%`,
-                  color: "var(--warn)",
-                  backgroundColor: "color-mix(in srgb, var(--warn) 22%, transparent)",
-                }
-              : { width: `${skill.accuracy}%` }
-          }
-        />
-      </span>
-      <span className="pct" style={weak ? { color: "var(--warn)" } : undefined}>
-        {skill.attempts > 0 ? `${skill.accuracy}%` : "—"}{" "}
-        <span className="n" style={weak ? { opacity: 0.7, color: "inherit" } : undefined}>
-          /{skill.attempts}
-        </span>
-      </span>
     </div>
   );
 }
@@ -158,22 +117,7 @@ export default async function Home() {
   const resumeKind = stats.lastKind;
 
   // 12-week heatmap: columns are weeks (oldest → newest), rows Mon → Sun.
-  const xpByDate = new Map(stats.activity.map((a) => [a.date, a.xp]));
-  const today = new Date();
-  const dow = (today.getDay() + 6) % 7; // Monday = 0
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - dow);
-  const weeks: { date: string; xp: number; future: boolean }[][] = [];
-  for (let w = 11; w >= 0; w--) {
-    const col: { date: string; xp: number; future: boolean }[] = [];
-    for (let d = 0; d < 7; d++) {
-      const day = new Date(monday);
-      day.setDate(monday.getDate() - w * 7 + d);
-      const iso = day.toISOString().slice(0, 10);
-      col.push({ date: iso, xp: xpByDate.get(iso) ?? 0, future: day > today });
-    }
-    weeks.push(col);
-  }
+  const weeks = buildHeatmapWeeks(stats.activity);
 
   return (
     <main className="page" style={{ paddingTop: "var(--space-8)" }}>
@@ -432,38 +376,7 @@ export default async function Home() {
             <h2>Activity</h2>
             <span className="lede">XP earned per day, last 12 weeks.</span>
           </div>
-          <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "flex-start" }}>
-            <div
-              style={{
-                display: "grid", gridTemplateRows: "repeat(7, 15px)", gap: 3,
-                fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".06em",
-                color: "color-mix(in srgb, var(--color-text) 50%, transparent)",
-                textAlign: "right", paddingTop: 1,
-              }}
-            >
-              <span>MON</span><span /><span>WED</span><span /><span>FRI</span><span /><span>SUN</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 15px)", gridTemplateRows: "repeat(7, 15px)", gap: 3 }}>
-              {weeks.map((col, w) =>
-                col.map((day, d) => {
-                  const fill = day.future ? null : heatFill(day.xp);
-                  return (
-                    <div
-                      key={day.date}
-                      title={`${day.xp} XP`}
-                      className={`heat-cell${fill ? "" : " empty"}`}
-                      style={{
-                        gridColumn: w + 1,
-                        gridRow: d + 1,
-                        background: fill ?? "transparent",
-                        opacity: day.future ? 0.35 : 1,
-                      }}
-                    />
-                  );
-                })
-              )}
-            </div>
-          </div>
+          <ActivityHeatmap weeks={weeks} />
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", marginTop: "var(--space-4)", flexWrap: "wrap" }}>
             <div
               style={{
