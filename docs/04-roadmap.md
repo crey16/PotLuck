@@ -208,16 +208,41 @@ the shipped data with zero problems, `solver/simulate-session.ts` plays 20-
 and 50-hand sessions clean, and the flow is browser-verified end-to-end
 (both hero positions, attempt writes 200).
 
-## M7 — Social
+## M7 — Core social ✅ BUILT 2026-08-03 (release pending)
 
-1. **Friends** — port the four endpoints; search by username, never email.
-2. **Leaderboards** — global and friends, by XP / streak / accuracy. Subscribe
-   via Supabase Realtime so it moves while you watch.
-3. **Public profiles** — `/u/[username]`, skill breakdown, streak heatmap,
-   respecting `is_public`. Add OG tags so shared links preview well.
-4. **Challenges** — freeze N hands, both players answer the same set, compare.
-   Start with friend-to-friend and a 7-day expiry.
-5. **Activity feed** — meaningful events only.
+Scope settled in `docs/superpowers/specs/2026-08-03-milestone-7-core-social-design.md`:
+friends + leaderboards + public profiles now; challenges and the activity
+feed moved to M7.5. Architecture is hybrid — writes and friend-request
+logic in FastAPI (`api/friends.py`, `api/profile.py`); RLS-secured reads
+direct from Supabase, isolated in `lib/social/queries.ts`.
+
+- [x] **Friends** — `/friends`: username search (relationship-aware
+  buttons, never email), request/accept/decline/cancel with StackSchool's
+  auto-accept-on-reverse-request, roster, unfriend (both rows + request
+  corpse cleaned so re-friending works).
+- [x] **Leaderboards** — `/leaderboard`: global (top 100, `leaderboard`
+  view) and friends (direct `profiles` read, so private friends still
+  rank among friends), XP and streak metrics, live via Realtime
+  `postgres_changes` on `profiles` with a mover flash. A caller absent
+  from the global board gets an unranked self row ("outside the top 100"
+  or "private — not ranked publicly").
+- [x] **Public profiles** — `/u/[username]` (logged-in only, by decision):
+  identity plate, skill bars + 12-week streak heatmap for self/friends
+  (RLS-gated; others see a "visible to friends" plate), private
+  non-friend profiles 404 without confirming existence.
+- [x] **Profile editing** — display name, bio, `is_public` toggle on your
+  own profile. Avatar upload deferred.
+- [x] Migration `0003_social_policies.sql` — status CHECK
+  (`pending|accepted|declined`), cancel/unfriend DELETE policies,
+  `profiles` added to the Realtime publication.
+- [ ] **Release:** apply `0003` to production, deploy, then the two-account
+  live checks (request/auto-accept/decline/cancel/unfriend round-trip, RLS
+  isolation, live board movement, and `is_public = false` hidden from
+  search, leaderboard, and direct visit).
+
+Deferred to **M7.5**: challenges (freeze N hands, friend-to-friend, 7-day
+expiry), activity feed (meaningful events only), accuracy leaderboard
+metric, OG tags / anonymous profile pages, avatar upload.
 
 ## M8 — Polish (partly absorbed by the redesign)
 

@@ -165,6 +165,15 @@ the exporter has three learned-the-hard-way EV/runout rules. Google OAuth
 provider config (deliberately skipped for now) and the confirm-email
 decision are still open; M7 Social is next.
 
+**M7 core social is built on branch `m7-social` (2026-08-03), release
+pending.** Friends (`/friends`, `api/friends.py`), live leaderboards
+(`/leaderboard`, Realtime on `profiles`), public profiles (`/u/[username]`,
+logged-in only) and profile editing (`api/profile.py`). Hybrid rule: writes
+go through FastAPI; RLS-secured reads go direct from Supabase and live
+ONLY in `lib/social/queries.ts`. Migration `0003_social_policies.sql` must
+be applied to production before deploy. Challenges + activity feed are
+M7.5. See `docs/09-m7-status.md`.
+
 Read `docs/06-m2-status.md` before touching M2 code — it carries the settled
 decisions M3 inherits and three local-dev traps that each cost real time
 (`python-dotenv` missing from `api/requirements.txt`, `PyJWKClient` needing

@@ -12,6 +12,8 @@ const NAV = [
   { href: "/learn", label: "Learn" },
   { href: "/drill", label: "Drill" },
   { href: "/play", label: "Play" },
+  { href: "/friends", label: "Friends" },
+  { href: "/leaderboard", label: "Ranks" },
   { href: "/ranges", label: "Ranges" },
   { href: "/reference", label: "Reference" },
   { href: "/system", label: "System" },
@@ -197,6 +199,13 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
                       borderTop: "1px solid var(--color-divider)", paddingTop: "var(--space-2)",
                     }}
                   >
+                    <Link
+                      className="menu-item"
+                      href={`/u/${username}`}
+                      onClick={() => setAcctOpen(false)}
+                    >
+                      Profile
+                    </Link>
                     <button className="menu-item danger" onClick={handleSignOut}>
                       Sign out
                     </button>

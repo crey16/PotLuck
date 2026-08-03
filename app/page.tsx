@@ -409,22 +409,26 @@ export default async function Home() {
 
         <div>
           <div className="section-head" style={{ gap: 0 }}>
-            <h2>Later</h2>
+            <h2>Social</h2>
           </div>
           <div
             style={{
-              border: "1px dashed var(--color-divider)", padding: "var(--space-6)",
+              border: "1px solid var(--color-divider)", padding: "var(--space-6)",
               display: "flex", flexDirection: "column", gap: "var(--space-2)",
             }}
           >
-            <div className="mono-label" style={{ fontSize: 10, letterSpacing: ".12em" }}>Reserved</div>
+            <div className="mono-label" style={{ fontSize: 10, letterSpacing: ".12em" }}>Live</div>
             <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 20, lineHeight: 1.15 }}>
-              Friends · leaderboards · head-to-head
+              Friends · leaderboards
             </div>
             <p style={{ fontSize: 13, color: "color-mix(in srgb, var(--color-text) 60%, transparent)", margin: 0 }}>
-              This column is held open for the social layer. Nothing is designed here yet — the grid
-              takes a third card row without moving anything above it.
+              Add friends by username, compare skill profiles, and watch the
+              XP and streak boards move live. Head-to-head challenges are next.
             </p>
+            <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-2)", flexWrap: "wrap" }}>
+              <Link href="/friends" className="btn btn-secondary btn-caps">Friends</Link>
+              <Link href="/leaderboard" className="btn btn-secondary btn-caps">Ranks</Link>
+            </div>
           </div>
         </div>
       </section>

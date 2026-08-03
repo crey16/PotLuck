@@ -72,15 +72,17 @@ entirely and select from Supabase in a server component.
 |---|---|---|
 | GET | `/stats/activity` | **KEEP** — powers the streak calendar |
 
-## friends
+## friends — ✅ shipped in M7 (`api/friends.py`)
 
 | Method | Path | Fate |
 |---|---|---|
-| GET | `/users/search` | **CHANGE** — search `username`, not email. Never expose emails. |
-| POST | `/friends/request` | **KEEP** |
-| GET | `/friends/requests` | **KEEP** |
-| POST | `/friends/respond` | **KEEP** — writes two `friends` rows on accept |
-| GET | `/friends` | **KEEP** |
+| GET | `/users/search` | **DONE** — username prefix search, `relationship` annotated, private profiles hidden unless friends, email never touched |
+| POST | `/friends/request` | **DONE** — guard cascade + auto-accept on a reverse pending request |
+| GET | `/friends/requests` | **DONE** — `{incoming, outgoing}`, single join (no N+1) |
+| POST | `/friends/respond` | **DONE** — `accept\|decline`; accept writes both `friends` rows in one transaction |
+| DELETE | `/friends/requests/{id}` | **NEW, DONE** — cancel own pending outgoing |
+| GET | `/friends` | **DONE** |
+| DELETE | `/friends/{user_id}` | **NEW, DONE** — unfriend; removes both rows and the accepted request rows |
 
 ## health
 
@@ -92,14 +94,14 @@ entirely and select from Supabase in a server component.
 
 ## New endpoints
 
-### Leaderboards
+### Leaderboards — ✅ shipped in M7, as direct Supabase reads (no endpoint)
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/leaderboard?scope=global\|friends&metric=xp\|streak\|accuracy` | Reads the `leaderboard` view; `friends` scope joins `friends` |
-
-`metric=accuracy` needs a rollup from `skill_stats` — consider a materialised
-view refreshed by `pg_cron` if it gets slow.
+The M7 decision: the `leaderboard` view is `security_invoker` and RLS-safe,
+so the browser reads it directly (`lib/social/queries.ts`) and subscribes to
+Realtime `postgres_changes` on `profiles` for liveness — no Python endpoint,
+no cold start. Friends scope reads `profiles` filtered by friend ids so
+private friends still rank. `metric=accuracy` remains future work and would
+need a `skill_stats` rollup (materialised view + `pg_cron` if slow).
 
 ### Challenges
 
@@ -125,11 +127,11 @@ Write events from the same places that award XP. Kinds to start with:
 `lesson_complete`, `level_up`, `streak_milestone` (7/30/100), `challenge_win`.
 Do not emit an event per attempt — the feed becomes noise.
 
-### Profiles
+### Profiles — ✅ shipped in M7
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/u/{username}` | Public profile: skill breakdown, streak history, level |
-| PATCH | `/profile` | Update display name, bio, avatar, `is_public` |
+| GET | `/u/{username}` | **DONE as a page, not an endpoint** — server component reading under RLS; skill breakdown + heatmap visible to self/friends only; logged-in users only |
+| PATCH | `/profile` | **DONE** (`api/profile.py`) — display name, bio, `is_public`; avatar deferred |
 
-Respect `is_public`. RLS already enforces it; do not build a bypass.
+Respect `is_public`. RLS already enforces it; no bypass was built.
