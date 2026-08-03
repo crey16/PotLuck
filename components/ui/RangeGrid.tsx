@@ -11,12 +11,12 @@ export interface RangeGridProps {
   highlight?: string;
 }
 
-/** Value steps of one hue, per the redesign: raise/3-bet is the dark accent,
- *  call the light accent, fold transparent with a hairline border. Split
+/** Value steps of one hue, per the v2 redesign: raise/3-bet is the solid
+ *  accent, call the light accent, fold transparent with a hairline border. Split
  *  cells are mixed frequencies, filled bottom-up — see rangeCell.ts for why
  *  those carry their own modifier class. */
-const RAISE = "var(--color-accent-800)";
-const CALL = "var(--color-accent-300)";
+const RAISE = "var(--color-accent)";
+const CALL = "var(--color-accent-200)";
 
 export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
   const scenario = getScenario(scenarioId);
@@ -47,7 +47,7 @@ export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
               className="sw"
               style={
                 key === "f"
-                  ? { border: "1px solid var(--color-divider)" }
+                  ? { border: "1px solid var(--line)" }
                   : { background: key === "r" ? RAISE : CALL }
               }
             />

@@ -2,17 +2,16 @@
  * How one 13x13 range cell paints: the fill that encodes its frequencies, and
  * the modifier class that keeps its label legible against that fill.
  *
- * Split out of RangeGrid so the three-case contract is unit-testable. It has
- * to be three cases, not two: `.gc` draws the label in the BACKGROUND colour
- * (reverse-out, correct on a cell filled edge to edge) and `.gc.dim` overrides
- * that for a pure fold. A partly-filled cell is neither — its label sits over
- * the transparent part — so without a third case it renders background on
- * background and disappears. See rangeCell.test.ts.
+ * Split out of RangeGrid so the three-case contract is unit-testable. The
+ * explicit solid, fold, and mixed cases let CSS tune labels that sit on a full
+ * fill, no fill, or both. In v2, mixed labels use dark ink with a light halo so
+ * they stay legible across the split. See rangeCell.test.ts.
  */
 
-/** Value steps of one hue: raise/3-bet is the dark accent, call the light one. */
-const RAISE = "var(--color-accent-800)";
-const CALL = "var(--color-accent-300)";
+/** Value steps of one hue in v2: raise/3-bet is the solid accent, call the
+ *  light 200 step. */
+const RAISE = "var(--color-accent)";
+const CALL = "var(--color-accent-200)";
 
 /** Frequencies for a single cell: raise, call, fold. They sum to 1. */
 export interface CellFrequency {

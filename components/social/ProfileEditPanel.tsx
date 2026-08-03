@@ -69,8 +69,9 @@ export function ProfileEditPanel({ initial }: { initial: ProfileEditInitial }) {
   } as const;
   const inputStyle = {
     width: "100%",
-    border: "1px solid var(--color-divider)",
-    background: "transparent",
+    border: "1px solid var(--line)",
+    borderRadius: "var(--r-sm)",
+    background: "var(--color-surface)",
     color: "var(--color-text)",
     fontFamily: "var(--font-body)",
     fontSize: 14,

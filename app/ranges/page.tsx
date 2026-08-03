@@ -2,10 +2,21 @@
 
 import { useState } from "react";
 import { RangeGrid } from "@/components/ui/RangeGrid";
-import { SCENARIOS } from "@/lib/poker/ranges";
+import { cellFrequency, getScenario, SCENARIOS } from "@/lib/poker/ranges";
+
+const DEALT_HAND = "T9s";
 
 export default function RangesPage() {
-  const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id);
+  const [scenarioId, setScenarioId] = useState("bb-btn");
+  const scenario = getScenario(scenarioId) ?? SCENARIOS[0];
+  const dealt = cellFrequency(scenario, DEALT_HAND);
+  const actionLabel = scenario.actions.find(([key]) => key === "r")?.[1] ?? "Raise";
+  const activeActions: Array<readonly [string, number]> = [
+    [actionLabel, dealt.r],
+    ...(scenario.c ? [["Call", dealt.c] as const] : []),
+    ["Fold", dealt.f],
+  ];
+  const nonZeroActions = activeActions.filter(([, frequency]) => frequency > 0.001);
 
   return (
     <main className="page">
@@ -58,8 +69,52 @@ export default function RangesPage() {
         ))}
       </div>
 
-      <div style={{ maxWidth: 820 }}>
-        <RangeGrid scenarioId={scenarioId} />
+      <div className="ranges-layout">
+        <RangeGrid scenarioId={scenarioId} highlight={DEALT_HAND} />
+        <aside className="ranges-aside">
+          <div className="blueprint" style={{ padding: "var(--space-4)" }}>
+            <div className="mono-label" style={{ letterSpacing: ".12em", marginBottom: 6 }}>
+              Dealt hand
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+              <div className="range-dealt-cards" aria-label="Ten and nine of spades">
+                <span><b>10</b><i>♠</i></span>
+                <span><b>9</b><i>♠</i></span>
+              </div>
+              <div>
+                <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 25, lineHeight: 1 }}>
+                  {DEALT_HAND}
+                </div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "color-mix(in srgb, var(--color-text) 60%, transparent)" }}>
+                  4 combos
+                </div>
+              </div>
+            </div>
+            <div className="range-action-list">
+              {activeActions.map(([label, frequency]) => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <span>{Math.round(frequency * 100)}%</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: "var(--space-3)", fontSize: 12.5, color: "color-mix(in srgb, var(--color-text) 65%, transparent)" }}>
+              {nonZeroActions.length > 1
+                ? "A mix. Either action is accepted; keep the split roughly honest across sessions."
+                : `${nonZeroActions[0]?.[0] ?? "Fold"} this hand in this spot.`}
+            </div>
+          </div>
+          <div className="blueprint" style={{ padding: "var(--space-4)" }}>
+            <div className="mono-label" style={{ letterSpacing: ".12em", marginBottom: 6 }}>
+              On a phone
+            </div>
+            <p style={{ fontSize: 13, margin: 0, color: "color-mix(in srgb, var(--color-text) 70%, transparent)" }}>
+              The grid stays one square: 13 columns of the viewport width, labels drop to 8px,
+              and the split fills stay readable because they are value steps of one hue, not two
+              hues. Pinch-zoom is never required.
+            </p>
+          </div>
+        </aside>
       </div>
     </main>
   );

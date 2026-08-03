@@ -7,7 +7,6 @@
  * No state, no browser APIs — deliberately not a client component.
  */
 import {
-  BET_SIZE_TABLE,
   breakEvenFoldRate,
   hitByRiver,
   hitOnRiver,
@@ -16,7 +15,6 @@ import {
   ruleOf2And4,
   ruleOf4Corrected,
 } from "@/lib/poker/math";
-import { pct } from "@/lib/drill/opts";
 
 /** Outs → equity, the spec's eight rows: 4–9 and the two big flagged draws. */
 const OUTS_ROWS = [4, 5, 6, 7, 8, 9, 12, 15].map((outs) => ({
@@ -37,11 +35,37 @@ const POT_MDF = minDefenceFrequency(100, 100);
 const POT_CALLER_NEEDS = requiredEquity(100 + 100, 100);
 const HALF_POT_CALLER_NEEDS = requiredEquity(100 + 50, 50);
 
+function wholePct(value: number): string {
+  // Round via one decimal so familiar poker-reference values such as 16.5%
+  // display as 17%, matching the v2 reference sheet.
+  return `${Math.round(Math.round(value * 1000) / 10)}%`;
+}
+
+const REFERENCE_BET_ROWS = [
+  [1 / 3, "⅓ pot"],
+  [1 / 2, "½ pot"],
+  [2 / 3, "⅔ pot"],
+  [3 / 4, "¾ pot"],
+  [1, "Pot"],
+  [2, "2× pot"],
+] as const;
+const BET_ROWS = REFERENCE_BET_ROWS.map(([fraction, label]) => {
+  const potBefore = 100;
+  const bet = potBefore * fraction;
+  return {
+    fraction,
+    label,
+    callerNeeds: requiredEquity(potBefore + bet, bet),
+    bluffNeedsFolds: breakEvenFoldRate(potBefore, bet),
+    mdf: minDefenceFrequency(potBefore, bet),
+  };
+});
+
 const FORMULAS: { name: string; formula: string; note: string }[] = [
   {
     name: "Pot odds",
     formula: "call ÷ (pot + call)",
-    note: `“Pot” is the pot after their bet — what you win. Half pot → ${pct(HALF_POT_CALLER_NEEDS)}. Pot-sized → ${pct(POT_CALLER_NEEDS)}.`,
+    note: `“Pot” is the pot after their bet — what you win. Half pot → ${wholePct(HALF_POT_CALLER_NEEDS)}. Pot-sized → ${wholePct(POT_CALLER_NEEDS)}.`,
   },
   {
     name: "Rule of 2 and 4",
@@ -56,12 +80,12 @@ const FORMULAS: { name: string; formula: string; note: string }[] = [
   {
     name: "Break-even bluff",
     formula: "bet ÷ (pot + bet)",
-    note: `Risk ÷ (risk + reward). ⅓ pot → ${pct(THIRD_POT_BLUFF_FOLDS)}, ½ → ${pct(HALF_POT_BLUFF_FOLDS)}, pot → ${pct(POT_BLUFF_FOLDS)}, 2× → ${pct(TWOX_POT_BLUFF_FOLDS)}.`,
+    note: `Risk ÷ (risk + reward). ⅓ pot → ${wholePct(THIRD_POT_BLUFF_FOLDS)}, ½ → ${wholePct(HALF_POT_BLUFF_FOLDS)}, pot → ${wholePct(POT_BLUFF_FOLDS)}, 2× → ${wholePct(TWOX_POT_BLUFF_FOLDS)}.`,
   },
   {
     name: "MDF",
     formula: "pot ÷ (pot + bet)",
-    note: `The bigger they bet, the more you are allowed to fold. Pot-sized bet → ${pct(POT_MDF)}.`,
+    note: `The bigger they bet, the more you are allowed to fold. Pot-sized bet → ${wholePct(POT_MDF)}.`,
   },
   {
     name: "Implied odds",
@@ -83,14 +107,12 @@ const LEAKS: [string, string][] = [
 export function ReferenceTab() {
   return (
     <>
-      <h2 style={{ fontSize: 26, letterSpacing: ".02em", textTransform: "uppercase", margin: "0 0 var(--space-4)" }}>
+      <h2 style={{ fontSize: 28, letterSpacing: "-.01em", margin: "0 0 var(--space-4)" }}>
         The five formulas
       </h2>
       <div
-        style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-          gap: "var(--space-4)", marginBottom: "var(--space-8)",
-        }}
+        className="reference-formulas"
+        style={{ gap: "var(--space-4)", marginBottom: "var(--space-8)" }}
       >
         {FORMULAS.map((f) => (
           <div key={f.name} className="blueprint" style={{ padding: "var(--space-4)" }}>
@@ -106,13 +128,11 @@ export function ReferenceTab() {
       </div>
 
       <div
-        style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: "var(--space-8)", marginBottom: "var(--space-8)", alignItems: "start",
-        }}
+        className="reference-tables"
+        style={{ gap: "var(--space-8)", marginBottom: "var(--space-8)", alignItems: "start" }}
       >
         <section>
-          <h2 style={{ fontSize: 26, letterSpacing: ".02em", textTransform: "uppercase", margin: "0 0 var(--space-2)" }}>
+          <h2 style={{ fontSize: 28, letterSpacing: "-.01em", margin: "0 0 var(--space-2)" }}>
             Outs → equity
           </h2>
           <p style={{ fontSize: 13, color: "color-mix(in srgb, var(--color-text) 65%, transparent)", margin: "0 0 var(--space-3)" }}>
@@ -132,7 +152,7 @@ export function ReferenceTab() {
               {OUTS_ROWS.map((r) => (
                 <tr key={r.outs}>
                   <td>{r.outs}</td>
-                  <td className="num">{Math.round(r.trueTwoCard * 100)}%</td>
+                  <td className="num">{wholePct(r.trueTwoCard)}</td>
                   <td className={r.outs > 8 ? "num flag" : "num"}>
                     {r.ruleOf4}%
                     {r.outs > 8 && (
@@ -140,7 +160,7 @@ export function ReferenceTab() {
                     )}
                   </td>
                   <td className="num">{r.corrected}%</td>
-                  <td className="num">{Math.round(r.trueOneCard * 100)}%</td>
+                  <td className="num">{wholePct(r.trueOneCard)}</td>
                 </tr>
               ))}
             </tbody>
@@ -148,7 +168,7 @@ export function ReferenceTab() {
         </section>
 
         <section>
-          <h2 style={{ fontSize: 26, letterSpacing: ".02em", textTransform: "uppercase", margin: "0 0 var(--space-2)" }}>
+          <h2 style={{ fontSize: 28, letterSpacing: "-.01em", margin: "0 0 var(--space-2)" }}>
             Bet size ↔ the numbers
           </h2>
           <p style={{ fontSize: 13, color: "color-mix(in srgb, var(--color-text) 65%, transparent)", margin: "0 0 var(--space-3)" }}>
@@ -164,7 +184,7 @@ export function ReferenceTab() {
               </tr>
             </thead>
             <tbody>
-              {BET_SIZE_TABLE.map((row) => (
+              {BET_ROWS.map((row) => (
                 <tr key={row.fraction}>
                   <td>{row.label}</td>
                   <td className="num">{Math.round(row.callerNeeds * 100)}%</td>
@@ -178,15 +198,10 @@ export function ReferenceTab() {
       </div>
 
       <section>
-        <h2 style={{ fontSize: 26, letterSpacing: ".02em", textTransform: "uppercase", margin: "0 0 var(--space-4)" }}>
+        <h2 style={{ fontSize: 28, letterSpacing: "-.01em", margin: "0 0 var(--space-4)" }}>
           The seven leaks this trainer targets
         </h2>
-        <div
-          style={{
-            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-            gap: "var(--space-3) var(--space-8)",
-          }}
-        >
+        <div className="reference-leaks" style={{ gap: "var(--space-3) var(--space-8)" }}>
           {LEAKS.map(([head, tail], i) => (
             <div
               key={head}

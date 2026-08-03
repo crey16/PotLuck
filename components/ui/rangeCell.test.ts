@@ -4,31 +4,21 @@ import assert from "node:assert/strict";
 import { rangeCellAppearance } from "./rangeCell";
 
 /**
- * A range cell's label is drawn either ON a fill or ON the page background,
- * and those are opposite luminances. `.gc` sets `color: var(--color-bg)` —
- * reverse-out text, correct for a cell filled edge to edge. `.gc.dim` (a pure
- * fold, no fill at all) overrides it to a page-legible colour.
- *
- * A MIXED-frequency cell matched neither: it is only partly filled, the label
- * sits over the transparent part, and it kept the reverse-out colour — so it
- * rendered background-coloured text on the background. Invisible, and
- * symmetrically so in both themes (dark-on-dark in dark mode, light-on-light
- * in light mode). It affected 29 cells across the 8 scenarios, and they are
- * precisely the cells a user most needs to read.
- *
- * So the appearance contract has three cases, not two, and every cell must
- * declare which one it is.
+ * A range cell can be fully filled, empty, or split between actions. The v2
+ * palette keeps those three states explicit so solid cells use the accent,
+ * folds stay open, and mixed cells can receive their own legibility treatment.
  */
 
 const only = (r: number, c: number, f: number) => ({ r, c, f });
 
-test("rangeCellAppearance: a fully-filled cell keeps reverse-out text", () => {
+test("rangeCellAppearance: fully-filled cells use the v2 solid palette", () => {
   const pure = rangeCellAppearance(only(1, 0, 0));
   assert.equal(pure.className, "", "a solid cell needs no modifier");
-  assert.notEqual(pure.background, "transparent");
+  assert.equal(pure.background, "var(--color-accent)");
 
   const call = rangeCellAppearance(only(0, 1, 0));
   assert.equal(call.className, "");
+  assert.equal(call.background, "var(--color-accent-200)");
 });
 
 test("rangeCellAppearance: a pure fold is dim", () => {
@@ -43,8 +33,7 @@ test("rangeCellAppearance: a mixed cell is flagged so its label stays legible", 
     assert.match(
       a.className,
       /\bmixed\b/,
-      `partly-filled cell (r=${f.r} c=${f.c} f=${f.f}) must be marked mixed, ` +
-        `or its label is drawn in the background colour on the background`,
+      `partly-filled cell (r=${f.r} c=${f.c} f=${f.f}) must be marked mixed`,
     );
     assert.notEqual(a.className, "dim", "a mixed cell is not a fold");
   }
@@ -53,6 +42,8 @@ test("rangeCellAppearance: a mixed cell is flagged so its label stays legible", 
 test("rangeCellAppearance: the fill still encodes the frequencies bottom-up", () => {
   const a = rangeCellAppearance(only(0.4, 0, 0.6));
   assert.match(a.background, /linear-gradient\(to top/);
+  assert.match(a.background, /var\(--color-accent\)/);
+  assert.match(a.background, /var\(--color-accent-200\)/);
   assert.match(a.background, /40\.0%/, "raise share should stop at 40%");
 });
 

@@ -51,6 +51,15 @@ export default async function RootLayout({
   return (
     <html lang="en" data-theme={theme} className={`${barlow.variable} ${barlowCondensed.variable}`}>
       <body>
+        <div className="ambient-wash" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
         <SiteHeader
           username={profile?.username}
           displayName={profile?.display_name ?? undefined}

@@ -52,7 +52,7 @@ function PersonPlate({
         aria-hidden="true"
         style={{
           width: 32, height: 32, display: "grid", placeItems: "center",
-          background: "var(--color-accent)", color: "var(--color-bg)",
+          borderRadius: 999, background: "var(--color-accent)", color: "#fff",
           fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 16,
           textTransform: "uppercase", flexShrink: 0,
         }}
@@ -162,8 +162,9 @@ export function FriendsShell() {
 
   const inputStyle = {
     width: "100%",
-    border: "1px solid var(--color-divider)",
-    background: "transparent",
+    border: "1px solid var(--line)",
+    borderRadius: "var(--r-sm)",
+    background: "var(--color-surface)",
     color: "var(--color-text)",
     fontFamily: "var(--font-body)",
     fontSize: 14,

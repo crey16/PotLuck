@@ -321,7 +321,7 @@ function LoginForm() {
                 >
                   Create one
                 </a>{" "}
-                — nothing is saved without one.
+                — the drills work either way, but nothing is saved without one.
               </p>
             )}
             {mode === "signup" && (

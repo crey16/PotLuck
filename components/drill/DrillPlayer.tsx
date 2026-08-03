@@ -181,7 +181,7 @@ export function DrillPlayer({ question, run, onAnswered, onNext }: DrillPlayerPr
       )}
       <Blocks blocks={question.body} />
 
-      <div className={`opts ${question.layout === "one" ? "" : question.layout}`.trim()}>
+      <div className={`opts opts-${question.kind} ${question.layout === "one" ? "" : question.layout}`.trim()}>
         {question.options.map((o, i) => {
           let state: OptionButtonState = "idle";
           if (answered) {
@@ -243,7 +243,7 @@ export function DrillPlayer({ question, run, onAnswered, onNext }: DrillPlayerPr
               </button>
               <span className="hint">or Enter</span>
               {!ok && (
-                <Link href="/reference" className="btn btn-secondary btn-caps">
+                <Link href={`/reference?from=${question.kind}`} className="btn btn-secondary btn-caps">
                   Read the formula
                 </Link>
               )}

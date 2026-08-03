@@ -86,7 +86,7 @@ export default async function ProfilePage({
             aria-hidden="true"
             style={{
               width: 64, height: 64, display: "grid", placeItems: "center",
-              background: "var(--color-accent)", color: "var(--color-bg)",
+              borderRadius: 999, background: "var(--color-accent)", color: "#fff",
               fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 32,
               textTransform: "uppercase",
             }}

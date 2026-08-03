@@ -19,7 +19,7 @@ export default function SystemPage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "var(--space-8)" }}>
         <section>
-          <h2 style={{ fontSize: 22, letterSpacing: ".03em", textTransform: "uppercase", margin: "0 0 var(--space-4)" }}>Colour</h2>
+          <h2 style={{ fontSize: 24, letterSpacing: "-.01em", margin: "0 0 var(--space-4)" }}>Colour</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, marginBottom: "var(--space-3)" }}>
             {[
               ["var(--color-accent-200)", "200"],
@@ -51,7 +51,7 @@ export default function SystemPage() {
         </section>
 
         <section>
-          <h2 style={{ fontSize: 22, letterSpacing: ".03em", textTransform: "uppercase", margin: "0 0 var(--space-4)" }}>Type</h2>
+          <h2 style={{ fontSize: 24, letterSpacing: "-.01em", margin: "0 0 var(--space-4)" }}>Type</h2>
           <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 34, lineHeight: 1.05 }}>
             Barlow Condensed 34 — prompts
           </div>
@@ -71,7 +71,7 @@ export default function SystemPage() {
         </section>
 
         <section>
-          <h2 style={{ fontSize: 22, letterSpacing: ".03em", textTransform: "uppercase", margin: "0 0 var(--space-4)" }}>Controls</h2>
+          <h2 style={{ fontSize: 24, letterSpacing: "-.01em", margin: "0 0 var(--space-4)" }}>Controls</h2>
           <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", alignItems: "center", marginBottom: "var(--space-4)" }}>
             <button className="btn btn-primary blueprint btn-caps">Primary</button>
             <button className="btn btn-secondary btn-caps">Secondary</button>
@@ -101,8 +101,8 @@ export default function SystemPage() {
         </section>
 
         <section>
-          <h2 style={{ fontSize: 22, letterSpacing: ".03em", textTransform: "uppercase", margin: "0 0 var(--space-4)" }}>Answer states</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          <h2 style={{ fontSize: 24, letterSpacing: "-.01em", margin: "0 0 var(--space-4)" }}>Answer states</h2>
+          <div className="system-answer-states" style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
             <div className="opt correct" style={{ cursor: "default" }}>
               <span className="key">1</span>30.4%
               <span className="mark">
@@ -110,14 +110,14 @@ export default function SystemPage() {
                 correct
               </span>
             </div>
-            <div className="opt wrong" style={{ cursor: "default" }}>
+            <div className="opt wrong" style={{ cursor: "default", borderRadius: 0 }}>
               <span className="key">2</span>43.6%
               <span className="mark">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
                 your pick
               </span>
             </div>
-            <div className="opt faded" style={{ cursor: "default" }}>
+            <div className="opt faded" style={{ cursor: "default", borderRadius: 0 }}>
               <span className="key">3</span>24.6%
               <span className="mark">unpicked</span>
             </div>
@@ -125,7 +125,7 @@ export default function SystemPage() {
         </section>
 
         <section>
-          <h2 style={{ fontSize: 22, letterSpacing: ".03em", textTransform: "uppercase", margin: "0 0 var(--space-4)" }}>Vocabulary</h2>
+          <h2 style={{ fontSize: 24, letterSpacing: "-.01em", margin: "0 0 var(--space-4)" }}>Vocabulary</h2>
           <table className="table">
             <thead>
               <tr><th>Word</th><th>Means</th><th>Where</th></tr>
@@ -142,7 +142,7 @@ export default function SystemPage() {
         </section>
 
         <section>
-          <h2 style={{ fontSize: 22, letterSpacing: ".03em", textTransform: "uppercase", margin: "0 0 var(--space-4)" }}>Spacing &amp; frame</h2>
+          <h2 style={{ fontSize: 24, letterSpacing: "-.01em", margin: "0 0 var(--space-4)" }}>Spacing &amp; frame</h2>
           <div style={{ display: "flex", alignItems: "flex-end", gap: 6, marginBottom: "var(--space-4)" }}>
             {["--space-1", "--space-2", "--space-3", "--space-4", "--space-6", "--space-8"].map((s) => (
               <span key={s} style={{ width: `var(${s})`, height: `var(${s})`, background: "var(--color-accent)" }} />

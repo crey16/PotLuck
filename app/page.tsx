@@ -57,6 +57,25 @@ function learningHref(recommendation: Recommendation): string {
   return "/learn";
 }
 
+function easternDaypart(now = new Date()): "morning" | "afternoon" | "evening" {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric",
+      hourCycle: "h23",
+    }).format(now)
+  );
+  if (hour < 12) return "morning";
+  if (hour < 18) return "afternoon";
+  return "evening";
+}
+
+function streakSentence(level: number, streak: number): string {
+  if (streak <= 0) return `You are level ${level}.`;
+  if (streak === 1) return `You are level ${level} and one day into a streak.`;
+  return `You are level ${level} and ${streak} days into a streak.`;
+}
+
 function Pips({ level }: { level: number }) {
   return (
     <div className="pips" style={{ justifyContent: "flex-end", marginBottom: 4 }}>
@@ -95,10 +114,6 @@ export default async function Home() {
   const accuracy =
     stats.totalAttempts > 0 ? Math.round((stats.totalCorrect / stats.totalAttempts) * 100) : null;
 
-  const sinceLabel = profile?.createdAt
-    ? new Date(profile.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
-    : null;
-
   // Weakest skill: lowest accuracy among tags with ≥5 attempts — the same
   // rule the recommendation engine uses.
   const ranked = [...stats.skills].filter((s) => s.attempts >= 5).sort((a, b) => a.accuracy - b.accuracy);
@@ -115,6 +130,7 @@ export default async function Home() {
     : 1;
 
   const resumeKind = stats.lastKind;
+  const firstName = (profile?.displayName?.trim() || profile?.username || "there").split(/\s+/)[0];
 
   // 12-week heatmap: columns are weeks (oldest → newest), rows Mon → Sun.
   const weeks = buildHeatmapWeeks(stats.activity);
@@ -124,20 +140,19 @@ export default async function Home() {
       {/* — hero — */}
       <div className="home-hero">
         <div>
-          <div className="mono-label accent" style={{ letterSpacing: ".14em", marginBottom: "var(--space-2)" }}>
-            All time{sinceLabel ? ` · since ${sinceLabel}` : ""}
-          </div>
-          <h1 style={{ fontSize: 52, lineHeight: 0.95, margin: "0 0 var(--space-2)" }}>
-            Level {level}
+          <h1 style={{ fontSize: 46, lineHeight: 1, margin: "0 0 6px", letterSpacing: "-.02em" }}>
+            Good {easternDaypart()}, {firstName}.
           </h1>
           <p
             style={{
-              fontSize: 15, color: "color-mix(in srgb, var(--color-text) 70%, transparent)",
-              maxWidth: "44ch", margin: "0 0 var(--space-4)",
+              fontSize: 16, color: "color-mix(in srgb, var(--color-text) 62%, transparent)",
+              maxWidth: "46ch", margin: "0 0 var(--space-6)",
             }}
           >
-            Every correct answer is 10&nbsp;XP, flat. 100&nbsp;XP a level — difficulty never
-            inflates the rate.
+            {streakSentence(level, profile?.streak ?? 0)}{" "}
+            {weakest
+              ? `${weakest.label} is the one to work on today.`
+              : "Start a mixed drill and PotLuck will find the skill to work on today."}
           </p>
           <div
             style={{
@@ -155,18 +170,11 @@ export default async function Home() {
           </div>
           <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)", flexWrap: "wrap" }}>
             <Link
-              href={learningHref(learningRecommendation)}
+              href={drillHref("mixed")}
               className="btn btn-primary blueprint btn-caps"
               style={{ fontSize: 16, padding: "12px 22px" }}
             >
-              Continue learning
-            </Link>
-            <Link
-              href={drillHref("mixed")}
-              className="btn btn-secondary btn-caps"
-              style={{ fontSize: 15, padding: "12px 18px" }}
-            >
-              Mixed drill <span className="keyhint">D</span>
+              Start mixed drill <span className="keyhint">D</span>
             </Link>
             {resumeKind && (
               <Link
@@ -239,41 +247,6 @@ export default async function Home() {
           </div>
         </div>
       </div>
-
-      {/* — learning path — */}
-      <section style={{ marginBottom: "var(--space-8)" }}>
-        <div className="section-head">
-          <h2>Learning path</h2>
-          <span className="lede">Build the concept first; then use the drills to make it automatic.</span>
-        </div>
-        <div className="home-learning">
-          <div className="blueprint home-learn-next">
-            <div>
-              <div className="mono-label accent">Recommended next</div>
-              <h3>
-                {learningRecommendation.lesson?.title ??
-                  (learningRecommendation.type === "scenario" ? "Authored practice hand" : "Open the course map")}
-              </h3>
-              <p>{learningRecommendation.reason}</p>
-            </div>
-            <Link href={learningHref(learningRecommendation)} className="btn btn-primary blueprint btn-caps">
-              Learn now
-            </Link>
-          </div>
-          <Link href="/daily" className="blueprint home-daily">
-            <div className="mono-label">Daily lesson</div>
-            <strong>One focused decision</strong>
-            <span>Changes at midnight ET · +15 XP</span>
-            <b>Open daily →</b>
-          </Link>
-          <Link href="/learn" className="blueprint home-course-link">
-            <div className="mono-label">Full course</div>
-            <strong>5 modules · 20 lessons</strong>
-            <span>Foundations through bankroll discipline</span>
-            <b>View map →</b>
-          </Link>
-        </div>
-      </section>
 
       {/* — skill strengths — */}
       <section style={{ marginBottom: "var(--space-8)" }}>
@@ -369,6 +342,41 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* — learning path — */}
+      <section style={{ marginBottom: "var(--space-8)" }}>
+        <div className="section-head">
+          <h2>Learning path</h2>
+          <span className="lede">Build the concept first; then use the drills to make it automatic.</span>
+        </div>
+        <div className="home-learning">
+          <div className="blueprint home-learn-next">
+            <div>
+              <div className="mono-label accent">Recommended next</div>
+              <h3>
+                {learningRecommendation.lesson?.title ??
+                  (learningRecommendation.type === "scenario" ? "Authored practice hand" : "Open the course map")}
+              </h3>
+              <p>{learningRecommendation.reason}</p>
+            </div>
+            <Link href={learningHref(learningRecommendation)} className="btn btn-primary blueprint btn-caps">
+              Learn now
+            </Link>
+          </div>
+          <Link href="/daily" className="blueprint home-daily">
+            <div className="mono-label">Daily lesson</div>
+            <strong>One focused decision</strong>
+            <span>Changes at midnight ET · +15 XP</span>
+            <b>Open daily →</b>
+          </Link>
+          <Link href="/learn" className="blueprint home-course-link">
+            <div className="mono-label">Full course</div>
+            <strong>5 modules · 20 lessons</strong>
+            <span>Foundations through bankroll discipline</span>
+            <b>View map →</b>
+          </Link>
+        </div>
+      </section>
+
       {/* — activity + later — */}
       <section className="home-bottom">
         <div>
@@ -388,10 +396,10 @@ export default async function Home() {
             >
               none
               <span className="heat-cell empty" style={{ width: 13, height: 13, display: "inline-block" }} />
-              <span style={{ width: 13, height: 13, display: "inline-block", background: "color-mix(in srgb, var(--color-accent) 25%, transparent)" }} />
-              <span style={{ width: 13, height: 13, display: "inline-block", background: "color-mix(in srgb, var(--color-accent) 50%, transparent)" }} />
-              <span style={{ width: 13, height: 13, display: "inline-block", background: "color-mix(in srgb, var(--color-accent) 75%, transparent)" }} />
-              <span style={{ width: 13, height: 13, display: "inline-block", background: "var(--color-accent)" }} />
+              <span className="heat-cell" style={{ width: 13, height: 13, display: "inline-block", background: "color-mix(in srgb, var(--color-accent) 25%, transparent)" }} />
+              <span className="heat-cell" style={{ width: 13, height: 13, display: "inline-block", background: "color-mix(in srgb, var(--color-accent) 50%, transparent)" }} />
+              <span className="heat-cell" style={{ width: 13, height: 13, display: "inline-block", background: "color-mix(in srgb, var(--color-accent) 75%, transparent)" }} />
+              <span className="heat-cell" style={{ width: 13, height: 13, display: "inline-block", background: "var(--color-accent)" }} />
               120+ xp
             </div>
             {(profile?.streak ?? 0) > 0 && (
@@ -412,8 +420,9 @@ export default async function Home() {
             <h2>Social</h2>
           </div>
           <div
+            className="blueprint"
             style={{
-              border: "1px solid var(--color-divider)", padding: "var(--space-6)",
+              padding: "var(--space-6)",
               display: "flex", flexDirection: "column", gap: "var(--space-2)",
             }}
           >

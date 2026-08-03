@@ -9,14 +9,17 @@ import { THEME_COOKIE, type Theme } from "@/lib/theme";
 
 const NAV = [
   { href: "/", label: "Home" },
-  { href: "/learn", label: "Learn" },
   { href: "/drill", label: "Drill" },
-  { href: "/play", label: "Play" },
-  { href: "/friends", label: "Friends" },
-  { href: "/leaderboard", label: "Ranks" },
   { href: "/ranges", label: "Ranges" },
   { href: "/reference", label: "Reference" },
   { href: "/system", label: "System" },
+] as const;
+
+const ACCOUNT_NAV = [
+  { href: "/learn", label: "Learn" },
+  { href: "/play", label: "Play" },
+  { href: "/friends", label: "Friends" },
+  { href: "/leaderboard", label: "Ranks" },
 ] as const;
 
 export interface SiteHeaderProps {
@@ -151,15 +154,15 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
                 onClick={() => setAcctOpen((o) => !o)}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
-                  border: "1px solid var(--color-divider)", background: "transparent",
-                  color: "var(--color-text)", padding: "4px 8px 4px 4px", cursor: "pointer",
+                  border: "1px solid var(--line)", borderRadius: 999, background: "var(--surface)",
+                  color: "var(--color-text)", padding: "4px 10px 4px 4px", cursor: "pointer",
                   fontFamily: "var(--font-body)", fontSize: 13,
                 }}
               >
                 <span
                   style={{
-                    width: 24, height: 24, display: "grid", placeItems: "center",
-                    background: "var(--color-accent)", color: "var(--color-bg)",
+                    width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center",
+                    background: "var(--color-accent)", color: "#fff",
                     fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 13,
                     textTransform: "uppercase",
                   }}
@@ -177,7 +180,7 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
                   className="blueprint"
                   style={{
                     position: "absolute", right: 0, top: "calc(100% + 10px)", width: 236,
-                    background: "var(--color-bg)", boxShadow: "var(--shadow-md)",
+                    background: "var(--surface)", boxShadow: "var(--lift)",
                     padding: "var(--space-3)", zIndex: 40,
                   }}
                 >
@@ -199,6 +202,16 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
                       borderTop: "1px solid var(--color-divider)", paddingTop: "var(--space-2)",
                     }}
                   >
+                    {ACCOUNT_NAV.map((item) => (
+                      <Link
+                        key={item.href}
+                        className="menu-item"
+                        href={item.href}
+                        onClick={() => setAcctOpen(false)}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
                     <Link
                       className="menu-item"
                       href={`/u/${username}`}

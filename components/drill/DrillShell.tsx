@@ -263,7 +263,7 @@ export function DrillShell({
       const key = e.key.toUpperCase();
       if (key === "R") {
         e.preventDefault();
-        router.push("/reference");
+        router.push(live ? `/reference?from=${live.kind}` : "/reference");
       } else if (key === "D" && tab !== "mixed") {
         e.preventDefault();
         handleSelectTab("mixed");
@@ -271,7 +271,7 @@ export function DrillShell({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [router, tab, handleSelectTab]);
+  }, [router, tab, live, handleSelectTab]);
 
   const sessionAccuracy = total === 0 ? null : Math.round((right / total) * 100);
   const difficulty = live?.difficulty ?? 1;
@@ -347,7 +347,10 @@ export function DrillShell({
             <span className="mono-label" style={{ fontSize: 9.5, letterSpacing: ".1em" }}>Opponent</span>
             <OpponentToggle mode={oppMode} onChange={handleMode} />
           </div>
-          <button className="btn-outline-accent" onClick={() => router.push("/reference")}>
+          <button
+            className="btn-outline-accent"
+            onClick={() => router.push(live ? `/reference?from=${live.kind}` : "/reference")}
+          >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
             </svg>
@@ -466,8 +469,8 @@ export function DrillShell({
             </div>
             <div
               style={{
-                fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 19,
-                letterSpacing: ".02em", textTransform: "uppercase", lineHeight: 1.1,
+                fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 20,
+                letterSpacing: "-.005em", lineHeight: 1.1,
               }}
             >
               Level {difficulty} — {LEVEL_LABELS[difficulty].toLowerCase()}
