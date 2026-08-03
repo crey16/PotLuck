@@ -81,6 +81,44 @@ def compute_pack_content_hash(catalog: dict[str, Any]) -> str:
     return _content_hash_from_inputs(catalog, manifest_bytes, solve_bytes)
 
 
+def pack_availability() -> dict[str, Any]:
+    """Report whether the immutable pack is readable in this runtime.
+
+    Vercel serves ``public/`` as Next.js static assets, which are not part of
+    the Python function bundle; ``vercel.json`` must include the solve files
+    explicitly.  A missing bundle is an operational fault, not a client error,
+    so surface it directly instead of as an opaque 500.
+    """
+    manifest_path = _SOLVE_DIR / "index.json"
+    catalog_path = _SOLVE_DIR / "catalog.json"
+    listed = 0
+    if manifest_path.is_file():
+        try:
+            listed = sum(
+                1
+                for entry in json.loads(manifest_path.read_bytes())["flops"]
+                if (_SOLVE_DIR / f"{entry['flop']}.json").is_file()
+            )
+        except (ValueError, KeyError, OSError):
+            listed = -1
+    status: dict[str, Any] = {
+        "solve_dir_present": _SOLVE_DIR.is_dir(),
+        "manifest_present": manifest_path.is_file(),
+        "catalog_present": catalog_path.is_file(),
+        "solve_files_present": listed,
+        "verified": False,
+    }
+    try:
+        catalog = load_catalog()
+    except Exception as exc:  # surfaced to an authenticated caller only
+        status["error"] = f"{type(exc).__name__}: {exc}"
+        return status
+    status["verified"] = True
+    status["solve_pack_id"] = catalog["id"]
+    status["content_hash"] = catalog["content_hash"]
+    return status
+
+
 @lru_cache(maxsize=1)
 def load_catalog() -> dict[str, Any]:
     catalog = json.loads((_SOLVE_DIR / "catalog.json").read_text("utf8"))

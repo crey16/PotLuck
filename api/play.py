@@ -29,6 +29,7 @@ from api.play_solver import (
     is_right_verdict,
     load_catalog,
     next_node_or_end,
+    pack_availability,
     parse_source_hand_id,
     parse_stable_node_id,
     source_hand_id,
@@ -161,6 +162,23 @@ class PlayStatusUpdateIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["completed", "abandoned"]
+
+
+def _guard_pack() -> dict[str, Any]:
+    """Fail fast, and legibly, when the solve pack is not in this bundle.
+
+    The pack lives under ``public/``, which Vercel deploys as Next.js static
+    assets rather than as part of the Python function.  ``vercel.json``
+    includes it explicitly; if that ever regresses, callers should see an
+    unambiguous 503 rather than a generic internal error.
+    """
+    try:
+        return load_catalog()
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            f"play solve pack is unavailable on the server ({type(exc).__name__})",
+        ) from exc
 
 
 def _public_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -334,13 +352,21 @@ def _fetch_decision_review(cur: Any, decision_id: UUID, user_id: str) -> tuple[d
     return row[0], [item[0] for item in cur.fetchall()]
 
 
+@router.get("/api/play/pack")
+def play_pack_status(
+    user_id: str = Depends(current_user_id),
+) -> dict[str, Any]:
+    """Report solve-pack readability so a bundling fault is diagnosable."""
+    return pack_availability()
+
+
 @router.post("/api/play/sessions", status_code=status.HTTP_201_CREATED)
 def create_play_session(
     body: PlaySessionCreateIn,
     user_id: str = Depends(current_user_id),
 ) -> dict[str, Any]:
     config = body.config.model_dump(mode="json")
-    catalog = load_catalog()
+    catalog = _guard_pack()
     with get_connection() as conn:
         try:
             with conn.cursor() as cur:
@@ -446,6 +472,7 @@ def create_play_hand(
     body: PlayHandCreateIn,
     user_id: str = Depends(current_user_id),
 ) -> dict[str, Any]:
+    _guard_pack()
     flop, instance_index, stable_hand_id = body.resolve()
     solve, instance = get_hand(flop, instance_index)
     hero_position = "BTN" if instance["hero"] == 1 else "BB"
@@ -573,6 +600,7 @@ def create_play_decision(
     body: PlayDecisionCreateIn,
     user_id: str = Depends(current_user_id),
 ) -> dict[str, Any]:
+    _guard_pack()
     with get_connection() as conn:
         try:
             with conn.cursor() as cur:
@@ -766,6 +794,9 @@ def update_play_hand_status(
                 runout_cards: list[str] = []
                 action_history: list[dict[str, Any]] = []
                 if body.status == "completed":
+                    # Guarded only here: abandoning a hand is the recovery path
+                    # and must stay available even if the pack is unreadable.
+                    _guard_pack()
                     flop, instance_index = parse_source_hand_id(hand["source_hand_id"])
                     try:
                         runout_cards, action_history, result_snapshot = completion_snapshots(
