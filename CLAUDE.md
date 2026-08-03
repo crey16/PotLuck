@@ -173,8 +173,9 @@ ONLY in `lib/social/queries.ts`. Migration `0003_social_policies.sql`
 is applied to production. Challenges + activity feed are
 M7.5. See `docs/09-m7-status.md`.
 
-**M8 durable play history is implemented and locally verified; production
-release is pending.** `supabase/migrations/0004_m8_play_history.sql` adds the
+**M8 durable play history shipped 2026-08-03** — migrated and deployed, with
+the release gate executed against production.
+`supabase/migrations/0004_m8_play_history.sql` adds the
 normalized, owner-readable play lifecycle and immutable solve-pack catalog.
 Authenticated play decisions now go through `api/play.py`, which re-derives
 grades from versioned data and writes the linked XP event atomically; generic
@@ -183,6 +184,16 @@ complete hand review. Legacy M6 attempts use a separate unverified archive
 identity and are excluded from coaching-quality aggregates. Read
 `docs/10-m8-play-data-contract.md` and `docs/11-m8-status.md` before changing
 play persistence.
+
+**The solve pack lives in `solver/pack/<spot>/`, not `public/`.** Vercel
+promotes `public/` to static assets and strips it from the Python function
+bundle, so anything the API must read cannot live there — a deploy will 500 at
+runtime while every local test passes. `vercel.json`'s `includeFiles` does not
+fix this; it is unsupported in Next.js projects. `scripts/sync-solve-pack.mjs`
+copies the pack into `public/solves/` at build and dev time for the browser
+(`prebuild`/`predev`), and that copy is git-ignored — never edit it. Check
+`GET /api/play/pack` (authenticated) to confirm a deployed function can read
+the pack and that its content hash matches the published row.
 
 Read `docs/06-m2-status.md` before touching M2 code — it carries the settled
 decisions M3 inherits and three local-dev traps that each cost real time

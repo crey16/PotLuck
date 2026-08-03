@@ -50,7 +50,7 @@ and accessibility polish—not another visual overhaul.
 | GTO Wizard-style Practice setup | 🟡 | `/play` starts a solver hand immediately from one hard-coded spot. | Add the positional setup table, solution profile, preflop/flop/custom starting spot, preflop-action filters, advanced settings, and a validated Start Training flow. |
 | Practice table interaction | 🟡 | `/play` deals full BTN-versus-BB single-raised-pot hands, shows cards/pot/actions, and supports both hero positions. | Match the reference's positional oval table and active/inactive seats; add configurable matchups and coherent branches instead of forcing unsupported preflop choices down the scripted raise/call line. |
 | GTO rating on every street | 🟡 | Postflop choices use real solver frequencies and EV loss; flop, turn, and river decisions receive correct / also-fine / inaccuracy / blunder verdicts. | Preflop uses solver-shaped **reference ranges**, not solver EVs. It records no preflop EV loss and therefore is not yet an all-street GTO grade. |
-| Per-hand review | 🟡 | M8 adds durable recent-session and recent-hand views plus a reloadable full review with every recorded decision, grading provenance, solve version, and all server-derived alternatives. The live completed-hand panel still shows its compact summary. | Add the EV-derived GTO score, street tabs, best-move summary, decision navigation, Repeat Hand, and Play From Here. Production rollout of M8 remains pending. |
+| Per-hand review | 🟡 | M8 adds durable recent-session and recent-hand views plus a reloadable full review with every recorded decision, grading provenance, solve version, and all server-derived alternatives. The live completed-hand panel still shows its compact summary. | Add the EV-derived GTO score, street tabs, best-move summary, decision navigation, Repeat Hand, and Play From Here. |
 | Weakness detection over time | 🟡 | M8 normalizes server-graded decisions by street, position, spot, board texture, hand class, action context, frequency, and EV loss. Unverified legacy grades are excluded from quality aggregates. | Build the recent/lifetime aggregates, taxonomy, confidence thresholds, trend analysis, weakness UI, and targeted routing in M11. |
 | Guidance to the right practice | 🟡 | The deterministic recommendation engine selects the weakest skill tag and routes to an unfinished lesson or authored scenario. The Home page can link known math tags to drills. | Play weaknesses are not classified finely enough to target a drill or play spot. `postflop_play` has no direct drill mapping, and recommendations optimize raw accuracy rather than EV loss or trend. |
 | Generated drill questions | 🟡 | Eight drill kinds generate cards or numeric parameters with seeded RNG and tested poker math. Preflop samples scenarios, grid cells, and actual suits. | The 15-item OMC concept drill and the six-item implied-odds concept mode are static banks. M4 practice uses 33 authored scenarios and 20 authored table scenarios. |
@@ -134,7 +134,7 @@ See `docs/09-m7-status.md`.
 
 ## Active execution order
 
-### M8 — Durable play history and GTO telemetry 🟠 IMPLEMENTED + VERIFIED 2026-08-03 — RELEASE PENDING
+### M8 — Durable play history and GTO telemetry ✅ SHIPPED 2026-08-03
 
 **Goal:** create trustworthy, queryable records for a complete hand and every
 decision before expanding the solver or building weakness analysis.
@@ -165,11 +165,16 @@ decision before expanding the solver or building weakness analysis.
   hand review, with RLS tests proving users cannot read each other's history.
 - [x] Preserve incomplete hands safely and distinguish abandoned from completed
   hands.
-- [ ] **Release gate:** quiesce legacy `/play` writes (or deploy the generic-
-  play rejection separately), apply `0004_m8_play_history.sql`, deploy the API
-  and frontend, audit for any cutover-window legacy attempts, then repeat the
-  authenticated two-account RLS and reload/review walkthrough against
-  production before changing this milestone to ✅ shipped.
+- [x] **Release gate (executed 2026-08-03):** applied
+  `0004_m8_play_history.sql` to production, deployed the API and frontend, and
+  audited the cutover — 0 unlinked legacy play attempts, so no delta archive
+  was needed. Verified owner-only reads at both the API and policy layers, an
+  interrupted reload and abandonment, a completed reload with every decision
+  and alternative, idempotent retries earning no second XP, exactly one linked
+  `attempts` row per decision, and legacy rows labelled unverified and excluded
+  from EV/blunder totals. Rollout also fixed a packaging defect: the solve pack
+  moved to `solver/pack/` because Vercel strips `public/` from the Python
+  function bundle. See `docs/11-m8-status.md`.
 
 **Done when:** a finished hand can be reopened after a reload and shows every
 preflop/flop/turn/river decision that occurred, its grading source and solve

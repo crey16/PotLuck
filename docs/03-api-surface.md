@@ -94,7 +94,7 @@ entirely and select from Supabase in a server component.
 
 ## New endpoints
 
-### Durable play history — M8 implemented, release pending
+### Durable play history — M8 shipped 2026-08-03
 
 All routes are authenticated. The browser supplies identities and choices;
 the API resolves the immutable solve pack, derives the grade and alternatives,
@@ -110,6 +110,7 @@ and writes the normalized coaching record and linked XP attempt atomically.
 | GET | `/play/sessions` | Recent owner-scoped sessions and trusted quality totals |
 | GET | `/play/sessions/{session_id}/hands` | Recent owner-scoped hands |
 | GET | `/play/hands/{hand_id}` | Full reloadable hand, decision, and action-alternative review |
+| GET | `/play/pack` | Diagnostic: whether the deployed function can read the solve pack, and its verified content hash |
 
 Generic `POST /progress/attempts` rejects `drill_kind = play`; play XP must flow
 through the authoritative decision transaction.
