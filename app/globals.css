@@ -1359,3 +1359,45 @@ img { display: block; max-width: 100%; }
   border-radius: 50%; background: var(--color-text); color: var(--surface);
   font-family: var(--font-heading); font-weight: 600; font-size: 10px;
 }
+
+/* — play table: the oval — */
+.pt-wrap { container-type: inline-size; margin-bottom: var(--space-4); }
+.pt-oval {
+  position: relative; aspect-ratio: 16 / 9; min-height: 340px;
+  border: 1px solid var(--color-divider); border-radius: 46% / 38%;
+  background:
+    radial-gradient(ellipse at 50% 45%,
+      color-mix(in srgb, var(--color-accent) 8%, var(--surface)) 0%,
+      var(--surface) 72%);
+}
+.pt-center {
+  position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+}
+.pt-spot { letter-spacing: .12em; opacity: .7; }
+.pt-pot { display: flex; align-items: baseline; gap: 7px; }
+.pt-pot strong { font-family: var(--font-heading); font-weight: 600; font-size: 21px; }
+.pt-board { display: flex; gap: 4px; min-height: 46px; }
+.pt-chips {
+  position: absolute; left: 50%; top: 45%;
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 2px 7px; border: 1px solid var(--color-accent);
+  background: var(--surface); border-radius: 999px;
+  animation: pt-slide 300ms ease-out;
+}
+@keyframes pt-slide {
+  from { transform: translate(-50%, 120px); opacity: 0; }
+  to   { transform: translate(-50%, 0);     opacity: 1; }
+}
+.pt-chips.from-villain { animation-name: pt-slide-down; }
+@keyframes pt-slide-down {
+  from { transform: translate(-50%, -120px); opacity: 0; }
+  to   { transform: translate(-50%, 0);      opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pt-chips { animation: none; }
+}
+@container (max-width: 620px) {
+  .pt-oval { aspect-ratio: 1 / 1; border-radius: 40% / 34%; }
+  .pt-seat-plate { min-width: 58px; padding: 4px 7px; }
+}
