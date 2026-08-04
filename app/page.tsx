@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { fetchDashboardStats } from "@/lib/drill/serverStats";
+import { fetchPlacementRouting } from "@/lib/placement/server";
 import {
   ActivityHeatmap,
   SkillRow,
@@ -103,6 +105,12 @@ export default async function Home() {
       </main>
     );
   }
+
+  // M8.5B: a brand-new account is placed before it is taught. Checked before
+  // anything else is rendered so the path is never presented first, and it is
+  // a one-time redirect — starting, completing or skipping the assessment all
+  // write a row, after which this is false forever.
+  if ((await fetchPlacementRouting()).needsPlacement) redirect("/placement");
 
   const [stats, path, learningRecommendation] = await Promise.all([
     fetchDashboardStats(),

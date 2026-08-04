@@ -1,7 +1,8 @@
 # PotLuck product roadmap
 
-Updated 2026-08-04 with M8.5 (lesson-first entry, new-user placement, and honest
-answer capture) after implementing and verifying M8. This document is the source
+Updated 2026-08-04 after implementing M8.5 (lesson-first entry, new-user
+placement, and honest answer capture); its migrations are written and verified
+locally but not yet applied to production. This document is the source
 of truth for product sequencing. Detailed shipped-state records stay in the
 milestone status documents; this roadmap distinguishes the finished foundation
 from the remaining product goal.
@@ -62,9 +63,9 @@ and accessibility polish—not another visual overhaul.
 | Guidance to the right practice | 🟡 | The deterministic recommendation engine selects the weakest skill tag and routes to an unfinished lesson or authored scenario. The Home page can link known math tags to drills. | Play weaknesses are not classified finely enough to target a drill or play spot. `postflop_play` has no direct drill mapping, and recommendations optimize raw accuracy rather than EV loss or trend. |
 | Generated drill questions | 🟡 | Eight drill kinds generate cards or numeric parameters with seeded RNG and tested poker math. Preflop samples scenarios, grid cells, and actual suits. | The 15-item OMC concept drill and the six-item implied-odds concept mode are static banks. M4 practice uses 33 authored scenarios and 20 authored table scenarios. |
 | Repeat avoidance | 🟡 | Generated drills use a 24-question per-kind signature window. `/play` uses a session-scoped used set while choosing from 5,000 offline-generated scripted instances. Authored scenarios exclude the five most recent IDs. | Drill and play repeat memory resets on reload; table scenarios have no recent-history exclusion; fixed concept banks must eventually cycle; solver hands are still a finite pre-scripted set. |
-| Lesson-first entry | ⬜ | Signing in lands on `/` — a stats dashboard of streak, XP, skill rows and drill cards. `/learn` exists as the module list but is one nav item among many. | Make the learning path the first thing a signed-in user sees, and give lessons a dedicated, directly linkable page that is the canonical home of the path. See M8.5. |
-| New-user placement | ⬜ | A new account starts at level 1 with no history, so the deterministic recommender has nothing to work from and serves the first lesson of the first module to everyone. | Add a short onboarding assessment that places the player, marks known material, and picks the entry point into the path. See M8.5. |
-| Honest answer capture | ⬜ | Every drill is multiple choice with no way to say "I don't know", so a guess and real knowledge are recorded identically. `rule24` hands the player the out count in the prompt, so it never tests counting. | Add a "Not sure" option graded as incorrect but flagged as non-guess, and stop printing the out count in the Rule of 2 and 4 prompt. See M8.5. |
+| Lesson-first entry | 🟠 | `/` leads with the next lesson, module and path progress, then the course map; stats and drill cards moved below. `/learn` stays the canonical linkable path page. One shared `CourseMap`/`ContinuePath`, guarded by a test. | Deployed with the M8.5 release gate. |
+| New-user placement | 🟠 | A nine-question assessment at `/placement`, one per drill kind, drawn from the tested generators. Seeds the path entry module and per-drill difficulty floors, marks earlier lessons `placed_out`, earns no XP, and is skippable and retakeable. | Apply `0006_m85_placement.sql` and run the release gate. |
+| Honest answer capture | 🟠 | "Not sure" is offered on every drill, lesson screen, scenario, table scenario and placement question; graded incorrect, stored as `response_type = 'unsure'`, excluded from adaptive difficulty on both client and server. `rule24` no longer states the out count and builds distractors from real miscounts. | Apply `0005_m85_not_sure.sql` and run the release gate. |
 | Core visual design | ✅ | Industry design system, PotLuck rebrand, light/dark themes, dashboard/drill/social layouts, and the 2026-08-03 redesign-v2 pass are shipped. | M10 still adds the new Practice-mode surface because it is core product behavior. After that, only a final punch list, responsive audit, state coverage, and accessibility fixes remain. |
 
 ## Shipped foundation
@@ -193,7 +194,7 @@ harmless, and another account cannot read it. **Met by the local integration
 harness; production release is the remaining gate.** See
 `docs/10-m8-play-data-contract.md` and `docs/11-m8-status.md`.
 
-### M8.5 — Lesson-first entry, placement, and honest answers ⬜ PLANNED — NEXT
+### M8.5 — Lesson-first entry, placement, and honest answers 🟠 RELEASE PENDING 2026-08-04
 
 **Goal:** make the learning path the product's front door, place a new player
 before teaching them, and stop drills from rewarding a guess or handing over the
@@ -202,83 +203,83 @@ experience before the larger M9/M10 work lands.
 
 #### M8.5A — Lessons as the landing surface
 
-- [ ] Make the learning path the first thing a signed-in user sees. On arrival
+- [x] Make the learning path the first thing a signed-in user sees. On arrival
   the player's next lesson, current module and path progress are the primary
   content; streak, XP, skill rows and drill cards move below it or onto a
   separate progress surface.
-- [ ] Keep a dedicated, directly linkable lessons page as the canonical home of
+- [x] Keep a dedicated, directly linkable lessons page as the canonical home of
   the path (today's `/learn`), reachable from the nav regardless of what the
   landing route renders. Decide explicitly whether `/` renders the path itself
   or redirects to it, and keep exactly one implementation of the module/lesson
   list — do not fork a second copy into the home page.
-- [ ] Show, on that page, every module, per-module completion, the locked/next
+- [x] Show, on that page, every module, per-module completion, the locked/next
   lesson, and a single unambiguous "continue" action.
-- [ ] Preserve the existing deterministic recommendation as a secondary
+- [x] Preserve the existing deterministic recommendation as a secondary
   "recommended practice" slot; it must not displace the path as the main
   action.
-- [ ] Keep the logged-out marketing/auth route unchanged — this reorder applies
+- [x] Keep the logged-out marketing/auth route unchanged — this reorder applies
   to the authenticated experience only.
 
 #### M8.5B — New-user placement assessment
 
-- [ ] Add a short onboarding assessment that runs once, after the first sign-in
+- [x] Add a short onboarding assessment that runs once, after the first sign-in
   and before the path is presented, and route new accounts into it
   automatically.
-- [ ] Draw its questions from the existing tested generators and skill tags
+- [x] Draw its questions from the existing tested generators and skill tags
   rather than a new authored bank, so the placement is derived from the same
   math as the drills it places into.
-- [ ] Keep it short and bounded (target roughly 8–12 questions), cover the
+- [x] Keep it short and bounded (target roughly 8–12 questions), cover the
   canonical skill tags, and include the same "Not sure" option from M8.5C —
   an unsure answer is strong placement signal.
-- [ ] Persist the result: store per-tag placement scores, the generator version,
+- [x] Persist the result: store per-tag placement scores, the generator version,
   and the assessment version, so a later re-placement can be compared and a
   changed generator does not silently reinterpret old scores.
-- [ ] Use the result to seed the entry point into the path and the per-drill
+- [x] Use the result to seed the entry point into the path and the per-drill
   adaptive difficulty, and to mark clearly-known early lessons as already
   satisfied instead of forcing a player through material they demonstrated.
-- [ ] Never hard-lock on the assessment: allow skip and allow retake later.
+- [x] Never hard-lock on the assessment: allow skip and allow retake later.
   A skipped assessment falls back to today's cold-start behaviour.
-- [ ] Distinguish assessment attempts from practice attempts so placement does
+- [x] Distinguish assessment attempts from practice attempts so placement does
   not inflate XP, streaks, or accuracy aggregates. Decide the XP rule
   explicitly rather than letting it fall out of the generic attempt path.
-- [ ] Add tests for placement determinism given a seed, for the skip path, and
+- [x] Add tests for placement determinism given a seed, for the skip path, and
   for the mapping from scores to entry lesson and starting difficulty.
 
 #### M8.5C — "Not sure" as a first-class answer
 
-- [ ] Add a **Not sure** option to every drill kind, visually separated from the
+- [x] Add a **Not sure** option to every drill kind, visually separated from the
   real choices so it is never mistaken for one.
-- [ ] Grade it as incorrect, but record it distinctly from a wrong pick so
+- [x] Grade it as incorrect, but record it distinctly from a wrong pick so
   "didn't know" and "believed the wrong thing" are separable in analytics and
   in weakness detection later.
-- [ ] Always show the full explanation for a "Not sure" answer — this is the
+- [x] Always show the full explanation for a "Not sure" answer — this is the
   case with the most to teach.
-- [ ] Define its effect on adaptive difficulty and `skill_stats` deliberately:
+- [x] Define its effect on adaptive difficulty and `skill_stats` deliberately:
   it should not be treated as a confident error, and it must not be a cheap way
   to farm easier questions.
-- [ ] Carry the same option into lesson practice, table scenarios, and the
+- [x] Carry the same option into lesson practice, table scenarios, and the
   placement assessment, so the affordance is consistent everywhere an answer is
   submitted.
-- [ ] Extend the drill contract and attempt payload for the new response type
+- [x] Extend the drill contract and attempt payload for the new response type
   and add tests covering grading, recording, and difficulty effect.
 
 #### M8.5D — Rule of 2 and 4 must test counting
 
-- [ ] Stop stating the out count in the `rule24` prompt. Today it reads "You
+- [x] Stop stating the out count in the `rule24` prompt. Today it reads "You
   have N outs…", which reduces the drill to arithmetic; the player must count
   the outs from the board and hole cards themselves.
-- [ ] Keep the answer derived from the evaluator's true out count, never a
+- [x] Keep the answer derived from the evaluator's true out count, never a
   hand-written number, per the poker-math correctness rules.
-- [ ] Keep the CLAUDE.md label/count agreement rule intact: if the draw is
+- [x] Keep the CLAUDE.md label/count agreement rule intact: if the draw is
   named, its name and the derived out count must still agree. Decide whether
   the draw label stays visible at all, and at minimum hide it at higher
   difficulty levels so the naming does not give the count away.
-- [ ] Build distractors around the *miscounted* out counts a player actually
+- [x] Build distractors around the *miscounted* out counts a player actually
   produces (missed dead outs, counting a board-only hand, double-counting a
   combo draw) rather than only around arithmetic slips on the correct count.
-- [ ] Show the counted outs in the explanation, with which cards they are and
+- [x] Show the counted outs in the explanation, with which cards they are and
   which were dead, so a wrong answer teaches the count and not just the rule.
-- [ ] Update `lib/drill/kinds/rule24.test.ts` for the new prompt contract and
+- [x] Update `lib/drill/kinds/rule24.test.ts` for the new prompt contract and
   re-run `npx tsx --test lib/poker/*.test.ts` and the drill suites.
 
 **Done when:** a signed-in player lands on their lessons with a dedicated
@@ -287,6 +288,9 @@ result visibly changes where the path starts and how hard the first drills are;
 every drill accepts "Not sure", grades it wrong, records it separately and
 explains the answer; and the Rule of 2 and 4 drill never states the out count
 while its options and explanation still come from the evaluator.
+**Met locally.** `0005_m85_not_sure.sql` and `0006_m85_placement.sql` are
+written and verified against the real schema shape but not yet applied to
+production; the release gate in `docs/12-m85-status.md` is the remaining step.
 
 ### M9 — Generated practice and persistent anti-repeat ⬜ PLANNED
 

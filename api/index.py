@@ -19,6 +19,11 @@ from api.daily import router as daily_router
 from api.friends import router as friends_router
 from api.profile import router as profile_router
 from api.play import router as play_router
+from api.placement import (
+    ASSESSMENT_VERSION as PLACEMENT_ASSESSMENT_VERSION,
+    GENERATOR_VERSION as PLACEMENT_GENERATOR_VERSION,
+    router as placement_router,
+)
 from api.learning import (
     LessonAttemptIn,
     record_lesson_attempt,
@@ -35,6 +40,7 @@ app.include_router(daily_router)
 app.include_router(friends_router)
 app.include_router(profile_router)
 app.include_router(play_router)
+app.include_router(placement_router)
 
 XP_CORRECT_ANSWER = 10
 
@@ -265,6 +271,7 @@ def drill_state(user_id: str = Depends(current_user_id)) -> Any:
     history", which simply starts every drill at level 1.
     """
     windows: dict[str, list[bool]] = {kind: [] for kind in DRILL_KINDS}
+    placement_levels: dict[str, int] = {}
 
     # No try/except + rollback here, unlike record_attempt above: this
     # handler only reads (one select, then a commit to close the
@@ -277,6 +284,34 @@ def drill_state(user_id: str = Depends(current_user_id)) -> Any:
             for kind, is_correct in cur.fetchall():
                 if kind in windows:
                     windows[kind].append(bool(is_correct))
+
+            # M8.5B: the starting difficulty the placement assessment implies.
+            # Applied by the client as a FLOOR under the history-derived level,
+            # so it only ever saves a new player from grinding level 1 and
+            # never pulls an experienced one back down.
+            #
+            # Both versions must match today's. A placement scored by different
+            # rules or dealt by different generators measured something else,
+            # and silently reinterpreting it is the exact failure the stored
+            # versions exist to prevent — so an outdated result simply stops
+            # applying rather than being reinterpreted.
+            cur.execute(
+                """
+                select levels from placement_assessments
+                where user_id = %s and status = 'completed'
+                  and assessment_version = %s and generator_version = %s
+                order by started_at desc, id desc
+                limit 1
+                """,
+                (user_id, PLACEMENT_ASSESSMENT_VERSION, PLACEMENT_GENERATOR_VERSION),
+            )
+            row = cur.fetchone()
+            if row and isinstance(row[0], dict):
+                placement_levels = {
+                    kind: level
+                    for kind, level in row[0].items()
+                    if kind in windows and isinstance(level, int) and 1 <= level <= 3
+                }
         conn.commit()
 
-    return {"windows": windows}
+    return {"windows": windows, "placement_levels": placement_levels}

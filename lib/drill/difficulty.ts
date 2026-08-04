@@ -2,7 +2,7 @@ import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
 import type { Grade } from "./grade";
 
 export const WINDOW_SIZE = 10;
-const MIN_SAMPLE = 6;
+export const MIN_SAMPLE = 6;
 const PROMOTE_AT = 0.8;
 const DEMOTE_BELOW = 0.5;
 
@@ -122,14 +122,34 @@ export type Levels = Partial<Record<DrillKind, DrillLevel>>;
 export function seededLevels(
   seeded: DrillWindows,
   previous: Levels,
-  answeredKinds: Iterable<DrillKind>
+  answeredKinds: Iterable<DrillKind>,
+  /**
+   * Per-kind floors from the M8.5B placement assessment. A floor, not an
+   * override: a player who demonstrated pot odds in placement starts that
+   * drill at level 2 instead of grinding level 1, but a player whose actual
+   * history says level 3 is never pulled back down to their placement, and a
+   * player who has since been demoted by real answers stays demoted — the
+   * window is the truth once it exists, placement only sets where it starts.
+   *
+   * Empty when placement was skipped, never taken, or taken under an older
+   * assessment/generator version, which is exactly today's cold start.
+   */
+  placementFloors: Levels = {}
 ): Levels {
   const keepLocal = new Set(answeredKinds);
   const levels: Levels = {};
   for (const kind of DRILL_KINDS) {
-    levels[kind] = keepLocal.has(kind)
-      ? (previous[kind] ?? 1)
-      : levelFromHistory(seeded[kind]);
+    if (keepLocal.has(kind)) {
+      levels[kind] = previous[kind] ?? 1;
+      continue;
+    }
+    const history = seeded[kind];
+    const fromHistory = levelFromHistory(history);
+    // The floor applies only while there is no history to speak of. Once the
+    // rolling window has enough answers to move the level on its own, those
+    // answers are better evidence than one placement question.
+    const floor = history.length >= MIN_SAMPLE ? 1 : (placementFloors[kind] ?? 1);
+    levels[kind] = Math.max(fromHistory, floor) as DrillLevel;
   }
   return levels;
 }

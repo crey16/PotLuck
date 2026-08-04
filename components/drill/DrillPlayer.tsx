@@ -120,10 +120,18 @@ export interface DrillPlayerProps {
    */
   onAnswered: (chosen: OptionValue, right: boolean) => void;
   onNext: () => void;
+  /**
+   * "practice" (default) earns XP and runs a streak. "assessment" is the
+   * M8.5B placement pass: it earns nothing, so the feedback bar must not
+   * promise "+10 XP" or show a run counter that means nothing here.
+   */
+  mode?: "practice" | "assessment";
 }
 
 /** Renders and drives ANY DrillQuestion. The only drill state machine. */
-export function DrillPlayer({ question, run, onAnswered, onNext }: DrillPlayerProps) {
+export function DrillPlayer({
+  question, run, onAnswered, onNext, mode = "practice",
+}: DrillPlayerProps) {
   const [chosen, setChosen] = useState<OptionValue | null>(null);
   const answered = chosen !== null;
 
@@ -255,7 +263,9 @@ export function DrillPlayer({ question, run, onAnswered, onNext }: DrillPlayerPr
             </span>
             <span className="xp">
               {ok
-                ? "+10 XP"
+                ? mode === "assessment"
+                  ? "Recorded"
+                  : "+10 XP"
                 : unsure
                   ? correctLabel
                     ? `${UNSURE_FEEDBACK} · answer ${correctLabel}`
@@ -264,7 +274,9 @@ export function DrillPlayer({ question, run, onAnswered, onNext }: DrillPlayerPr
                     ? `You picked ${chosenLabel} · answer ${correctLabel}`
                     : ""}
             </span>
-            <span className="run">{ok ? `Run ${run}` : "Run reset"}</span>
+            {mode === "practice" && (
+              <span className="run">{ok ? `Run ${run}` : "Run reset"}</span>
+            )}
           </div>
           <div className="body">
             <ExplainBody explain={question.explain(chosen)} />

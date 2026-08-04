@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  nextLevel, pushResult, pushOutcome, emptyWindows, levelFromHistory, mergeSeededWindows, seededLevels, WINDOW_SIZE,
+  nextLevel, pushResult, pushOutcome, emptyWindows, levelFromHistory, mergeSeededWindows, seededLevels, WINDOW_SIZE, MIN_SAMPLE,
 } from "./difficulty";
 import { DRILL_KINDS } from "./contract";
 import { mulberry32 } from "./rng";
@@ -225,4 +225,47 @@ test("pushOutcome: unsure answers also cannot promote", () => {
   let window = rep(9, true);
   for (let i = 0; i < 5; i++) window = pushOutcome(window, "unsure");
   assert.equal(window.length, 9);
+});
+
+/* ---------- M8.5B: the placement floor ---------- */
+
+test("seededLevels: placement raises a drill with no history off level 1", () => {
+  const levels = seededLevels(emptyWindows(), {}, [], { outs: 2 });
+  assert.equal(levels.outs, 2);
+  assert.equal(levels.rule24, 1, "a kind placement did not cover stays at 1");
+});
+
+test("seededLevels: with no placement, nothing changes", () => {
+  assert.deepEqual(
+    seededLevels(emptyWindows(), {}, []),
+    seededLevels(emptyWindows(), {}, [], {}),
+  );
+});
+
+test("seededLevels: placement is a floor and never pulls a real level down", () => {
+  const windows = emptyWindows();
+  windows.outs = rep(WINDOW_SIZE, true); // climbed to level 3 for real
+  assert.equal(levelFromHistory(windows.outs), 3);
+  assert.equal(seededLevels(windows, {}, [], { outs: 2 }).outs, 3);
+});
+
+test("seededLevels: once there is real history, the floor stops applying", () => {
+  // Six answers is MIN_SAMPLE — enough for the window to move the level on its
+  // own, at which point those answers are better evidence than one placement
+  // question. A player who placed at 2 and then missed six in a row must be
+  // allowed back down to 1.
+  const windows = emptyWindows();
+  windows.outs = rep(MIN_SAMPLE, false);
+  assert.equal(seededLevels(windows, {}, [], { outs: 2 }).outs, 1);
+});
+
+test("seededLevels: the floor still applies while history is below MIN_SAMPLE", () => {
+  const windows = emptyWindows();
+  windows.outs = rep(MIN_SAMPLE - 1, false);
+  assert.equal(seededLevels(windows, {}, [], { outs: 2 }).outs, 2);
+});
+
+test("seededLevels: a kind answered this session keeps its session level", () => {
+  const levels = seededLevels(emptyWindows(), { outs: 3 }, ["outs"], { outs: 2 });
+  assert.equal(levels.outs, 3);
 });

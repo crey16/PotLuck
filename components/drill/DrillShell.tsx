@@ -147,14 +147,15 @@ export function DrillShell({
   // no problem — every window just stays empty and difficulty starts at 1.
   useEffect(() => {
     let cancelled = false;
-    void fetchDrillState().then((seeded) => {
-      if (cancelled || !seeded) return;
+    void fetchDrillState().then((state) => {
+      if (cancelled || !state) return;
+      const { windows: seeded, placementLevels } = state;
       const answered = answeredKinds.current;
       setWindows((local) => mergeSeededWindows(seeded, local, answered));
-      setLevels((prev) => seededLevels(seeded, prev, answered));
+      setLevels((prev) => seededLevels(seeded, prev, answered, placementLevels));
       // Computed EAGERLY, outside the updater above, because the re-deal reads
       // it synchronously (see the sibling comment in the pre-redesign shell).
-      const restored = seededLevels(seeded, {}, answered);
+      const restored = seededLevels(seeded, {}, answered, placementLevels);
       if (answered.size === 0 && nextDealCount.current === 1) {
         setLive(
           makeLive(tabRef.current, oppModeRef.current, restored, seed, nextDealCount.current++, recentRef.current)

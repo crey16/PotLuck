@@ -185,6 +185,19 @@ identity and are excluded from coaching-quality aggregates. Read
 `docs/10-m8-play-data-contract.md` and `docs/11-m8-status.md` before changing
 play persistence.
 
+**M8.5 is implemented but NOT yet released (2026-08-04).** Migrations
+`0005_m85_not_sure.sql` and `0006_m85_placement.sql` are written and verified
+locally; neither is applied to production. Four independent parts: the landing
+route now leads with the learning path (one shared `CourseMap`/`ContinuePath`
+used by both `/` and `/learn` — never fork a second copy), "Not sure" is a
+first-class answer everywhere an answer is submitted, `/placement` places new
+accounts from nine generator-drawn questions, and the `rule24` prompt no longer
+states the out count. Read `docs/12-m85-status.md` before touching any of them;
+it carries the release gate and three rules that are easy to break:
+`isRight` must not mean "not wrong", `pushOutcome` and `DRILL_STATE_SQL` must
+agree about excluding unsure answers, and placement must never touch `attempts`,
+`skill_stats`, XP or streaks.
+
 **The solve pack lives in `solver/pack/<spot>/`, not `public/`.** Vercel
 promotes `public/` to static assets and strips it from the Python function
 bundle, so anything the API must read cannot live there — a deploy will 500 at

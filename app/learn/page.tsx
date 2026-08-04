@@ -64,7 +64,12 @@ export default async function LearnPage() {
 
       <div className="section-head learn-section-head">
         <h2>Course map</h2>
-        <span className="lede">Foundations through bankroll discipline. No gates; follow the sequence or revisit any plate.</span>
+        <span className="lede">
+          Foundations through bankroll discipline. No gates; follow the sequence or revisit any plate.{" "}
+          {/* M8.5B: placement is retakeable from here, so a player who skipped
+              it — or whose game has moved on — is never stuck with a cold start. */}
+          <Link href="/placement">Take the placement assessment</Link> to move where the path starts.
+        </span>
       </div>
 
       <div className="learn-labs-grid">

@@ -85,8 +85,15 @@ export async function fetchLearningPath(): Promise<LearningPathData> {
     const parsed = progressFromRow(row);
     return parsed ? [parsed] : [];
   });
+  // `placed_out` counts as satisfied (M8.5B): the placement assessment showed
+  // the player already knows this material, so the path must not route them
+  // back into it. It is a separate status rather than `completed` because they
+  // did not take the lesson — `fetchLesson` below still reports it as
+  // uncompleted, so the lesson itself opens fresh if they choose to.
   const completedLessonIds = new Set(
-    progress.filter((row) => row.status === "completed").map((row) => row.lessonId)
+    progress
+      .filter((row) => row.status === "completed" || row.status === "placed_out")
+      .map((row) => row.lessonId)
   );
   const withProgress: ModuleWithProgress[] = modules.map((module) => {
     const moduleLessons = lessons.filter((lesson) => lesson.moduleId === module.id);
