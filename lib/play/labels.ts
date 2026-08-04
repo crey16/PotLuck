@@ -1,10 +1,12 @@
 /**
  * Button and feed copy for the play table, in big blinds.
  *
- * The dollar-based `actionDisplay` in ./actions stays where it is — the saved
- * hand review still uses it — but everything on the live table reads in bb,
- * because that is the unit every solver tool and every player uses, and stack
- * depths only make sense in bb.
+ * Everything on the live table reads in bb: that is the unit every solver tool
+ * and every player uses, and stack depths only make sense in bb.
+ *
+ * The dollar-based `actionDisplay` in ./actions is left in place but now has
+ * no production caller — only its own tests. It is kept because actions.ts is
+ * on this milestone's do-not-touch list; deleting it is a separate decision.
  *
  * Pure and neutral (no "use client"), so both the table and any server-side
  * caller can import it — see components/drill/clientBoundary.test.ts for why
