@@ -5,11 +5,13 @@ import {
   SkillRow,
   buildHeatmapWeeks,
 } from "@/components/social/ProfileWidgets";
+import { ContinuePath } from "@/components/learn/ContinuePath";
+import { CourseMap } from "@/components/learn/CourseMap";
 import { KIND_LABELS, TAB_ORDER, drillHref } from "@/lib/drill/registry";
 import type { DrillKind } from "@/lib/drill/contract";
 import { supabaseConfigured } from "@/lib/supabase/env";
-import { fetchServerRecommendation } from "@/lib/learn/server";
-import type { Recommendation } from "@/lib/learn/types";
+import { fetchLearningPath, fetchServerRecommendation } from "@/lib/learn/server";
+import { nextPathStep, pathProgress, recommendationHref } from "@/lib/learn/path";
 
 /** Card blurbs, from the redesign spec. */
 const DRILL_DESCRIPTIONS: Record<DrillKind | "mixed", string> = {
@@ -43,20 +45,6 @@ const TAG_TO_KIND: Record<string, DrillKind> = {
   expected_value: "ev",
 };
 
-function learningHref(recommendation: Recommendation): string {
-  if (recommendation.type === "lesson" && recommendation.module_id && recommendation.lesson_id) {
-    return `/learn/${recommendation.module_id}/${recommendation.lesson_id}`;
-  }
-  if (recommendation.type === "scenario") {
-    const params = new URLSearchParams();
-    if (recommendation.scenario_id) params.set("id", String(recommendation.scenario_id));
-    if (recommendation.skill_tag) params.set("skill", recommendation.skill_tag);
-    if (recommendation.difficulty) params.set("difficulty", String(recommendation.difficulty));
-    return `/learn/practice${params.size ? `?${params}` : ""}`;
-  }
-  return "/learn";
-}
-
 function easternDaypart(now = new Date()): "morning" | "afternoon" | "evening" {
   const hour = Number(
     new Intl.DateTimeFormat("en-US", {
@@ -86,6 +74,20 @@ function Pips({ level }: { level: number }) {
   );
 }
 
+/**
+ * The signed-in landing surface (M8.5A).
+ *
+ * The training loop is lesson-first: a signed-in player lands on their
+ * lessons, not on a statistics dashboard. The next lesson, current module and
+ * path progress are the primary content; streak, XP, skill rows and drill
+ * cards live below under "Your progress", and the deterministic
+ * recommendation is a secondary "recommended practice" slot that must never
+ * displace the path as the main action.
+ *
+ * The logged-out route below is unchanged — this reorder is authenticated-only.
+ * The module list itself is `components/learn/CourseMap`, shared with `/learn`;
+ * there is no second copy here.
+ */
 export default async function Home() {
   if (!supabaseConfigured()) {
     return (
@@ -102,8 +104,9 @@ export default async function Home() {
     );
   }
 
-  const [stats, learningRecommendation] = await Promise.all([
+  const [stats, path, learningRecommendation] = await Promise.all([
     fetchDashboardStats(),
+    fetchLearningPath(),
     fetchServerRecommendation(),
   ]);
   const { profile } = stats;
@@ -113,6 +116,9 @@ export default async function Home() {
   const xpPct = Math.min(100, Math.max(0, xp - (level - 1) * 100));
   const accuracy =
     stats.totalAttempts > 0 ? Math.round((stats.totalCorrect / stats.totalAttempts) * 100) : null;
+
+  const progress = pathProgress(path);
+  const step = nextPathStep(path);
 
   // Weakest skill: lowest accuracy among tags with ≥5 attempts — the same
   // rule the recommendation engine uses.
@@ -137,8 +143,8 @@ export default async function Home() {
 
   return (
     <main className="page" style={{ paddingTop: "var(--space-8)" }}>
-      {/* — hero — */}
-      <div className="home-hero">
+      {/* — the path, first — */}
+      <div className="home-path-hero">
         <div>
           <h1 style={{ fontSize: 46, lineHeight: 1, margin: "0 0 6px", letterSpacing: "-.02em" }}>
             Good {easternDaypart()}, {firstName}.
@@ -150,45 +156,84 @@ export default async function Home() {
             }}
           >
             {streakSentence(level, profile?.streak ?? 0)}{" "}
-            {weakest
-              ? `${weakest.label} is the one to work on today.`
-              : "Start a mixed drill and PotLuck will find the skill to work on today."}
+            {step
+              ? "Pick the path back up where you left it."
+              : "The course is finished — keep the numbers sharp in the drill room."}
           </p>
-          <div
-            style={{
-              display: "flex", alignItems: "baseline", justifyContent: "space-between",
-              fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: ".08em",
-              textTransform: "uppercase",
-              color: "color-mix(in srgb, var(--color-text) 60%, transparent)", marginBottom: 5,
-            }}
-          >
-            <span>{xp.toLocaleString()} XP total</span>
-            <span>{xpToNext} XP to level {level + 1}</span>
-          </div>
-          <div className="meter">
-            <i style={{ width: `${xpPct}%` }} />
-          </div>
-          <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)", flexWrap: "wrap" }}>
-            <Link
-              href={drillHref("mixed")}
-              className="btn btn-primary blueprint btn-caps"
-              style={{ fontSize: 16, padding: "12px 22px" }}
-            >
-              Start mixed drill <span className="keyhint">D</span>
-            </Link>
-            {resumeKind && (
-              <Link
-                href={drillHref(resumeKind)}
-                className="btn btn-secondary btn-caps"
-                style={{ fontSize: 15, padding: "12px 18px" }}
-              >
-                Resume {KIND_LABELS[resumeKind].toLowerCase()}
-              </Link>
+
+          <div className="home-path-side">
+            {learningRecommendation.type !== "none" && (
+              <section className="blueprint recommended-practice">
+                <div>
+                  <div className="mono-label">Recommended practice</div>
+                  <strong>
+                    {learningRecommendation.lesson?.title ??
+                      (learningRecommendation.type === "scenario"
+                        ? "Authored practice hand"
+                        : "Course map")}
+                  </strong>
+                  <span>{learningRecommendation.reason}</span>
+                </div>
+                <Link
+                  href={recommendationHref(learningRecommendation)}
+                  className="btn btn-secondary btn-caps"
+                >
+                  Practice this
+                </Link>
+              </section>
             )}
+            <Link href="/daily" className="blueprint home-daily">
+              <div className="mono-label">Daily lesson</div>
+              <strong>One focused decision</strong>
+              <span>Changes at midnight ET · +15 XP</span>
+              <b>Open daily →</b>
+            </Link>
           </div>
         </div>
 
-        <div className="home-tiles">
+        <ContinuePath step={step} progress={progress} />
+      </div>
+
+      {/* — course map — */}
+      <section style={{ marginBottom: "var(--space-8)" }}>
+        <div className="section-head">
+          <h2>Your course</h2>
+          <span className="lede">
+            Five modules, in order. Nothing is gated — revisit any lesson at any time.{" "}
+            <Link href="/learn">Open the full course map</Link>.
+          </span>
+        </div>
+        {path.error && <div className="note critl" role="alert">{path.error}</div>}
+        {!path.error && path.modules.length === 0 ? (
+          <p className="text-dim">
+            No lessons are loaded yet. Apply <code>supabase/seed.sql</code> to seed the course.
+          </p>
+        ) : (
+          <CourseMap modules={path.modules} completedLessonIds={path.completedLessonIds} />
+        )}
+      </section>
+
+      {/* — progress: everything that used to lead the page — */}
+      <section style={{ marginBottom: "var(--space-8)" }}>
+        <div className="section-head">
+          <h2>Your progress</h2>
+          <span className="lede">Level, streak, and the eight skill tags tracked on every answer.</span>
+        </div>
+
+        <div className="home-tiles home-progress-tiles">
+          <div className="blueprint stat-tile">
+            <div className="mono-label">Level {level}</div>
+            <div className="big">
+              {xp.toLocaleString()}{" "}
+              <span style={{ fontSize: 15, color: "color-mix(in srgb, var(--color-text) 55%, transparent)" }}>
+                XP
+              </span>
+            </div>
+            <div className="meter" style={{ margin: "6px 0" }}>
+              <i style={{ width: `${xpPct}%` }} />
+            </div>
+            <div className="small">{xpToNext} XP to level {level + 1}</div>
+          </div>
           <div className="blueprint stat-tile">
             <div className="mono-label">Day streak</div>
             <div className="big">
@@ -219,13 +264,13 @@ export default async function Home() {
           </div>
           <div
             className="blueprint stat-tile"
-            style={{ gridColumn: "span 2", display: "flex", gap: "var(--space-4)", alignItems: "center" }}
+            style={{ display: "flex", gap: "var(--space-4)", alignItems: "center" }}
           >
             <div style={{ flex: 1 }}>
               <div className="mono-label" style={{ color: "var(--warn)" }}>Weakest skill</div>
               <div
                 style={{
-                  fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 24,
+                  fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 22,
                   lineHeight: 1.1, marginTop: 2,
                 }}
               >
@@ -233,7 +278,7 @@ export default async function Home() {
               </div>
               <div style={{ fontSize: 12.5, color: "color-mix(in srgb, var(--color-text) 65%, transparent)" }}>
                 {weakest
-                  ? `${weakest.attempts} answers. The app already picks this for recommendations.`
+                  ? `${weakest.attempts} answers.`
                   : "Five answers on a skill puts it on the board."}
               </div>
             </div>
@@ -246,21 +291,14 @@ export default async function Home() {
             </Link>
           </div>
         </div>
-      </div>
 
-      {/* — skill strengths — */}
-      <section style={{ marginBottom: "var(--space-8)" }}>
-        <div className="section-head">
-          <h2>Skill strengths</h2>
-          <span className="lede">
-            Eight tags, tracked on every answer. Bars are all-time accuracy; the count is sample size.
-          </span>
-        </div>
         {allSkills.length === 0 ? (
-          <p className="text-dim">Answer a few hands and the eight skill tags appear here.</p>
+          <p className="text-dim" style={{ marginTop: "var(--space-6)" }}>
+            Answer a few hands and the eight skill tags appear here.
+          </p>
         ) : (
           <>
-            <div className="home-skills">
+            <div className="home-skills" style={{ marginTop: "var(--space-6)" }}>
               {allSkills.map((s) => (
                 <SkillRow key={s.tag} skill={s} weak={weakest !== null && s.tag === weakest.tag} />
               ))}
@@ -284,10 +322,20 @@ export default async function Home() {
       {/* — the drills — */}
       <section style={{ marginBottom: "var(--space-8)" }}>
         <div className="section-head">
-          <h2>The drills</h2>
+          <h2>Sharpen it in the drill room</h2>
           <span className="lede">
             Each drill carries its own difficulty, set by your last 10 answers in that drill.
           </span>
+        </div>
+        <div style={{ display: "flex", gap: "var(--space-3)", marginBottom: "var(--space-6)", flexWrap: "wrap" }}>
+          <Link href={drillHref("mixed")} className="btn btn-secondary btn-caps">
+            Start mixed drill <span className="keyhint">D</span>
+          </Link>
+          {resumeKind && (
+            <Link href={drillHref(resumeKind)} className="btn btn-secondary btn-caps">
+              Resume {KIND_LABELS[resumeKind].toLowerCase()}
+            </Link>
+          )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(258px, 1fr))", gap: "var(--space-4)" }}>
           {drillOrder.map((t, i) => {
@@ -342,42 +390,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* — learning path — */}
-      <section style={{ marginBottom: "var(--space-8)" }}>
-        <div className="section-head">
-          <h2>Learning path</h2>
-          <span className="lede">Build the concept first; then use the drills to make it automatic.</span>
-        </div>
-        <div className="home-learning">
-          <div className="blueprint home-learn-next">
-            <div>
-              <div className="mono-label accent">Recommended next</div>
-              <h3>
-                {learningRecommendation.lesson?.title ??
-                  (learningRecommendation.type === "scenario" ? "Authored practice hand" : "Open the course map")}
-              </h3>
-              <p>{learningRecommendation.reason}</p>
-            </div>
-            <Link href={learningHref(learningRecommendation)} className="btn btn-primary blueprint btn-caps">
-              Learn now
-            </Link>
-          </div>
-          <Link href="/daily" className="blueprint home-daily">
-            <div className="mono-label">Daily lesson</div>
-            <strong>One focused decision</strong>
-            <span>Changes at midnight ET · +15 XP</span>
-            <b>Open daily →</b>
-          </Link>
-          <Link href="/learn" className="blueprint home-course-link">
-            <div className="mono-label">Full course</div>
-            <strong>5 modules · 20 lessons</strong>
-            <span>Foundations through bankroll discipline</span>
-            <b>View map →</b>
-          </Link>
-        </div>
-      </section>
-
-      {/* — activity + later — */}
+      {/* — activity + social — */}
       <section className="home-bottom">
         <div>
           <div className="section-head">

@@ -1,36 +1,29 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { fetchLearningPath, fetchServerRecommendation } from "../../lib/learn/server";
-import { formatLessonTime } from "../../lib/learn/content";
-import type { Recommendation } from "../../lib/learn/types";
+import { nextPathStep, pathProgress, recommendationHref } from "../../lib/learn/path";
+import { ContinuePath } from "../../components/learn/ContinuePath";
+import { CourseMap } from "../../components/learn/CourseMap";
 
 export const metadata: Metadata = {
   title: "Learn · PotLuck",
   description: "A five-module learning path from poker foundations to disciplined decisions.",
 };
 
-function recommendationHref(recommendation: Recommendation): string {
-  if (recommendation.type === "lesson" && recommendation.lesson_id && recommendation.module_id) {
-    return `/learn/${recommendation.module_id}/${recommendation.lesson_id}`;
-  }
-  if (recommendation.type === "scenario") {
-    const params = new URLSearchParams();
-    if (recommendation.scenario_id) params.set("id", String(recommendation.scenario_id));
-    if (recommendation.skill_tag) params.set("skill", recommendation.skill_tag);
-    if (recommendation.difficulty) params.set("difficulty", String(recommendation.difficulty));
-    return `/learn/practice${params.size ? `?${params}` : ""}`;
-  }
-  return "/learn";
-}
-
+/**
+ * The canonical, directly linkable home of the learning path (M8.5A).
+ *
+ * `/` also leads with the path, but this route stays in the nav and keeps its
+ * own URL so the course can be bookmarked and shared. Both render the same
+ * `ContinuePath` + `CourseMap`; neither owns a private copy.
+ */
 export default async function LearnPage() {
   const [path, recommendation] = await Promise.all([
     fetchLearningPath(),
     fetchServerRecommendation(),
   ]);
-  const totalLessons = path.modules.reduce((sum, module) => sum + module.lessons.length, 0);
-  const completedLessons = path.completedLessonIds.size;
-  const coursePct = totalLessons ? Math.round((completedLessons / totalLessons) * 100) : 0;
+  const progress = pathProgress(path);
+  const step = nextPathStep(path);
 
   return (
     <main className="page learn-page">
@@ -42,32 +35,32 @@ export default async function LearnPage() {
             Short reads, checks, and retries build the idea. The drill room makes it automatic.
             Every lesson stays open for replay.
           </p>
-          <div className="learn-course-progress">
-            <div className="lesson-progress-meta">
-              <span>{completedLessons} / {totalLessons} lessons</span>
-              <span>{coursePct}% complete</span>
-            </div>
-            <div className="meter"><i style={{ width: `${coursePct}%` }} /></div>
-          </div>
         </div>
 
         <div className="learn-hero-actions">
-          <section className="blueprint learn-next-card">
-            <div className="mono-label accent">Learn next</div>
-            <h2>{recommendation.lesson?.title ?? (recommendation.type === "scenario" ? "Practice hand" : "Course map")}</h2>
-            <p>{recommendation.reason}</p>
-            {recommendation.type !== "none" && (
-              <Link href={recommendationHref(recommendation)} className="btn btn-primary blueprint btn-caps">
-                Continue
-              </Link>
-            )}
-          </section>
+          <ContinuePath step={step} progress={progress} />
           <Link href="/daily" className="blueprint daily-mini-card">
             <div><span className="mono-label">Daily</span><strong>One decision today</strong></div>
             <span>+15 XP →</span>
           </Link>
         </div>
       </div>
+
+      {recommendation.type !== "none" && (
+        <section className="blueprint recommended-practice">
+          <div>
+            <div className="mono-label">Recommended practice</div>
+            <strong>
+              {recommendation.lesson?.title ??
+                (recommendation.type === "scenario" ? "Authored practice hand" : "Course map")}
+            </strong>
+            <span>{recommendation.reason}</span>
+          </div>
+          <Link href={recommendationHref(recommendation)} className="btn btn-secondary btn-caps">
+            Practice this
+          </Link>
+        </section>
+      )}
 
       <div className="section-head learn-section-head">
         <h2>Course map</h2>
@@ -98,48 +91,7 @@ export default async function LearnPage() {
         </div>
       )}
 
-      <div className="course-map">
-        {path.modules.map((module, index) => {
-          const total = module.lessons.length;
-          const pct = total ? Math.round((module.completedCount / total) * 100) : 0;
-          const nextLesson = module.lessons.find((lesson) => lesson.id === module.nextLessonId);
-          const complete = total > 0 && module.completedCount === total;
-          return (
-            <div className="course-map-row" key={module.id}>
-              <div className={`course-node${complete ? " complete" : ""}`}>
-                {complete ? "✓" : String(index + 1).padStart(2, "0")}
-              </div>
-              {index < path.modules.length - 1 && <span className="course-line" aria-hidden="true" />}
-              <article className={`blueprint course-module${complete ? " complete" : ""}`}>
-                <div className="course-module-head">
-                  <div>
-                    <div className="mono-label accent">Module {String(index + 1).padStart(2, "0")}</div>
-                    <h2>{module.title}</h2>
-                  </div>
-                  <div className="course-module-count">
-                    <strong>{module.completedCount}/{total}</strong>
-                    <span>lessons</span>
-                  </div>
-                </div>
-                <p>{module.description}</p>
-                <div className="meter"><i style={{ width: `${pct}%` }} /></div>
-                <div className="course-module-foot">
-                  <span>
-                    {complete
-                      ? "Module complete · replay any lesson"
-                      : nextLesson
-                        ? `Next: ${nextLesson.title} · ${formatLessonTime(nextLesson.estimatedSeconds)}`
-                        : "No lessons loaded"}
-                  </span>
-                  <Link href={`/learn/${module.id}`} className="btn btn-secondary btn-caps">
-                    Open module
-                  </Link>
-                </div>
-              </article>
-            </div>
-          );
-        })}
-      </div>
+      <CourseMap modules={path.modules} completedLessonIds={path.completedLessonIds} />
     </main>
   );
 }
