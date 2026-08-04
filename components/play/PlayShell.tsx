@@ -906,26 +906,34 @@ export function PlayShell({ seed }: PlayShellProps) {
                       />
                     ))}
                   </WorkTable>
-                  <div className="actions">
-                    <button
-                      className="btn btn-primary blueprint btn-caps"
-                      disabled={!canDealNext}
-                      onClick={handleNextHand}
-                    >
-                      {persistenceBusy === "Finalizing hand" ? "Finalizing…" : "Next hand"}
-                      <span className="keyhint">N</span>
-                    </button>
-                    {remoteHand?.status === "completed" && (
-                      <Link
-                        className="btn btn-secondary btn-caps"
-                        href={`/play/history/${encodeURIComponent(remoteHand.id)}`}
-                      >
-                        Open saved review
-                      </Link>
-                    )}
-                    <span className="hint">or Enter</span>
-                  </div>
                 </div>
+              </div>
+            )}
+
+            {/* The hand-complete controls live in the same slot as the action
+                bar, as a direct child of the tall page container. Sticking them
+                inside the review panel does not work — the panel ends a few
+                pixels below them, so there is no range to stick within, and the
+                primary action ends up below the fold behind a long review. */}
+            {over && outcome && (
+              <div className="pt-endbar">
+                <button
+                  className="btn btn-primary blueprint btn-caps"
+                  disabled={!canDealNext}
+                  onClick={handleNextHand}
+                >
+                  {persistenceBusy === "Finalizing hand" ? "Finalizing…" : "Next hand"}
+                  <span className="keyhint">N</span>
+                </button>
+                {remoteHand?.status === "completed" && (
+                  <Link
+                    className="btn btn-secondary btn-caps"
+                    href={`/play/history/${encodeURIComponent(remoteHand.id)}`}
+                  >
+                    Open saved review
+                  </Link>
+                )}
+                <span className="hint">or Enter</span>
               </div>
             )}
           </div>
