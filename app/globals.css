@@ -564,6 +564,47 @@ img { display: block; max-width: 100%; }
 
 .system-answer-states .opt { padding: 11px 12px; font-size: 16px; }
 
+/* — "Not sure" (M8.5C) —
+   Deliberately not an `.opt`. It sits below the grid behind a rule, at body
+   weight with no border box, so it is always reachable but can never be
+   mistaken for one of the real choices while scanning the answers. */
+.not-sure {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  margin-top: var(--space-4); padding-top: var(--space-3);
+  border-top: 1px dashed var(--color-divider);
+}
+.not-sure-btn {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: transparent; border: none; padding: 4px 0; cursor: pointer;
+  color: color-mix(in srgb, var(--color-text) 72%, transparent);
+  font-family: var(--font-body); font-size: 14.5px;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--color-text) 30%, transparent);
+}
+.not-sure-btn:hover:not(:disabled) { color: var(--color-text); }
+.not-sure-btn:disabled { cursor: default; opacity: 0.65; text-decoration: none; }
+.not-sure-btn .key {
+  font-family: var(--font-mono); font-size: 11px;
+  width: 22px; height: 22px; display: grid; place-items: center;
+  border: 1px solid var(--color-divider); border-radius: 7px; flex: none;
+}
+.not-sure-note {
+  font-size: 12px; color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+.not-sure.picked .not-sure-btn { color: var(--warn); opacity: 1; }
+.not-sure.picked .not-sure-btn .key { border-color: var(--warn); }
+.not-sure.picked .not-sure-note { color: var(--warn); }
+@media (max-width: 640px) {
+  .not-sure-btn { min-height: 44px; }
+}
+
+/* An unsure verdict is a gap, not a wrong belief — warn, never crit. */
+.fb.unsure { border-color: var(--warn); }
+.fb.unsure .bar { background: var(--warn-fill); border-bottom-color: var(--warn); }
+.fb.unsure .bar .glyph { border-color: var(--warn); color: var(--warn); }
+.fb.unsure .bar .word,
+.fb.unsure .bar .xp { color: var(--warn); }
+
 /* — feedback panel — */
 .fb { margin-top: var(--space-6); border: 1px solid var(--good); }
 .fb.no { border-color: var(--crit); }

@@ -1,4 +1,4 @@
-import type { AttemptKind, OptionValue } from "@/lib/drill/contract";
+import { responseTypeFor, type AttemptKind, type OptionValue, type ResponseType } from "@/lib/drill/contract";
 import { createClient } from "@/lib/supabase/client";
 import { supabaseConfigured } from "@/lib/supabase/env";
 
@@ -8,6 +8,11 @@ export interface DrillResult {
   payload: Record<string, unknown>;
   answer: OptionValue;
   correct: boolean;
+  /**
+   * Defaults to whatever `answer` implies, so an older call site that does not
+   * pass it still records the right thing (M8.5C).
+   */
+  responseType?: ResponseType;
 }
 
 /** Body shape expected by `AttemptIn` in api/index.py. Names must match exactly. */
@@ -16,6 +21,7 @@ export interface AttemptRequestBody {
   drill_payload: Record<string, unknown>;
   answer: string;
   is_correct: boolean;
+  response_type: ResponseType;
 }
 
 export interface AttemptRequest {
@@ -40,13 +46,17 @@ export interface ProfileUpdate {
  * `AttemptIn` in api/index.py: field names, and `answer` stringified.
  */
 export function buildAttemptRequest(result: DrillResult): AttemptRequest {
+  const responseType = result.responseType ?? responseTypeFor(result.answer);
   return {
     path: "/api/progress/attempts",
     body: {
       drill_kind: result.kind,
       drill_payload: result.payload,
       answer: String(result.answer),
-      is_correct: result.correct,
+      // An unsure answer is never correct. The server enforces this too — this
+      // is belt-and-braces so a bad call site cannot claim XP for a shrug.
+      is_correct: responseType === "unsure" ? false : result.correct,
+      response_type: responseType,
     },
   };
 }

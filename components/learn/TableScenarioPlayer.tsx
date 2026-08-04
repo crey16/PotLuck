@@ -5,6 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 import { getTableScenario, submitTableScenario } from "../../lib/learn/api";
 import type { ScenarioSubmitResult, TableScenario } from "../../lib/learn/types";
 import { OptionButton, type OptionButtonState } from "../ui/OptionButton";
+import { NotSureOption } from "../ui/NotSureOption";
+import { UNSURE } from "../../lib/drill/contract";
+import { UNSURE_KEY, UNSURE_VERDICT } from "../../lib/drill/unsureUi";
 
 interface TableScenarioPlayerProps {
   initialScenario: TableScenario;
@@ -44,6 +47,7 @@ export function TableScenarioPlayer({ initialScenario, filters }: TableScenarioP
   const [nextPending, setNextPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { situation } = scenario;
+  const unsure = selectedId === UNSURE;
   const lastAction = situation.pre_action.at(-1);
   const potAtDecision =
     (situation.pot_bb ?? 0) +
@@ -85,6 +89,11 @@ export function TableScenarioPlayer({ initialScenario, filters }: TableScenarioP
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       if (!result && !pending) {
+        if (event.key === UNSURE_KEY) {
+          event.preventDefault();
+          void handleAnswer(UNSURE);
+          return;
+        }
         const choice = scenario.choices[Number(event.key) - 1];
         if (choice) {
           event.preventDefault();
@@ -173,11 +182,17 @@ export function TableScenarioPlayer({ initialScenario, filters }: TableScenarioP
         })}
       </div>
 
+      <NotSureOption
+        answered={pending || result !== null}
+        picked={unsure}
+        onClick={() => void handleAnswer(UNSURE)}
+      />
+
       {result && (
-        <div className={`fb${result.is_correct || result.is_acceptable ? "" : " no"}`}>
+        <div className={`fb${result.is_correct || result.is_acceptable ? "" : " no"}${unsure ? " unsure" : ""}`}>
           <div className="bar">
-            <span className="glyph">{result.is_correct || result.is_acceptable ? "✓" : "×"}</span>
-            <span className="word">{result.is_correct ? "Correct" : result.is_acceptable ? "Also fine" : "Not quite"}</span>
+            <span className="glyph">{result.is_correct || result.is_acceptable ? "✓" : unsure ? "?" : "×"}</span>
+            <span className="word">{result.is_correct ? "Correct" : result.is_acceptable ? "Also fine" : unsure ? UNSURE_VERDICT : "Not quite"}</span>
             <span className="xp">+{result.xp_awarded} XP</span>
           </div>
           <div className="body scenario-feedback">

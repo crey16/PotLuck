@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import type { Spot } from "../poker/engine";
 import { hitProbability } from "../poker/engine";
 import { buildAttemptRequest } from "./recordAttempt";
+import { UNSURE } from "./contract";
 
 function fakeSpot(overrides: Partial<Spot> = {}): Spot {
   return {
@@ -76,5 +77,33 @@ test("buildAttemptRequest: drill_kind passes through for a non-outs kind", () =>
   });
   assert.equal(req.body.drill_kind, "potodds");
   assert.equal(req.body.answer, "25");
+  assert.equal(req.body.is_correct, false);
+});
+
+/* ---------- M8.5C: "Not sure" ---------- */
+
+test("buildAttemptRequest: a normal answer carries response_type 'answer'", () => {
+  const req = buildAttemptRequest({ kind: "outs", payload: fakePayload(), answer: 9, correct: true });
+  assert.equal(req.body.response_type, "answer");
+});
+
+test("buildAttemptRequest: UNSURE is inferred as response_type 'unsure'", () => {
+  const req = buildAttemptRequest({ kind: "outs", payload: fakePayload(), answer: UNSURE, correct: false });
+  assert.equal(req.body.response_type, "unsure");
+  assert.equal(req.body.answer, UNSURE);
+});
+
+test("buildAttemptRequest: an unsure answer can never claim is_correct", () => {
+  // The server enforces this too; this pins the client so a bad call site
+  // cannot even ask for XP it did not earn.
+  const req = buildAttemptRequest({ kind: "outs", payload: fakePayload(), answer: UNSURE, correct: true });
+  assert.equal(req.body.is_correct, false);
+});
+
+test("buildAttemptRequest: an explicit responseType overrides the inference", () => {
+  const req = buildAttemptRequest({
+    kind: "outs", payload: fakePayload(), answer: 9, correct: true, responseType: "unsure",
+  });
+  assert.equal(req.body.response_type, "unsure");
   assert.equal(req.body.is_correct, false);
 });

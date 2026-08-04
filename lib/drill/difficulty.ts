@@ -1,4 +1,5 @@
 import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
+import type { Grade } from "./grade";
 
 export const WINDOW_SIZE = 10;
 const MIN_SAMPLE = 6;
@@ -15,6 +16,30 @@ export function emptyWindows(): DrillWindows {
 /** Append a result, keeping only the most recent WINDOW_SIZE. Never mutates. */
 export function pushResult(window: boolean[], ok: boolean): boolean[] {
   return [...window, ok].slice(-WINDOW_SIZE);
+}
+
+/**
+ * The difficulty window's view of one answer, including "Not sure" (M8.5C).
+ *
+ * An unsure answer leaves the window untouched. That is a deliberate choice
+ * between the two obvious alternatives, and both of them are wrong:
+ *
+ *  - Recording it as a miss treats "I don't know" as a confident error. It
+ *    also makes "Not sure" the fastest route to easier questions — six of them
+ *    demote a drill a level, which is precisely the farming the M8.5C brief
+ *    rules out.
+ *  - Recording it as a hit is obviously false.
+ *
+ * Not recording it at all means an unsure answer can neither promote nor
+ * demote: the player stays where they are until they commit to a real answer.
+ * The attempt is still stored, still graded a miss for XP and accuracy, and
+ * still visible to M11 as its own signal — this function governs difficulty
+ * only. `api/index.py`'s DRILL_STATE_SQL applies the same exclusion so a
+ * reload reconstructs the same window.
+ */
+export function pushOutcome(window: boolean[], grade: Grade): boolean[] {
+  if (grade === "unsure") return window;
+  return pushResult(window, grade !== "wrong");
 }
 
 /**

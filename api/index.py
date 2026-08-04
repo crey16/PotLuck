@@ -24,7 +24,7 @@ from api.learning import (
     record_lesson_attempt,
     router as learning_router,
 )
-from api.progress import next_streak, recalc_level, today_et
+from api.progress import graded_correct, next_streak, recalc_level, today_et
 from api.scenarios import router as scenarios_router
 from api.skills import DRILL_KINDS, skill_tag_for
 
@@ -67,14 +67,19 @@ class AttemptIn(BaseModel):
     drill_payload: dict
     answer: str = Field(max_length=256)
     is_correct: bool
+    # M8.5C.  Optional so an older client keeps working; absent means the
+    # player committed to a choice, which is what every pre-M8.5 attempt was.
+    response_type: Literal["answer", "unsure"] = "answer"
 
 
 SKILL_STATS_SQL = """
-    insert into skill_stats (user_id, skill_tag, total_attempts, correct_attempts)
-    values (%s, %s, 1, %s)
+    insert into skill_stats
+        (user_id, skill_tag, total_attempts, correct_attempts, unsure_attempts)
+    values (%s, %s, 1, %s, %s)
     on conflict (user_id, skill_tag) do update
     set total_attempts   = skill_stats.total_attempts + 1,
-        correct_attempts = skill_stats.correct_attempts + excluded.correct_attempts
+        correct_attempts = skill_stats.correct_attempts + excluded.correct_attempts,
+        unsure_attempts  = skill_stats.unsure_attempts + excluded.unsure_attempts
 """
 
 # Must equal WINDOW_SIZE in lib/drill/difficulty.ts. The client slices the
@@ -85,6 +90,11 @@ SKILL_STATS_SQL = """
 # against the TypeScript value.
 DRILL_WINDOW_SIZE = 10
 
+# `response_type = 'answer'` mirrors lib/drill/difficulty.ts::pushOutcome: an
+# unsure attempt never enters the adaptive-difficulty window, so it can neither
+# demote a drill nor be farmed for easier questions. If this filter and that
+# function ever disagree, difficulty silently changes on reload — the seeded
+# window would carry rows the live session dropped.
 DRILL_STATE_SQL = f"""
     select drill_kind, is_correct
     from (
@@ -93,6 +103,7 @@ DRILL_STATE_SQL = f"""
                                 order by created_at desc, id desc) as rn
       from attempts
       where user_id = %s and drill_kind is not null
+        and response_type = 'answer'
     ) t
     where rn <= {DRILL_WINDOW_SIZE}
     order by drill_kind, rn desc
@@ -118,7 +129,11 @@ def record_attempt(
             "submit play decisions through /api/play/hands/{hand_id}/decisions",
         )
 
-    xp_earned = XP_CORRECT_ANSWER if body.is_correct else 0
+    # "Not sure" is never right, whatever the client claims (M8.5C).
+    is_unsure = body.response_type == "unsure"
+    is_correct = graded_correct(body.is_correct, body.response_type)
+
+    xp_earned = XP_CORRECT_ANSWER if is_correct else 0
     today = today_et()
 
     with get_connection() as conn:
@@ -151,15 +166,16 @@ def record_attempt(
                     """
                     insert into attempts
                         (user_id, drill_kind, drill_payload, is_correct,
-                         selected_choice_id)
-                    values (%s, %s, %s, %s, %s)
+                         selected_choice_id, response_type)
+                    values (%s, %s, %s, %s, %s, %s)
                     """,
                     (
                         user_id,
                         body.drill_kind,
                         Json(body.drill_payload),
-                        body.is_correct,
+                        is_correct,
                         body.answer,
+                        body.response_type,
                     ),
                 )
 
@@ -167,7 +183,12 @@ def record_attempt(
                 # drill_kind so the client cannot report the wrong one.
                 cur.execute(
                     SKILL_STATS_SQL,
-                    (user_id, skill_tag_for(body.drill_kind), 1 if body.is_correct else 0),
+                    (
+                        user_id,
+                        skill_tag_for(body.drill_kind),
+                        1 if is_correct else 0,
+                        1 if is_unsure else 0,
+                    ),
                 )
 
                 # 2. XP + level (recalc_level is the one consolidated place

@@ -18,7 +18,7 @@ from api.index import (
     SKILL_STATS_SQL,
     record_attempt,
 )
-from api.progress import next_streak, recalc_level, today_et
+from api.progress import graded_correct, next_streak, recalc_level, today_et
 
 
 class TestRecalcLevel:
@@ -164,3 +164,35 @@ def test_drill_state_sql_windows_the_last_ten_per_kind():
     # pushResult/nextLevel call without changing anything else observable
     # here (same rows, same set membership, just backwards).
     assert "order by drill_kind, rn desc" in sql
+
+
+# ---------- M8.5C: "Not sure" ----------
+
+
+def test_graded_correct_never_lets_an_unsure_answer_be_right():
+    assert graded_correct(True, "unsure") is False
+    assert graded_correct(False, "unsure") is False
+
+
+def test_graded_correct_passes_a_committed_answer_through():
+    assert graded_correct(True, "answer") is True
+    assert graded_correct(False, "answer") is False
+
+
+def test_attempt_in_defaults_to_a_committed_answer():
+    """An older client that predates M8.5C sends no response_type."""
+    body = AttemptIn(
+        drill_kind="outs", drill_payload={}, answer="9", is_correct=True
+    )
+    assert body.response_type == "answer"
+
+
+def test_attempt_in_rejects_an_unknown_response_type():
+    with pytest.raises(ValidationError):
+        AttemptIn(
+            drill_kind="outs",
+            drill_payload={},
+            answer="9",
+            is_correct=False,
+            response_type="maybe",
+        )

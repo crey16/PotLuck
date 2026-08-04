@@ -10,7 +10,13 @@ from pydantic import BaseModel, Field
 from api.db import get_connection
 from api.deps import current_user_id
 from api.learning import LESSON_SKILL_STATS_SQL, difficulty_for_accuracy
-from api.progress import et_day_start_utc, next_streak, recalc_level, today_et
+from api.progress import (
+    et_day_start_utc,
+    is_unsure_choice,
+    next_streak,
+    recalc_level,
+    today_et,
+)
 
 router = APIRouter()
 
@@ -288,13 +294,16 @@ def submit_scenario(
                 choice_ids = {
                     choice.get("id") for choice in choices if isinstance(choice, dict)
                 }
-                if body.selected_choice_id not in choice_ids:
+                # "Not sure" (M8.5C) skips the membership check — it is not one
+                # of the scenario's choices by design — and grades as a miss.
+                is_unsure = is_unsure_choice(body.selected_choice_id)
+                if not is_unsure and body.selected_choice_id not in choice_ids:
                     raise HTTPException(
                         status.HTTP_422_UNPROCESSABLE_ENTITY,
                         "choice is not present on this scenario",
                     )
-                is_correct = body.selected_choice_id == correct_choice_id
-                is_acceptable = body.selected_choice_id in acceptable_ids
+                is_correct = not is_unsure and body.selected_choice_id == correct_choice_id
+                is_acceptable = not is_unsure and body.selected_choice_id in acceptable_ids
 
                 profile = _lock_profile(cur, user_id)
                 cur.execute(
@@ -313,19 +322,26 @@ def submit_scenario(
                 cur.execute(
                     """
                     insert into attempts
-                        (user_id, scenario_id, is_correct, selected_choice_id)
-                    values (%s, %s, %s, %s)
+                        (user_id, scenario_id, is_correct, selected_choice_id,
+                         response_type)
+                    values (%s, %s, %s, %s, %s)
                     """,
                     (
                         user_id,
                         body.scenario_id,
                         is_correct or is_acceptable,
                         body.selected_choice_id,
+                        "unsure" if is_unsure else "answer",
                     ),
                 )
                 cur.execute(
                     LESSON_SKILL_STATS_SQL,
-                    (user_id, skill_tag, 1 if (is_correct or is_acceptable) else 0),
+                    (
+                        user_id,
+                        skill_tag,
+                        1 if (is_correct or is_acceptable) else 0,
+                        1 if is_unsure else 0,
+                    ),
                 )
                 total_xp, level, streak = _update_profile_and_activity(
                     cur, user_id, profile, xp_awarded, 1
@@ -338,6 +354,7 @@ def submit_scenario(
     return {
         "is_correct": is_correct,
         "is_acceptable": is_acceptable,
+        "is_unsure": is_unsure,
         "xp_awarded": xp_awarded,
         "correct_choice_id": correct_choice_id,
         "explanation": scenario_json.get("explanation", ""),
@@ -354,7 +371,8 @@ def skill_stats(user_id: str = Depends(current_user_id)) -> list[dict[str, Any]]
         with conn.cursor() as cur:
             cur.execute(
                 """
-                select skill_tag, total_attempts, correct_attempts
+                select skill_tag, total_attempts, correct_attempts,
+                       unsure_attempts
                 from skill_stats where user_id = %s order by skill_tag
                 """,
                 (user_id,),
@@ -366,6 +384,9 @@ def skill_stats(user_id: str = Depends(current_user_id)) -> list[dict[str, Any]]
             "skill_tag": row[0],
             "total_attempts": row[1],
             "correct_attempts": row[2],
+            # M8.5C: the subset the player answered "Not sure".  A knowledge gap
+            # reads differently from a confident error and M11 needs both.
+            "unsure_attempts": row[3],
         }
         for row in rows
     ]
@@ -462,13 +483,16 @@ def submit_table_scenario(
                 choice_ids = {
                     choice.get("id") for choice in choices if isinstance(choice, dict)
                 }
-                if body.selected_choice_id not in choice_ids:
+                is_unsure = is_unsure_choice(body.selected_choice_id)
+                if not is_unsure and body.selected_choice_id not in choice_ids:
                     raise HTTPException(
                         status.HTTP_422_UNPROCESSABLE_ENTITY,
                         "choice is not present on this table scenario",
                     )
-                is_correct = body.selected_choice_id == correct_choice_id
-                is_acceptable = body.selected_choice_id in (acceptable_ids or [])
+                is_correct = not is_unsure and body.selected_choice_id == correct_choice_id
+                is_acceptable = not is_unsure and body.selected_choice_id in (
+                    acceptable_ids or []
+                )
 
                 profile = _lock_profile(cur, user_id)
                 cur.execute(
@@ -487,19 +511,26 @@ def submit_table_scenario(
                 cur.execute(
                     """
                     insert into attempts
-                        (user_id, table_scenario_id, is_correct, selected_choice_id)
-                    values (%s, %s, %s, %s)
+                        (user_id, table_scenario_id, is_correct,
+                         selected_choice_id, response_type)
+                    values (%s, %s, %s, %s, %s)
                     """,
                     (
                         user_id,
                         body.scenario_id,
                         is_correct or is_acceptable,
                         body.selected_choice_id,
+                        "unsure" if is_unsure else "answer",
                     ),
                 )
                 cur.execute(
                     LESSON_SKILL_STATS_SQL,
-                    (user_id, skill_tag, 1 if (is_correct or is_acceptable) else 0),
+                    (
+                        user_id,
+                        skill_tag,
+                        1 if (is_correct or is_acceptable) else 0,
+                        1 if is_unsure else 0,
+                    ),
                 )
                 total_xp, level, streak = _update_profile_and_activity(
                     cur, user_id, profile, xp_awarded, 1
@@ -512,6 +543,7 @@ def submit_table_scenario(
     return {
         "is_correct": is_correct,
         "is_acceptable": is_acceptable,
+        "is_unsure": is_unsure,
         "xp_awarded": xp_awarded,
         "correct_choice_id": correct_choice_id,
         "explanation": explanation,

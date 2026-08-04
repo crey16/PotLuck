@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import type { DrillQuestion, Explain, OptionValue, ViewBlock } from "@/lib/drill/contract";
+import { UNSURE, type DrillQuestion, type Explain, type OptionValue, type ViewBlock } from "@/lib/drill/contract";
 import { gradeAnswer, isRight } from "@/lib/drill/grade";
+import { UNSURE_FEEDBACK, UNSURE_KEY, UNSURE_VERDICT } from "@/lib/drill/unsureUi";
+import { NotSureOption } from "@/components/ui/NotSureOption";
 import { Felt, Seat, Divider } from "@/components/ui/Felt";
 import { PlayingCard } from "@/components/ui/PlayingCard";
 import { MoneyStrip } from "@/components/ui/MoneyStrip";
@@ -110,7 +112,12 @@ export interface DrillPlayerProps {
   question: DrillQuestion;
   /** The session run AFTER this answer landed — shown in the feedback bar. */
   run: number;
-  /** Fired once per question, with whether it counted as right. */
+  /**
+   * Fired once per question, with whether it counted as right. `chosen` is
+   * `UNSURE` when the player said so — the caller grades it through
+   * `gradeAnswer` rather than inferring from `right`, because "wrong" and
+   * "unsure" are both `right === false` and mean different things.
+   */
   onAnswered: (chosen: OptionValue, right: boolean) => void;
   onNext: () => void;
 }
@@ -138,6 +145,11 @@ export function DrillPlayer({ question, run, onAnswered, onNext }: DrillPlayerPr
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       if (!answered) {
+        if (e.key === UNSURE_KEY) {
+          e.preventDefault();
+          handleAnswer(UNSURE);
+          return;
+        }
         const idx = Number(e.key) - 1;
         if (Number.isInteger(idx) && idx >= 0 && idx < question.options.length) {
           e.preventDefault();
@@ -153,7 +165,9 @@ export function DrillPlayer({ question, run, onAnswered, onNext }: DrillPlayerPr
   }, [answered, question, handleAnswer, onNext]);
 
   const grade = answered ? gradeAnswer(question, chosen) : null;
-  const ok = grade !== null && grade !== "wrong";
+  // Not `grade !== "wrong"`: "unsure" is also not right (M8.5C).
+  const ok = grade === "correct" || grade === "acceptable";
+  const unsure = grade === "unsure";
 
   const chosenLabel = answered
     ? question.options.find((o) => o.value === chosen)?.label
@@ -204,13 +218,25 @@ export function DrillPlayer({ question, run, onAnswered, onNext }: DrillPlayerPr
         })}
       </div>
 
+      <NotSureOption
+        answered={answered}
+        picked={unsure}
+        onClick={() => handleAnswer(UNSURE)}
+      />
+
       {answered && (
-        <div className={`fb${ok ? "" : " no"}`}>
+        <div className={`fb${ok ? "" : " no"}${unsure ? " unsure" : ""}`}>
           <div className="bar">
             <span className="glyph">
               {ok ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M20 6L9 17l-5-5" />
+                </svg>
+              ) : unsure ? (
+                // A question mark, not a cross: an unsure answer is a gap, and
+                // the verdict must not read as "you believed the wrong thing".
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9.1 9a3 3 0 1 1 4.2 2.7c-.8.4-1.3 1.2-1.3 2.1v.4M12 17.5h.01" />
                 </svg>
               ) : (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -219,14 +245,24 @@ export function DrillPlayer({ question, run, onAnswered, onNext }: DrillPlayerPr
               )}
             </span>
             <span className="word">
-              {grade === "correct" ? "Correct" : grade === "acceptable" ? "Also fine" : "Not quite"}
+              {grade === "correct"
+                ? "Correct"
+                : grade === "acceptable"
+                  ? "Also fine"
+                  : unsure
+                    ? UNSURE_VERDICT
+                    : "Not quite"}
             </span>
             <span className="xp">
               {ok
                 ? "+10 XP"
-                : chosenLabel && correctLabel
-                  ? `You picked ${chosenLabel} · answer ${correctLabel}`
-                  : ""}
+                : unsure
+                  ? correctLabel
+                    ? `${UNSURE_FEEDBACK} · answer ${correctLabel}`
+                    : UNSURE_FEEDBACK
+                  : chosenLabel && correctLabel
+                    ? `You picked ${chosenLabel} · answer ${correctLabel}`
+                    : ""}
             </span>
             <span className="run">{ok ? `Run ${run}` : "Run reset"}</span>
           </div>

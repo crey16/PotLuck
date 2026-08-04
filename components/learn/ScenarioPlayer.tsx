@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { OptionButton, type OptionButtonState } from "../ui/OptionButton";
+import { NotSureOption } from "../ui/NotSureOption";
+import { UNSURE } from "../../lib/drill/contract";
+import { UNSURE_KEY, UNSURE_VERDICT } from "../../lib/drill/unsureUi";
 import { completeDaily, getScenario, submitScenario } from "../../lib/learn/api";
 import type {
   AuthoredScenario,
@@ -25,6 +28,7 @@ export function ScenarioPlayer({ initialScenario, filters, daily }: ScenarioPlay
   const [nextPending, setNextPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const content = scenario.scenario_json;
+  const unsure = selectedId === UNSURE;
 
   const claimDaily = useCallback(async () => {
     if (!daily || dailyResult) return dailyResult;
@@ -86,6 +90,11 @@ export function ScenarioPlayer({ initialScenario, filters, daily }: ScenarioPlay
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       if (!result && !pending) {
+        if (event.key === UNSURE_KEY) {
+          event.preventDefault();
+          void handleAnswer(UNSURE);
+          return;
+        }
         const index = Number(event.key) - 1;
         const choice = content.choices[index];
         if (choice) {
@@ -150,11 +159,17 @@ export function ScenarioPlayer({ initialScenario, filters, daily }: ScenarioPlay
         })}
       </div>
 
+      <NotSureOption
+        answered={pending || result !== null}
+        picked={unsure}
+        onClick={() => void handleAnswer(UNSURE)}
+      />
+
       {result && (
-        <div className={`fb${result.is_correct || result.is_acceptable ? "" : " no"}`}>
+        <div className={`fb${result.is_correct || result.is_acceptable ? "" : " no"}${unsure ? " unsure" : ""}`}>
           <div className="bar">
-            <span className="glyph">{result.is_correct || result.is_acceptable ? "✓" : "×"}</span>
-            <span className="word">{result.is_correct ? "Correct" : result.is_acceptable ? "Also fine" : "Not quite"}</span>
+            <span className="glyph">{result.is_correct || result.is_acceptable ? "✓" : unsure ? "?" : "×"}</span>
+            <span className="word">{result.is_correct ? "Correct" : result.is_acceptable ? "Also fine" : unsure ? UNSURE_VERDICT : "Not quite"}</span>
             <span className="xp">+{result.xp_awarded + (dailyResult?.xp_awarded ?? 0)} XP</span>
           </div>
           <div className="body scenario-feedback">

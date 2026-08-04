@@ -8,6 +8,7 @@ from api.scenarios import (
     et_day_start_utc,
     scenario_xp,
 )
+from api.progress import UNSURE_CHOICE_ID, is_unsure_choice
 
 
 @pytest.mark.parametrize(
@@ -38,3 +39,17 @@ def test_et_day_start_uses_new_york_not_utc_midnight():
     assert got == datetime.datetime(
         2026, 7, 30, 4, 0, tzinfo=datetime.timezone.utc
     )
+
+
+# ---------- M8.5C: "Not sure" ----------
+
+
+def test_an_unsure_submission_is_a_valid_request_body():
+    body = ScenarioSubmitIn(scenario_id=1, selected_choice_id=UNSURE_CHOICE_ID)
+    assert is_unsure_choice(body.selected_choice_id)
+
+
+def test_unsure_earns_no_scenario_xp():
+    """`submit_scenario` grades unsure as neither correct nor acceptable, so
+    the XP rule it feeds must award nothing on a first attempt too."""
+    assert scenario_xp(False, False, False) == 0

@@ -14,7 +14,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from api.db import get_connection
 from api.deps import current_user_id
-from api.progress import et_day_start_utc, next_streak, recalc_level, today_et
+from api.progress import (
+    et_day_start_utc,
+    is_unsure_choice,
+    next_streak,
+    recalc_level,
+    today_et,
+)
 
 router = APIRouter()
 
@@ -38,12 +44,17 @@ class LessonCompleteIn(BaseModel):
     lesson_id: int = Field(gt=0)
 
 
+# Params: (user_id, skill_tag, 1 if correct else 0, 1 if unsure else 0).
+# The unsure column arrived with M8.5C; every call site passes it explicitly so
+# a new one cannot forget and silently lose the signal.
 LESSON_SKILL_STATS_SQL = """
-    insert into skill_stats (user_id, skill_tag, total_attempts, correct_attempts)
-    values (%s, %s, 1, %s)
+    insert into skill_stats
+        (user_id, skill_tag, total_attempts, correct_attempts, unsure_attempts)
+    values (%s, %s, 1, %s, %s)
     on conflict (user_id, skill_tag) do update
     set total_attempts   = skill_stats.total_attempts + 1,
-        correct_attempts = skill_stats.correct_attempts + excluded.correct_attempts
+        correct_attempts = skill_stats.correct_attempts + excluded.correct_attempts,
+        unsure_attempts  = skill_stats.unsure_attempts + excluded.unsure_attempts
 """
 
 
@@ -134,6 +145,10 @@ def grade_lesson_screen(
 
     Raises ValueError for malformed content or an index that does not point to
     an answerable screen. The route maps that to a 422 response.
+
+    "Not sure" (M8.5C) still validates the screen — a malformed lesson or an
+    unanswerable index is an error however the player responded — but is graded
+    incorrect without being required to name a choice.
     """
     if not isinstance(content_json, dict):
         raise ValueError("lesson content is invalid")
@@ -151,6 +166,8 @@ def grade_lesson_screen(
         for choice in choices
         if isinstance(choice, dict) and isinstance(choice.get("id"), str)
     }
+    if is_unsure_choice(selected_choice_id):
+        return False, lesson_skill_tags(content_json)
     if selected_choice_id not in choice_ids:
         raise ValueError("choice is not present on this screen")
     correct_choice_id = screen.get("correct_choice_id")
@@ -274,12 +291,13 @@ def record_lesson_attempt(body: LessonAttemptIn, user_id: str) -> dict[str, Any]
                         status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)
                     ) from exc
 
+                is_unsure = is_unsure_choice(body.selected_choice_id)
                 cur.execute(
                     """
                     insert into attempts
                         (user_id, lesson_id, lesson_screen_index, is_correct,
-                         selected_choice_id)
-                    values (%s, %s, %s, %s, %s)
+                         selected_choice_id, response_type)
+                    values (%s, %s, %s, %s, %s, %s)
                     returning id, created_at
                     """,
                     (
@@ -288,13 +306,14 @@ def record_lesson_attempt(body: LessonAttemptIn, user_id: str) -> dict[str, Any]
                         body.screen_index,
                         is_correct,
                         body.selected_choice_id,
+                        "unsure" if is_unsure else "answer",
                     ),
                 )
                 attempt_id, created_at = cur.fetchone()
                 for tag in skill_tags:
                     cur.execute(
                         LESSON_SKILL_STATS_SQL,
-                        (user_id, tag, 1 if is_correct else 0),
+                        (user_id, tag, 1 if is_correct else 0, 1 if is_unsure else 0),
                     )
         except Exception:
             conn.rollback()
@@ -307,6 +326,7 @@ def record_lesson_attempt(body: LessonAttemptIn, user_id: str) -> dict[str, Any]
         "screen_index": body.screen_index,
         "selected_choice_id": body.selected_choice_id,
         "is_correct": is_correct,
+        "response_type": "unsure" if is_unsure else "answer",
         "skill_tags": skill_tags,
         "created_at": created_at,
     }

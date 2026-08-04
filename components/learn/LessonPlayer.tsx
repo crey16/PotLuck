@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { OptionButton, type OptionButtonState } from "../ui/OptionButton";
+import { NotSureOption } from "../ui/NotSureOption";
 import { LessonMarkdown } from "./LessonMarkdown";
+import { UNSURE } from "../../lib/drill/contract";
+import { UNSURE_KEY, UNSURE_VERDICT } from "../../lib/drill/unsureUi";
 import { completeDaily, completeLesson, recordLessonAttempt } from "../../lib/learn/api";
 import { formatLessonTime, lessonTypeLabel } from "../../lib/learn/content";
 import type {
@@ -49,6 +52,7 @@ export function LessonPlayer({
   const screens = lesson.content.screens;
   const screen = screens[screenIndex];
   const answered = selectedId !== null && answerCorrect !== null;
+  const unsure = answered && selectedId === UNSURE;
   const canContinue =
     screen.type === "info" ||
     screen.type === "recap" ||
@@ -130,6 +134,11 @@ export function LessonPlayer({
         !answered &&
         !answerPending
       ) {
+        if (event.key === UNSURE_KEY) {
+          event.preventDefault();
+          void handleSelect(UNSURE);
+          return;
+        }
         const optionIndex = Number(event.key) - 1;
         const choice = screen.choices?.[optionIndex];
         if (choice) {
@@ -234,11 +243,21 @@ export function LessonPlayer({
             </div>
           )}
 
+          {(screen.type === "question" || screen.type === "drill") && (
+            <NotSureOption
+              answered={answerPending || answered}
+              picked={unsure}
+              onClick={() => void handleSelect(UNSURE)}
+            />
+          )}
+
           {answered && (screen.type === "question" || screen.type === "drill") && (
-            <div className={`fb${answerCorrect ? "" : " no"}`}>
+            <div className={`fb${answerCorrect ? "" : " no"}${unsure ? " unsure" : ""}`}>
               <div className="bar">
-                <span className="glyph">{answerCorrect ? "✓" : "×"}</span>
-                <span className="word">{answerCorrect ? "Correct" : "Not quite"}</span>
+                <span className="glyph">{answerCorrect ? "✓" : unsure ? "?" : "×"}</span>
+                <span className="word">
+                  {answerCorrect ? "Correct" : unsure ? UNSURE_VERDICT : "Not quite"}
+                </span>
                 <span className="xp">
                   {!answerCorrect && correctChoice ? `Answer: ${correctChoice.label}` : "Attempt saved"}
                 </span>
@@ -246,10 +265,14 @@ export function LessonPlayer({
               <div className="body">
                 <p style={{ margin: 0 }}>
                   {screen.type === "drill" && !answerCorrect
-                    ? "Try it again before moving on."
+                    ? unsure
+                      ? "Read the answer above, then take it again — a drill screen only clears on a correct answer."
+                      : "Try it again before moving on."
                     : answerCorrect
                       ? "Good. Keep the decision rule, not just this answer."
-                      : "Review the answer, then continue—the lesson will reinforce it."}
+                      : unsure
+                        ? "Saying so is the right call. Read the answer, then continue — the lesson reinforces it."
+                        : "Review the answer, then continue—the lesson will reinforce it."}
                 </p>
               </div>
             </div>

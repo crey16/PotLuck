@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { gradeAnswer } from "./grade";
-import type { DrillQuestion } from "./contract";
+import { gradeAnswer, isRight } from "./grade";
+import { UNSURE, responseTypeFor, type DrillQuestion } from "./contract";
 
 function q(over: Partial<DrillQuestion> = {}): DrillQuestion {
   return {
@@ -57,4 +57,31 @@ test("isRight: correct and acceptable both count as right for scoring", async ()
   assert.equal(isRight(q(), "r"), true);
   assert.equal(isRight(q({ acceptable: ["c"] }), "c"), true);
   assert.equal(isRight(q(), "f"), false);
+});
+
+/* ---------- M8.5C: "Not sure" ---------- */
+
+test("gradeAnswer: UNSURE grades as 'unsure', not 'wrong'", () => {
+  assert.equal(gradeAnswer(q(), UNSURE), "unsure");
+});
+
+test("gradeAnswer: UNSURE stays 'unsure' even if a generator listed it as acceptable", () => {
+  assert.equal(gradeAnswer(q({ acceptable: [UNSURE] }), UNSURE), "unsure");
+});
+
+test("isRight: an unsure answer is not right", () => {
+  assert.equal(isRight(q(), UNSURE), false);
+});
+
+test("isRight: correct and acceptable are both right; a wrong pick is not", () => {
+  assert.equal(isRight(q({ acceptable: ["c"] }), "r"), true);
+  assert.equal(isRight(q({ acceptable: ["c"] }), "c"), true);
+  assert.equal(isRight(q({ acceptable: ["c"] }), "f"), false);
+});
+
+test("responseTypeFor: only UNSURE maps to 'unsure'", () => {
+  assert.equal(responseTypeFor(UNSURE), "unsure");
+  assert.equal(responseTypeFor("r"), "answer");
+  assert.equal(responseTypeFor(0), "answer");
+  assert.equal(responseTypeFor("__unsure"), "answer");
 });

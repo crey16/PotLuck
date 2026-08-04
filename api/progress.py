@@ -13,6 +13,31 @@ from zoneinfo import ZoneInfo
 
 ET = ZoneInfo("America/New_York")
 
+# M8.5C: the choice id a client sends for "Not sure".  Authored content —
+# lessons, scenarios, table scenarios — is graded by matching the submitted id
+# against the screen's own choices, so the sentinel has to be recognised before
+# that membership check or an honest "I don't know" would 422.
+#
+# Must equal `UNSURE` in lib/drill/contract.ts; test_unsure_matches_typescript.py
+# pins the two together.  Namespaced because authored choice ids are short
+# hand-written strings like "call" or "fold".
+UNSURE_CHOICE_ID = "__unsure__"
+
+
+def is_unsure_choice(selected_choice_id: str) -> bool:
+    """True when the player said they did not know rather than choosing."""
+    return selected_choice_id == UNSURE_CHOICE_ID
+
+
+def graded_correct(is_correct: bool, response_type: str) -> bool:
+    """Re-grade a client-reported result against its response type.
+
+    "Not sure" is never correct, however the request describes it. Deciding
+    that here rather than trusting `is_correct` means no call site can earn XP
+    for a shrug, and a stored attempt can never contradict its response_type.
+    """
+    return False if response_type == "unsure" else is_correct
+
 
 def today_et(now: datetime.datetime | None = None) -> datetime.date:
     """The current date in America/New_York — the ONLY place day boundaries

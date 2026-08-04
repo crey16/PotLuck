@@ -58,6 +58,29 @@ export interface Explain {
 export type OptionValue = string | number;
 export interface DrillOption { label: string; value: OptionValue }
 
+/**
+ * The value a player submits when they do not know (M8.5C).
+ *
+ * It is deliberately NOT a member of `DrillQuestion.options`. Every generator
+ * would otherwise have to remember to append it, and one that forgot would
+ * silently lose the affordance for that drill; worse, `buildOpts` and the
+ * anti-repeat signature both walk the option list and would have to learn to
+ * skip it. Instead the renderer offers it beside the real choices, visually
+ * separated, for every question — see `components/ui/NotSureOption.tsx`.
+ *
+ * The string is namespaced because `OptionValue` includes plain strings and a
+ * preflop drill's option values are action names like "raise".
+ */
+export const UNSURE = "__unsure__";
+
+/** What kind of response an attempt carried. Mirrors `attempts.response_type`. */
+export type ResponseType = "answer" | "unsure";
+
+export const isUnsureValue = (chosen: OptionValue): boolean => chosen === UNSURE;
+
+export const responseTypeFor = (chosen: OptionValue): ResponseType =>
+  isUnsureValue(chosen) ? "unsure" : "answer";
+
 export interface DrillQuestion {
   kind: DrillKind;
   /** Small caps label, e.g. "Counting outs". */

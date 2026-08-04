@@ -13,6 +13,7 @@ from api.learning import (
     lesson_skill_tags,
     lesson_xp_reward,
 )
+from api.progress import UNSURE_CHOICE_ID
 
 
 CONTENT = {
@@ -108,3 +109,38 @@ def test_lesson_reward_is_read_from_content_and_bounded():
 )
 def test_recommendation_difficulty_thresholds(correct: int, total: int, expected: int):
     assert difficulty_for_accuracy(correct, total) == expected
+
+
+# ---------- M8.5C: "Not sure" ----------
+
+
+def test_grade_accepts_the_unsure_sentinel_and_grades_it_incorrect():
+    """It is not one of the screen's choices by design, so it must not 422."""
+    correct, tags = grade_lesson_screen(CONTENT, 1, UNSURE_CHOICE_ID)
+    assert correct is False
+    assert tags == ["pot_odds", "position"]
+
+
+@pytest.mark.parametrize("index", [0, 2])
+def test_unsure_still_rejects_a_non_answerable_or_missing_screen(index: int):
+    """The sentinel bypasses the choice check, not the content validation."""
+    with pytest.raises(ValueError):
+        grade_lesson_screen(CONTENT, index, UNSURE_CHOICE_ID)
+
+
+def test_unsure_still_rejects_malformed_lesson_content():
+    with pytest.raises(ValueError):
+        grade_lesson_screen(None, 1, UNSURE_CHOICE_ID)
+    with pytest.raises(ValueError):
+        grade_lesson_screen(
+            {"screens": [{"type": "question", "content": "x", "choices": "nope"}]},
+            0,
+            UNSURE_CHOICE_ID,
+        )
+
+
+def test_a_lesson_attempt_may_carry_the_sentinel_choice_id():
+    body = LessonAttemptIn(
+        lesson_id=1, screen_index=1, selected_choice_id=UNSURE_CHOICE_ID
+    )
+    assert body.selected_choice_id == UNSURE_CHOICE_ID

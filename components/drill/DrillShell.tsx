@@ -9,7 +9,7 @@ import {
   emptyWindows,
   mergeSeededWindows,
   nextLevel,
-  pushResult,
+  pushOutcome,
   seededLevels,
   type DrillWindows,
   type Levels,
@@ -18,8 +18,10 @@ import { mulberry32 } from "@/lib/drill/rng";
 import { generateFresh, pushSignature, questionSignature } from "@/lib/drill/antirepeat";
 import { fetchDrillState } from "@/lib/drill/drillState";
 import {
+  responseTypeFor,
   type DrillKind, type DrillLevel, type DrillQuestion, type OppMode, type OptionValue,
 } from "@/lib/drill/contract";
+import { gradeAnswer } from "@/lib/drill/grade";
 import { recordAttempt } from "@/lib/drill/recordAttempt";
 import type { KindStat } from "@/lib/drill/serverStats";
 
@@ -223,7 +225,11 @@ export function DrillShell({
       };
 
       // Difficulty is recomputed once per answer, from that kind's own window.
-      const nextWindow = pushResult(windows[kind] ?? [], ok);
+      // `pushOutcome`, not `pushResult`: an unsure answer leaves the window
+      // alone so it can neither demote the drill nor be farmed for easier
+      // questions. See lib/drill/difficulty.ts.
+      const grade = gradeAnswer(question, chosen);
+      const nextWindow = pushOutcome(windows[kind] ?? [], grade);
       setWindows((w) => ({ ...w, [kind]: nextWindow }));
       setLevels((prev) => ({ ...prev, [kind]: nextLevel(nextWindow, prev[kind] ?? 1) }));
 
@@ -249,7 +255,13 @@ export function DrillShell({
 
       // The layout header owns XP/streak display now; the write still has to
       // land, but there is nothing to show from the response.
-      void recordAttempt({ kind, payload: question.payload, answer: chosen, correct: ok });
+      void recordAttempt({
+        kind,
+        payload: question.payload,
+        answer: chosen,
+        correct: ok,
+        responseType: responseTypeFor(chosen),
+      });
     },
     [live, windows, run]
   );
@@ -508,6 +520,10 @@ export function DrillShell({
                 <span className="keycap">1</span>
                 <span className="keycap">4</span>
                 pick an answer
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="keycap">0</span>
+                not sure
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span className="keycap">N</span>

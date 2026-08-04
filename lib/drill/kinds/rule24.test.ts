@@ -193,12 +193,15 @@ test("rule24: face-up mode explains which outs were dead", () => {
   let checked = 0;
   for (let seed = 1; seed <= 400 && checked < 3; seed++) {
     const q = generateRule24({ level: 3, oppMode: "shown", rng: mulberry32(seed) });
-    const { spot } = q.payload as { spot: Spot };
     const notes = q.explain(q.answer).notes;
     const dead = notes.find((n) => /^Dead outs/.test(n.title ?? ""));
     if (!dead) continue;
     checked++;
     assert.equal(dead.tone, "warn");
+    // The cards are named, not just counted — a wrong count has to be
+    // traceable to the specific card the player should not have counted.
+    assert.match(dead.title!, /^Dead outs \(\d+\)\.$/);
+    assert.match(dead.text, /gives you .* but hands them /);
   }
   assert.ok(checked > 0, "no dead outs surfaced in 400 face-up seeds");
 });

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  nextLevel, pushResult, emptyWindows, levelFromHistory, mergeSeededWindows, seededLevels, WINDOW_SIZE,
+  nextLevel, pushResult, pushOutcome, emptyWindows, levelFromHistory, mergeSeededWindows, seededLevels, WINDOW_SIZE,
 } from "./difficulty";
 import { DRILL_KINDS } from "./contract";
 import { mulberry32 } from "./rng";
@@ -184,4 +184,45 @@ test("seededLevels: returns a level for every kind, ready to deal from", () => {
   for (const kind of DRILL_KINDS) {
     assert.ok(levels[kind]! >= 1 && levels[kind]! <= 3, `${kind} has a usable level`);
   }
+});
+
+/* ---------- M8.5C: "Not sure" must not move difficulty ---------- */
+
+test("pushOutcome: a correct or acceptable answer is recorded as a hit", () => {
+  assert.deepEqual(pushOutcome([], "correct"), [true]);
+  assert.deepEqual(pushOutcome([], "acceptable"), [true]);
+});
+
+test("pushOutcome: a wrong answer is recorded as a miss", () => {
+  assert.deepEqual(pushOutcome([], "wrong"), [false]);
+});
+
+test("pushOutcome: an unsure answer is not recorded at all", () => {
+  assert.deepEqual(pushOutcome([], "unsure"), []);
+  assert.deepEqual(pushOutcome([true, false], "unsure"), [true, false]);
+});
+
+test("pushOutcome: unsure answers can never demote a drill", () => {
+  // Ten confident misses in a row would demote; ten shrugs must not.
+  let window: boolean[] = [];
+  for (let i = 0; i < 10; i++) window = pushOutcome(window, "unsure");
+  assert.equal(window.length, 0);
+  assert.equal(nextLevel(window, 3), 3);
+});
+
+test("pushOutcome: unsure answers cannot be farmed to reach easier questions", () => {
+  // A level-3 player at exactly the demotion boundary stays there however many
+  // times they say "Not sure" — the window they are judged on does not change.
+  const atBoundary = [...rep(5, true), ...rep(5, false)];
+  let window = atBoundary;
+  const before = nextLevel(window, 3);
+  for (let i = 0; i < 20; i++) window = pushOutcome(window, "unsure");
+  assert.deepEqual(window, atBoundary);
+  assert.equal(nextLevel(window, 3), before);
+});
+
+test("pushOutcome: unsure answers also cannot promote", () => {
+  let window = rep(9, true);
+  for (let i = 0; i < 5; i++) window = pushOutcome(window, "unsure");
+  assert.equal(window.length, 9);
 });
