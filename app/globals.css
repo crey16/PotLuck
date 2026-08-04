@@ -1321,3 +1321,41 @@ img { display: block; max-width: 100%; }
 }
 .scen:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
 .scen.on { border-color: var(--color-accent); background: var(--color-accent); color: var(--color-bg); }
+
+/* — play table: seats (M10B) —
+   The four uninvolved seats render dimmed rather than hidden: in a BTN-vs-BB
+   single-raised pot they genuinely folded preflop, so showing them is the
+   truth about the hand. */
+.pt-seat {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  transition: opacity .2s ease;
+}
+.pt-seat-cards { display: flex; gap: 3px; }
+.pt-seat-plate {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 5px 10px; min-width: 74px;
+  border: 1px solid var(--color-divider); border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.pt-seat.active .pt-seat-plate {
+  border-color: var(--color-accent); box-shadow: var(--lift);
+}
+.pt-seat.hero .pt-seat-plate {
+  border-left-width: 3px; border-left-color: var(--color-accent);
+}
+.pt-seat.folded { opacity: .38; }
+.pt-seat-pos {
+  font-family: var(--font-heading); font-weight: 600; font-size: 11px;
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.pt-seat-stack {
+  font-family: var(--font-mono); font-size: 11px;
+  color: color-mix(in srgb, var(--color-text) 62%, transparent);
+}
+.pt-dealer {
+  position: absolute; top: -6px; right: -10px;
+  width: 19px; height: 19px; display: grid; place-items: center;
+  border-radius: 50%; background: var(--color-text); color: var(--surface);
+  font-family: var(--font-heading); font-weight: 600; font-size: 10px;
+}
