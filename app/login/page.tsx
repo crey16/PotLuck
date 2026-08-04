@@ -150,6 +150,8 @@ function LoginForm() {
 
   return (
     <main className="auth-layout">
+      {/* Fixed, so it is out of flow and never becomes a grid item. */}
+      <div className="auth-mesh" aria-hidden="true" />
       <div>
         <div className="mono-label accent" style={{ letterSpacing: ".14em", marginBottom: "var(--space-3)" }}>
           Poker math trainer
