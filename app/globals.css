@@ -1328,6 +1328,7 @@ img { display: block; max-width: 100%; }
    truth about the hand. */
 .pt-seat {
   position: absolute; transform: translate(-50%, -50%);
+  left: var(--seat-left); top: var(--seat-top);
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   transition: opacity .2s ease;
 }
@@ -1400,6 +1401,9 @@ img { display: block; max-width: 100%; }
 @container (max-width: 620px) {
   .pt-oval { aspect-ratio: 1 / 1; border-radius: 40% / 34%; }
   .pt-seat-plate { min-width: 58px; padding: 4px 7px; }
+  /* Pull the side columns toward the centre: at phone widths a seat's cards
+     are wide enough to hang off the felt at the full 12%/88% spread. */
+  .pt-seat { left: calc(50% + (var(--seat-left) - 50%) * 0.7); }
 }
 
 /* — play table: action bar — */

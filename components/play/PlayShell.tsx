@@ -601,7 +601,8 @@ export function PlayShell({ seed }: PlayShellProps) {
     }
   }, [persistenceMode]);
 
-  // Keyboard: 1..n pick an action, Enter/N continue or next hand.
+  // Keyboard: 1..n pick an action, F/C fold or check-call, Enter/N deal the
+  // next hand, any other key skips the remaining playback.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const t = e.target as HTMLElement | null;
@@ -984,7 +985,7 @@ export function PlayShell({ seed }: PlayShellProps) {
               BTN opens 2.5bb, BB calls — solved to &lt;0.3% pot exploitability on a
               simplified tree (one bet size per street, one raise size). Preflop is
               graded against the reference ranges; postflop against the solve.
-              EV losses are shown in dollars at $10 blinds.
+              Amounts and EV losses are shown in big blinds.
             </p>
           </div>
 
@@ -999,9 +1000,18 @@ export function PlayShell({ seed }: PlayShellProps) {
                 pick an action
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="keycap">F</span>
+                <span className="keycap">C</span>
+                fold / check-call
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span className="keycap">N</span>
                 <span className="keycap">Enter</span>
-                continue / next hand
+                next hand
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="keycap">any</span>
+                skip the animation
               </div>
             </div>
           </div>

@@ -16,8 +16,9 @@ export interface TableSeatProps {
   isActive?: boolean;
   /** Dimmed: folded preflop and not part of this spot. */
   isFolded?: boolean;
-  /** Absolute placement on the oval, as a percentage. */
-  style?: CSSProperties;
+  /** Placement on the oval, as a percentage of the table box. */
+  left: number;
+  top: number;
 }
 
 /**
@@ -41,7 +42,8 @@ export function TableSeat({
   isDealer = false,
   isActive = false,
   isFolded = false,
-  style,
+  left,
+  top,
 }: TableSeatProps) {
   const classes = [
     "pt-seat",
@@ -52,8 +54,13 @@ export function TableSeat({
     .filter(Boolean)
     .join(" ");
 
+  // Placement travels as custom properties, not as `left`/`top` directly, so
+  // the narrow-container rule can pull the side columns inward — an inline
+  // left/top would beat any stylesheet and the seats would spill off the felt.
+  const placement = { "--seat-left": `${left}%`, "--seat-top": `${top}%` } as CSSProperties;
+
   return (
-    <div className={classes} style={style}>
+    <div className={classes} style={placement}>
       {cards.length > 0 && (
         <div className="pt-seat-cards">
           {cards.map((c) => (

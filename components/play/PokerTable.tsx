@@ -91,7 +91,8 @@ export function PokerTable({
                 (isVillain && activeSeat === "villain")
               }
               isFolded={!involved}
-              style={{ left: `${slot.left}%`, top: `${slot.top}%` }}
+              left={slot.left}
+              top={slot.top}
             />
           );
         })}
