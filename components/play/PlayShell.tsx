@@ -19,7 +19,6 @@ import { VerdictFlash } from "./VerdictFlash";
 import { useHandDirector } from "./useHandDirector";
 import { beatsFor } from "@/lib/play/beats";
 import { actionLabelBb } from "@/lib/play/labels";
-import { money } from "@/lib/drill/opts";
 import { mulberry32 } from "@/lib/drill/rng";
 import { whoIsAhead, type Card } from "@/lib/poker/engine";
 import {
@@ -35,7 +34,8 @@ import {
   type PlaySession,
 } from "@/lib/play/api";
 import { fetchManifest, fetchSolve, handId, pickHand, SPOT } from "@/lib/play/load";
-import { moneyExact, parseAction, signedMoneyExact } from "@/lib/play/actions";
+import { parseAction } from "@/lib/play/actions";
+import { bb, signedBb } from "@/lib/play/units";
 import { preflopDecision, type PreflopDecision } from "@/lib/play/preflop";
 import {
   awaitingHero, boardFrom, handOver, holeCards, potAfter, timeline, toCallAt,
@@ -94,9 +94,9 @@ function botLine(code: string, bot: string): string {
     case "check": return `${bot} checks`;
     case "fold": return `${bot} folds`;
     case "call": return `${bot} calls`;
-    case "bet": return `${bot} bets ${money(info.to!)}`;
-    case "raise": return `${bot} raises to ${money(info.to!)}`;
-    case "allin": return `${bot} is all-in for ${money(info.to!)}`;
+    case "bet": return `${bot} bets ${bb(info.to!)}`;
+    case "raise": return `${bot} raises to ${bb(info.to!)}`;
+    case "allin": return `${bot} is all-in for ${bb(info.to!)}`;
   }
 }
 
@@ -106,9 +106,9 @@ function heroLine(code: string): string {
     case "check": return "you check";
     case "fold": return "you fold";
     case "call": return "you call";
-    case "bet": return `you bet ${money(info.to!)}`;
-    case "raise": return `you raise to ${money(info.to!)}`;
-    case "allin": return `you're all-in for ${money(info.to!)}`;
+    case "bet": return `you bet ${bb(info.to!)}`;
+    case "raise": return `you raise to ${bb(info.to!)}`;
+    case "allin": return `you're all-in for ${bb(info.to!)}`;
   }
 }
 
@@ -360,11 +360,11 @@ export function PlayShell({ seed }: PlayShellProps) {
     const tb = over.end.tb;
     const pot = potAfter(startPot, tb);
     const heroIn = PREFLOP_CONTRIBUTION + tb[inst.hero];
-    if (over.end.k === "f") return { text: `You fold — ${botName} takes ${money(pot)}`, net: -heroIn, showdown: false };
+    if (over.end.k === "f") return { text: `You fold — ${botName} takes ${bb(pot)}`, net: -heroIn, showdown: false };
     if (over.end.k === "bf") return { text: `${botName} folds — you take the pot`, net: pot - heroIn, showdown: false };
     const cmp = whoIsAhead(heroCards, botCards, board);
-    if (cmp > 0) return { text: `Showdown — you win ${money(pot)}`, net: pot - heroIn, showdown: true };
-    if (cmp < 0) return { text: `Showdown — ${botName} wins ${money(pot)}`, net: -heroIn, showdown: true };
+    if (cmp > 0) return { text: `Showdown — you win ${bb(pot)}`, net: pot - heroIn, showdown: true };
+    if (cmp < 0) return { text: `Showdown — ${botName} wins ${bb(pot)}`, net: -heroIn, showdown: true };
     return { text: "Showdown — chopped pot", net: pot / 2 - heroIn, showdown: true };
   }, [over, inst, startPot, heroCards, botCards, board, botName]);
 
@@ -372,7 +372,7 @@ export function PlayShell({ seed }: PlayShellProps) {
   const feed = useMemo(() => {
     if (!inst || !preflopDone) return [];
     const rows: string[] = [];
-    const open = inst.hero === 1 ? "you open to $25" : "BTN opens to $25";
+    const open = inst.hero === 1 ? "you open to 2.5bb" : "BTN opens to 2.5bb";
     const call = inst.hero === 1 ? "BB calls" : "you call";
     rows.push(`Preflop — ${open}, ${call}`);
     let street = 0;
@@ -690,26 +690,26 @@ export function PlayShell({ seed }: PlayShellProps) {
   const strip = (() => {
     if (over) {
       return [
-        { label: "Final pot", value: money(potAfter(startPot, over.end.tb)) },
-        { label: "Your result", value: signedMoneyExact(outcome?.net ?? 0) },
+        { label: "Final pot", value: bb(potAfter(startPot, over.end.tb)) },
+        { label: "Your result", value: signedBb(outcome?.net ?? 0) },
       ];
     }
     if (!preflopDone) {
       return [
-        { label: "Blinds", value: "$5 / $10" },
-        { label: "Effective stacks", value: money(1000) },
+        { label: "Blinds", value: "0.5 / 1bb" },
+        { label: "Effective stacks", value: bb(1000) },
       ];
     }
     if (stripNode) {
       const pot = potAfter(startPot, stripNode.tb);
       const toCall = toCallAt(stripNode, inst.hero);
       return [
-        { label: "Pot", value: money(pot) },
-        ...(toCall > 0 ? [{ label: "To call", value: money(toCall) }] : []),
-        { label: "Behind", value: money(stack - stripNode.tb[inst.hero]) },
+        { label: "Pot", value: bb(pot) },
+        ...(toCall > 0 ? [{ label: "To call", value: bb(toCall) }] : []),
+        { label: "Behind", value: bb(stack - stripNode.tb[inst.hero]) },
       ];
     }
-    return [{ label: "Pot", value: money(startPot) }];
+    return [{ label: "Pot", value: bb(startPot) }];
   })();
 
   return (
@@ -798,7 +798,7 @@ export function PlayShell({ seed }: PlayShellProps) {
                 <h2 style={{ fontSize: 26, lineHeight: 1.1, margin: "0 0 var(--space-2)" }}>
                   {inst.hero === 1
                     ? `Folded to you on the button with ${preflop.notation}.`
-                    : `BTN opens to $25. You're in the big blind with ${preflop.notation}.`}
+                    : `BTN opens to 2.5bb. You're in the big blind with ${preflop.notation}.`}
                 </h2>
                 <div className={`opts ${preflop.options.length === 2 ? "two" : "grid3"}`}>
                   {preflop.options.map((o, i) => {
@@ -867,7 +867,7 @@ export function PlayShell({ seed }: PlayShellProps) {
               <div className={`fb${(outcome.net ?? 0) >= 0 ? "" : " no"}`}>
                 <div className="bar">
                   <span className="word">{outcome.text}</span>
-                  <span className="xp">{signedMoneyExact(outcome.net)}</span>
+                  <span className="xp">{signedBb(outcome.net)}</span>
                 </div>
                 <div className="body">
                   <WorkTable>
@@ -878,7 +878,7 @@ export function PlayShell({ seed }: PlayShellProps) {
                         value={`${VERDICT_WORD[r.verdict]}${
                           r.lossDollars === null
                             ? " · EV unknown"
-                            : r.lossDollars > 0 ? ` · −${moneyExact(r.lossDollars)}` : ""
+                            : r.lossDollars > 0 ? ` · −${bb(r.lossDollars)}` : ""
                         }`}
                       />
                     ))}
@@ -929,7 +929,7 @@ export function PlayShell({ seed }: PlayShellProps) {
               </div>
               <div className="cell">
                 <div className="k">EV lost</div>
-                <div className="v">{stats.evLost > 0 ? `−${moneyExact(stats.evLost)}` : "$0"}</div>
+                <div className="v">{stats.evLost > 0 ? `−${bb(stats.evLost)}` : "0bb"}</div>
               </div>
             </div>
             <div className="foot">
