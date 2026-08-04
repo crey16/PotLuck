@@ -1428,3 +1428,33 @@ img { display: block; max-width: 100%; }
   border: 1px solid var(--color-divider); border-radius: 5px;
 }
 @media (max-width: 640px) { .pt-action { flex: 1 1 100%; } }
+
+/* — play table: verdict flash —
+   Non-blocking by construction: it is absolutely positioned over the table,
+   has pointer-events: none, and fades on a timer. Nothing waits for it. */
+.pt-flash {
+  position: absolute; left: 50%; bottom: 12%;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: 999px; border: 1px solid;
+  font-family: var(--font-heading); font-weight: 600; font-size: 13px;
+  letter-spacing: .04em; text-transform: uppercase;
+  animation: pt-flash-fade 1400ms ease-out forwards;
+  pointer-events: none;
+}
+.pt-flash.correct,
+.pt-flash.acceptable { border-color: var(--good); color: var(--good); background: var(--good-fill); }
+.pt-flash.inaccuracy { border-color: var(--warn); color: var(--warn); background: var(--warn-fill); }
+.pt-flash.blunder    { border-color: var(--crit); color: var(--crit); background: var(--crit-fill); }
+/* A blunder reads stronger and holds longer — but still never blocks. */
+.pt-flash.blunder { border-width: 2px; animation-duration: 2200ms; }
+.pt-flash-cost { font-family: var(--font-mono); font-size: 11px; }
+@keyframes pt-flash-fade {
+  0%   { opacity: 0; transform: translate(-50%, 8px); }
+  15%  { opacity: 1; transform: translate(-50%, 0); }
+  75%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pt-flash { animation: none; opacity: 1; }
+}
