@@ -15,6 +15,14 @@ const NAV = [
   // the wrong place for the thing a new player should reach for first.
   { href: "/learn", label: "Learn" },
   { href: "/drill", label: "Drill" },
+  // Play follows Drill because that is the progression: learn the decision,
+  // make the math automatic, then apply both against real solver output. It
+  // shipped in this bar in M6 and was swept into the account dropdown by the
+  // redesign-v2 pass, which was cutting a nine-item nav down to five rather
+  // than judging Play unfinished. It is the most substantial training surface
+  // in the app and the one M10 builds on; buried behind an avatar it gets no
+  // use and therefore generates no feedback about what M10 has to fix.
+  { href: "/play", label: "Play" },
   { href: "/ranges", label: "Ranges" },
   { href: "/reference", label: "Reference" },
   // `/system` is deliberately absent. It is the design-system reference —
@@ -25,7 +33,6 @@ const NAV = [
 ] as const;
 
 const ACCOUNT_NAV = [
-  { href: "/play", label: "Play" },
   { href: "/friends", label: "Friends" },
   { href: "/leaderboard", label: "Ranks" },
 ] as const;
