@@ -1346,6 +1346,16 @@ img { display: block; max-width: 100%; }
   border-left-width: 3px; border-left-color: var(--color-accent);
 }
 .pt-seat.folded { opacity: .38; }
+.pt-seat-bet {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: -20px; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 10.5px;
+  padding: 1px 7px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  background: var(--surface);
+}
+/* The hero sits at the bottom of the felt, so their bet belongs above them. */
+.pt-seat.hero .pt-seat-bet { bottom: auto; top: -20px; }
 .pt-seat-pos {
   font-family: var(--font-heading); font-weight: 600; font-size: 11px;
   letter-spacing: .1em; text-transform: uppercase;
@@ -1364,7 +1374,7 @@ img { display: block; max-width: 100%; }
 /* — play table: the oval — */
 .pt-wrap { container-type: inline-size; margin-bottom: var(--space-4); }
 .pt-oval {
-  position: relative; aspect-ratio: 16 / 9; min-height: 340px;
+  position: relative; aspect-ratio: 16 / 9; min-height: 300px; max-height: 46vh;
   border: 1px solid var(--color-divider); border-radius: 46% / 38%;
   background:
     radial-gradient(ellipse at 50% 45%,
@@ -1410,6 +1420,12 @@ img { display: block; max-width: 100%; }
 .pt-actions {
   display: flex; gap: var(--space-3); flex-wrap: wrap;
   padding-top: var(--space-4); border-top: 1px solid var(--color-divider);
+  /* The controls follow the player down the page. Without this the bar sat
+     ~150px below the fold on a laptop (~320px on a phone) and every single
+     hand began by scrolling to find your own buttons. */
+  position: sticky; bottom: 0; z-index: 5;
+  padding-bottom: var(--space-4);
+  background: var(--color-bg);
 }
 .pt-action {
   flex: 1 1 150px; display: flex; align-items: center; gap: var(--space-2);

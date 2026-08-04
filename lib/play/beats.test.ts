@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { beatsFor, BEAT_MS } from "./beats";
+import { beatsFor, streetBets, BEAT_MS } from "./beats";
 import type { HandEvent } from "./timeline";
 import type { PlayNode } from "./types";
 
@@ -147,4 +147,40 @@ test("beatsFor: is pure — the same events always produce the same beats", () =
     { type: "card", card: "2c" },
   ];
   assert.deepEqual(beatsFor(events, 1), beatsFor(events, 1));
+});
+
+test("streetBets: a bet sits in front of the seat that made it", () => {
+  const beats = beatsFor([{ type: "bot", code: "B27" }], 1);
+  assert.deepEqual(streetBets(beats), { hero: 0, villain: 27 });
+});
+
+test("streetBets: a call brings both seats level", () => {
+  const beats = beatsFor([
+    { type: "bot", code: "B27" },
+    { type: "decision", key: "", node: node({ a: ["F", "C"], tb: [27, 0] }), chosen: 1 },
+  ], 1);
+  assert.deepEqual(streetBets(beats), { hero: 27, villain: 27 });
+});
+
+test("streetBets: a new street clears what is in front of both seats", () => {
+  const beats = beatsFor([
+    { type: "bot", code: "B27" },
+    { type: "card", card: "2c" },
+  ], 1);
+  assert.deepEqual(streetBets(beats), { hero: 0, villain: 0 });
+});
+
+test("streetBets: pushing the pot clears the felt", () => {
+  const beats = beatsFor([
+    { type: "bot", code: "B27" },
+    { type: "end", key: "", end: { pre: [], tb: [27, 0], k: "bf" } },
+  ], 1);
+  assert.deepEqual(streetBets(beats), { hero: 0, villain: 0 });
+});
+
+test("streetBets: only counts beats actually revealed so far", () => {
+  const beats = beatsFor([{ type: "bot", code: "B27" }], 1);
+  // Nothing revealed yet — the felt must be empty, not pre-loaded.
+  assert.deepEqual(streetBets(beats.slice(0, 1)), { hero: 0, villain: 0 });
+  assert.deepEqual(streetBets(beats.slice(0, 2)), { hero: 0, villain: 27 });
 });

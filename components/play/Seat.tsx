@@ -16,6 +16,8 @@ export interface TableSeatProps {
   isActive?: boolean;
   /** Dimmed: folded preflop and not part of this spot. */
   isFolded?: boolean;
+  /** Chips this seat currently has in front of them on this street. */
+  betChips?: number;
   /** Placement on the oval, as a percentage of the table box. */
   left: number;
   top: number;
@@ -42,6 +44,7 @@ export function TableSeat({
   isDealer = false,
   isActive = false,
   isFolded = false,
+  betChips = 0,
   left,
   top,
 }: TableSeatProps) {
@@ -78,6 +81,9 @@ export function TableSeat({
         <span className="pt-dealer" aria-label="Dealer button">
           D
         </span>
+      )}
+      {betChips > 0 && (
+        <span className="pt-seat-bet">{bb(betChips)}</span>
       )}
     </div>
   );

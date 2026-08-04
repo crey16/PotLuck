@@ -57,6 +57,28 @@ function wager(code: string, mine: number, theirs: number): number {
   }
 }
 
+/**
+ * What each seat currently has in front of them on THIS street, from the
+ * beats revealed so far.
+ *
+ * A poker table has to show the live bet in front of the player who made it —
+ * otherwise the felt is decoration and the only place the number exists is a
+ * strip underneath the table. Wagers clear when a card comes (new street) and
+ * when the pot is pushed.
+ */
+export function streetBets(revealed: readonly Beat[]): { hero: number; villain: number } {
+  const bets = { hero: 0, villain: 0 };
+  for (const b of revealed) {
+    if (b.kind === "board" || b.kind === "pot-push") {
+      bets.hero = 0;
+      bets.villain = 0;
+    } else if (b.kind === "chips") {
+      bets[b.seat] += b.chips;
+    }
+  }
+  return bets;
+}
+
 export function beatsFor(events: readonly HandEvent[], hero: 0 | 1): Beat[] {
   const beats: Beat[] = [];
   // Street wagers, indexed [OOP, IP] to match PlayNode.tb.

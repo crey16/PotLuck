@@ -32,6 +32,8 @@ export interface PokerTableProps {
   heroStackChips: number;
   villainStackChips: number;
   activeSeat: SeatId | null;
+  /** What each seat has in front of them on the current street, in chips. */
+  bets: { hero: number; villain: number };
   /** The chips currently sliding into the pot, if any. */
   chipFlight: { seat: SeatId; chips: number } | null;
   spotLabel: string;
@@ -48,6 +50,7 @@ export function PokerTable({
   heroStackChips,
   villainStackChips,
   activeSeat,
+  bets,
   chipFlight,
   spotLabel,
 }: PokerTableProps) {
@@ -91,6 +94,7 @@ export function PokerTable({
                 (isVillain && activeSeat === "villain")
               }
               isFolded={!involved}
+              betChips={isHero ? bets.hero : isVillain ? bets.villain : 0}
               left={slot.left}
               top={slot.top}
             />

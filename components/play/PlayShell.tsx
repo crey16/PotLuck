@@ -17,7 +17,7 @@ import { ActionBar } from "./ActionBar";
 import { PokerTable } from "./PokerTable";
 import { VerdictFlash } from "./VerdictFlash";
 import { useHandDirector } from "./useHandDirector";
-import { beatsFor } from "@/lib/play/beats";
+import { beatsFor, streetBets } from "@/lib/play/beats";
 import { actionLabelBb } from "@/lib/play/labels";
 import { mulberry32 } from "@/lib/drill/rng";
 import { whoIsAhead, type Card } from "@/lib/poker/engine";
@@ -351,6 +351,11 @@ export function PlayShell({ seed }: PlayShellProps) {
       ? { seat: lastRevealed.seat, chips: lastRevealed.chips }
       : null;
 
+  // What sits in front of each seat right now, so the felt carries the bet the
+  // player is being asked to respond to.
+  const bets = useMemo(() => streetBets(revealed), [revealed]);
+  const potPushed = revealed.some((b) => b.kind === "pot-push");
+
   const heroSeat = inst?.hero === 1 ? "BTN (you)" : "BB (you)";
   const botName = inst?.hero === 1 ? "BB" : "BTN";
 
@@ -360,13 +365,29 @@ export function PlayShell({ seed }: PlayShellProps) {
     const tb = over.end.tb;
     const pot = potAfter(startPot, tb);
     const heroIn = PREFLOP_CONTRIBUTION + tb[inst.hero];
-    if (over.end.k === "f") return { text: `You fold — ${botName} takes ${bb(pot)}`, net: -heroIn, showdown: false };
-    if (over.end.k === "bf") return { text: `${botName} folds — you take the pot`, net: pot - heroIn, showdown: false };
+    if (over.end.k === "f")
+      return { text: `You fold — ${botName} takes ${bb(pot)}`, net: -heroIn, showdown: false, winner: "villain" as const };
+    if (over.end.k === "bf")
+      return { text: `${botName} folds — you take the pot`, net: pot - heroIn, showdown: false, winner: "hero" as const };
     const cmp = whoIsAhead(heroCards, botCards, board);
-    if (cmp > 0) return { text: `Showdown — you win ${bb(pot)}`, net: pot - heroIn, showdown: true };
-    if (cmp < 0) return { text: `Showdown — ${botName} wins ${bb(pot)}`, net: -heroIn, showdown: true };
-    return { text: "Showdown — chopped pot", net: pot / 2 - heroIn, showdown: true };
+    if (cmp > 0)
+      return { text: `Showdown — you win ${bb(pot)}`, net: pot - heroIn, showdown: true, winner: "hero" as const };
+    if (cmp < 0)
+      return { text: `Showdown — ${botName} wins ${bb(pot)}`, net: -heroIn, showdown: true, winner: "villain" as const };
+    return { text: "Showdown — chopped pot", net: pot / 2 - heroIn, showdown: true, winner: "split" as const };
   }, [over, inst, startPot, heroCards, botCards, board, botName]);
+
+  // Stacks shown on the felt. During the hand a stack only goes down; once the
+  // pot is pushed the winner is actually credited, so the seat and the result
+  // strip agree. Without this you can win a 35bb pot and watch your stack
+  // still read what was left after you bet.
+  const won = potPushed && outcome ? potShown : 0;
+  const heroStackShown =
+    stack - wageredShown.hero +
+    (outcome?.winner === "hero" ? won : outcome?.winner === "split" ? won / 2 : 0);
+  const villainStackShown =
+    stack - wageredShown.villain +
+    (outcome?.winner === "villain" ? won : outcome?.winner === "split" ? won / 2 : 0);
 
   /** The action feed, street by street, from the answered events. */
   const feed = useMemo(() => {
@@ -765,9 +786,10 @@ export function PlayShell({ seed }: PlayShellProps) {
                 showdown={showdownShown}
                 board={boardShown}
                 potChips={potShown}
-                heroStackChips={stack - wageredShown.hero}
-                villainStackChips={stack - wageredShown.villain}
+                heroStackChips={heroStackShown}
+                villainStackChips={villainStackShown}
                 activeSeat={director.playing ? "villain" : atDecision ? "hero" : null}
+                bets={bets}
                 chipFlight={chipFlight}
                 spotLabel={SPOT}
               />
