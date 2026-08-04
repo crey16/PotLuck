@@ -1,11 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateRule24 } from "./rule24";
+import { generateRule24, miscounts, showsDrawLabel } from "./rule24";
 import { mulberry32 } from "../rng";
 import { hitByRiver, hitOnRiver, ruleOf2And4, ruleOf4Corrected } from "../../poker/math";
 import { pct } from "../opts";
-import type { Spot } from "../../poker/engine";
+import { DRAW_OUTS, describeOuts, type Spot } from "../../poker/engine";
 import { assertCommonShape, assertDeterministic } from "./assertions";
+import type { DrillLevel, OppMode } from "../contract";
+
+/** Every generated question at a level/mode, with its payload destructured. */
+function sweep(
+  level: DrillLevel,
+  oppMode: OppMode,
+  seeds: number,
+): { q: ReturnType<typeof generateRule24>; spot: Spot; street: "flop" | "turn" }[] {
+  const out = [];
+  for (let seed = 1; seed <= seeds; seed++) {
+    const q = generateRule24({ level, oppMode, rng: mulberry32(seed) });
+    const { spot, street } = q.payload as { spot: Spot; street: "flop" | "turn" };
+    out.push({ q, spot, street });
+  }
+  return out;
+}
 
 test("generateRule24: satisfies the common shape invariants", () => {
   assertCommonShape(generateRule24, "rule24");
@@ -72,6 +88,119 @@ test("generateRule24: chip names the cards to come per street", () => {
     const { street } = q.payload as { street: "flop" | "turn" };
     assert.equal(q.chip, street === "flop" ? "Two cards to come" : "One card to come");
   }
+});
+
+/* ---------- M8.5D: the drill must test counting ---------- */
+
+test("rule24: the prompt never states the out count", () => {
+  for (const level of [1, 2, 3] as DrillLevel[]) {
+    for (const oppMode of ["unknown", "shown"] as OppMode[]) {
+      for (const { q, spot } of sweep(level, oppMode, 40)) {
+        // The rule's own name and the ×2 / ×4 sides are the only numerals the
+        // prompt is allowed to carry; strip them before looking for a leak.
+        const text = `${q.prompt} ${q.sub ?? ""}`
+          .replace(/Rule of 2 and 4/g, "the rule")
+          .replace(/×[24]/g, "the rule");
+        assert.ok(
+          !/\d/.test(text),
+          `L${level}/${oppMode}: prompt or sub states a number (outs are ${spot.outs}): ${text}`,
+        );
+      }
+    }
+  }
+});
+
+test("rule24: the draw label is hidden above level 1", () => {
+  for (const level of [2, 3] as DrillLevel[]) {
+    for (const oppMode of ["unknown", "shown"] as OppMode[]) {
+      for (const { q } of sweep(level, oppMode, 40)) {
+        assert.ok(
+          !q.body.some((b) => b.type === "text"),
+          `L${level}/${oppMode}: draw label still shown`,
+        );
+      }
+    }
+  }
+});
+
+test("rule24: when the label IS shown, its canonical count equals the true count", () => {
+  let shown = 0;
+  for (const oppMode of ["unknown", "shown"] as OppMode[]) {
+    for (const { q, spot } of sweep(1, oppMode, 60)) {
+      const labelled = q.body.some((b) => b.type === "text");
+      assert.equal(labelled, showsDrawLabel(spot, 1));
+      if (!labelled) continue;
+      shown++;
+      // The CLAUDE.md label/count rule: a named draw and the derived out count
+      // may never disagree.
+      assert.equal(DRAW_OUTS[spot.draw], spot.outs, `label "${spot.draw}" vs ${spot.outs} outs`);
+    }
+  }
+  assert.ok(shown > 0, "no level-1 spot printed its label — widen the sweep");
+});
+
+test("rule24: distractors include the rule applied to a plausible miscount", () => {
+  let checked = 0;
+  for (const { q, spot, street } of sweep(2, "unknown", 120)) {
+    const cardsToCome = street === "flop" ? 2 : 1;
+    const wrong = q.options.map((o) => o.value as number).filter((v) => v !== q.answer);
+    const fromMiscount = miscounts(spot, "unknown")
+      .map((m) => ruleOf2And4(m, cardsToCome))
+      .filter((v) => v > 0 && v <= 100);
+    if (!fromMiscount.length) continue;
+    checked++;
+    assert.ok(
+      wrong.some((v) => fromMiscount.includes(v)),
+      `options ${wrong} contain no miscount-derived value from ${fromMiscount}`,
+    );
+  }
+  assert.ok(checked > 0, "no spot produced miscount candidates");
+});
+
+test("rule24: miscounts never include the true count and are all positive", () => {
+  for (const { spot } of sweep(3, "shown", 60)) {
+    for (const m of miscounts(spot, "shown")) {
+      assert.ok(m > 0, `non-positive miscount ${m}`);
+      assert.notEqual(m, spot.outs, "miscount equals the true count");
+    }
+  }
+});
+
+test("rule24: a combo draw's miscounts include the naive sum of its parts", () => {
+  let checked = 0;
+  for (let seed = 1; seed <= 600 && checked < 3; seed++) {
+    const q = generateRule24({ level: 3, oppMode: "unknown", rng: mulberry32(seed) });
+    const { spot } = q.payload as { spot: Spot };
+    const parts = spot.draw.split(" + ");
+    if (parts.length < 2) continue;
+    const sum = parts.reduce((a, p) => a + (DRAW_OUTS[p] ?? 0), 0);
+    if (sum === spot.outs) continue; // nothing to double-count
+    checked++;
+    assert.ok(miscounts(spot, "unknown").includes(sum), `${spot.draw}: ${sum} missing`);
+  }
+  assert.ok(checked > 0, "no combo draw generated in 600 seeds — widen the search");
+});
+
+test("rule24: the explanation names the counted out cards", () => {
+  for (const { q, spot } of sweep(2, "unknown", 40)) {
+    const note = q.explain(q.answer).notes.find((n) => /Your \d+ outs?:/.test(n.title ?? ""));
+    assert.ok(note, "no counted-outs note");
+    assert.equal(note!.text, describeOuts(spot.outCards));
+  }
+});
+
+test("rule24: face-up mode explains which outs were dead", () => {
+  let checked = 0;
+  for (let seed = 1; seed <= 400 && checked < 3; seed++) {
+    const q = generateRule24({ level: 3, oppMode: "shown", rng: mulberry32(seed) });
+    const { spot } = q.payload as { spot: Spot };
+    const notes = q.explain(q.answer).notes;
+    const dead = notes.find((n) => /^Dead outs/.test(n.title ?? ""));
+    if (!dead) continue;
+    checked++;
+    assert.equal(dead.tone, "warn");
+  }
+  assert.ok(checked > 0, "no dead outs surfaced in 400 face-up seeds");
 });
 
 test("generateRule24: payload carries level, oppMode, street and spot, and survives JSON", () => {
