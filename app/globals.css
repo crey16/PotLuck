@@ -1401,3 +1401,30 @@ img { display: block; max-width: 100%; }
   .pt-oval { aspect-ratio: 1 / 1; border-radius: 40% / 34%; }
   .pt-seat-plate { min-width: 58px; padding: 4px 7px; }
 }
+
+/* — play table: action bar — */
+.pt-actions {
+  display: flex; gap: var(--space-3); flex-wrap: wrap;
+  padding-top: var(--space-4); border-top: 1px solid var(--color-divider);
+}
+.pt-action {
+  flex: 1 1 150px; display: flex; align-items: center; gap: var(--space-2);
+  justify-content: center; min-height: 52px; padding: 12px 16px;
+  border: 1px solid var(--color-divider); border-radius: var(--r-sm);
+  background: transparent; color: var(--color-text); cursor: pointer;
+  font-family: var(--font-heading); font-weight: 600; font-size: 15px;
+  letter-spacing: .03em; transition: border-color .15s ease, background .15s ease;
+}
+.pt-action:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+.pt-action:disabled { opacity: .45; cursor: default; }
+.pt-action.fold { flex: 0 1 110px; }
+.pt-action.raise { border-color: color-mix(in srgb, var(--color-accent) 45%, var(--line)); }
+.pt-action .key {
+  font-family: var(--font-mono); font-size: 10px; opacity: .6;
+  width: 17px; height: 17px; display: grid; place-items: center;
+  border: 1px solid var(--color-divider); border-radius: 5px;
+}
+@media (max-width: 640px) { .pt-action { flex: 1 1 100%; } }
