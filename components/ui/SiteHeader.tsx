@@ -17,7 +17,11 @@ const NAV = [
   { href: "/drill", label: "Drill" },
   { href: "/ranges", label: "Ranges" },
   { href: "/reference", label: "Reference" },
-  { href: "/system", label: "System" },
+  // `/system` is deliberately absent. It is the design-system reference —
+  // colour ramps, type scale, component states — which is developer
+  // documentation, not something a player has any reason to open. The route
+  // stays live and reachable by URL; it just does not spend a nav slot that
+  // the player-facing on-ramp needs.
 ] as const;
 
 const ACCOUNT_NAV = [
