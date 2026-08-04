@@ -10,11 +10,15 @@
  */
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Felt, Seat, Divider } from "@/components/ui/Felt";
-import { PlayingCard } from "@/components/ui/PlayingCard";
 import { MoneyStrip } from "@/components/ui/MoneyStrip";
 import { OptionButton, type OptionButtonState } from "@/components/ui/OptionButton";
 import { WorkTable, WorkRow } from "@/components/ui/FeedbackPanel";
+import { ActionBar } from "./ActionBar";
+import { PokerTable } from "./PokerTable";
+import { VerdictFlash } from "./VerdictFlash";
+import { useHandDirector } from "./useHandDirector";
+import { beatsFor } from "@/lib/play/beats";
+import { actionLabelBb } from "@/lib/play/labels";
 import { money } from "@/lib/drill/opts";
 import { mulberry32 } from "@/lib/drill/rng";
 import { whoIsAhead, type Card } from "@/lib/poker/engine";
@@ -31,7 +35,7 @@ import {
   type PlaySession,
 } from "@/lib/play/api";
 import { fetchManifest, fetchSolve, handId, pickHand, SPOT } from "@/lib/play/load";
-import { actionDisplay, moneyExact, parseAction, signedMoneyExact } from "@/lib/play/actions";
+import { moneyExact, parseAction, signedMoneyExact } from "@/lib/play/actions";
 import { preflopDecision, type PreflopDecision } from "@/lib/play/preflop";
 import {
   awaitingHero, boardFrom, handOver, holeCards, potAfter, timeline, toCallAt,
@@ -139,10 +143,18 @@ export function PlayShell({ seed }: PlayShellProps) {
   const [preflopChosen, setPreflopChosen] = useState<string | null>(null);
   const [preflopDone, setPreflopDone] = useState(false);
 
-  // Postflop: hero action indices taken, plus the answer being reviewed
-  // before it is committed (feedback shows between click and Continue).
+  // Postflop: the hero action indices taken so far. A choice commits on click
+  // — there is deliberately no "reviewing" state between the click and the
+  // hand continuing, because that pause is what made this feel like a quiz.
   const [chosen, setChosen] = useState<number[]>([]);
-  const [pendingAction, setPendingAction] = useState<number | null>(null);
+
+  // The transient verdict, rendered concurrently with the hand rather than
+  // queued ahead of it. `nonce` restarts the animation when the same verdict
+  // lands twice in a row.
+  const [flash, setFlash] = useState<
+    { verdict: Verdict; lossSteps: number | null; nonce: number } | null
+  >(null);
+  const flashSeqRef = useRef(0);
 
   const [stats, setStats] = useState<SessionStats>(EMPTY_STATS);
   const [review, setReview] = useState<DecisionRecord[]>([]);
@@ -178,7 +190,7 @@ export function PlayShell({ seed }: PlayShellProps) {
         setPreflopChosen(null);
         setPreflopDone(false);
         setChosen([]);
-        setPendingAction(null);
+        setFlash(null);
         setReview([]);
       };
       if (cached) {
@@ -295,8 +307,51 @@ export function PlayShell({ seed }: PlayShellProps) {
   const atDecision = awaitingHero(events) && last?.type === "decision" ? last : null;
   const over = handOver(events) && last?.type === "end" ? last : null;
 
+  // — playback —
+  // `events` is what has HAPPENED; `revealed` is what the player has SEEN.
+  // Keeping those apart is what lets the table animate at all.
+  const beats = useMemo(
+    () => (inst && preflopDone ? beatsFor(events, inst.hero) : []),
+    [inst, preflopDone, events]
+  );
+  const director = useHandDirector(beats);
+  const revealed = useMemo(
+    () => beats.slice(0, director.applied),
+    [beats, director.applied]
+  );
+
+  const potShown = useMemo(
+    () =>
+      revealed.reduce((sum, b) => (b.kind === "chips" ? sum + b.chips : sum), startPot),
+    [revealed, startPot]
+  );
+  const dealtShown = revealed.filter((b) => b.kind === "board").length;
+  const showdownShown = revealed.some((b) => b.kind === "showdown");
+
+  // The flop arrives whole with the street; only turn and river are dealt as
+  // events, so only those are gated on playback.
+  const boardShown = useMemo(
+    () => [...board.slice(0, 3), ...board.slice(3, 3 + dealtShown)],
+    [board, dealtShown]
+  );
+
+  // Chips the hero has put in this hand, so the seat shows what is BEHIND
+  // rather than the starting stack — a stack that never moves reads as fake.
+  const wageredShown = useMemo(() => {
+    const totals = { hero: 0, villain: 0 };
+    for (const b of revealed) if (b.kind === "chips") totals[b.seat] += b.chips;
+    return totals;
+  }, [revealed]);
+
+  // Only while the queue is still running: once it drains at a decision, a
+  // chip badge left hanging over the felt reads as part of the layout.
+  const lastRevealed = revealed[revealed.length - 1];
+  const chipFlight =
+    director.playing && lastRevealed?.kind === "chips"
+      ? { seat: lastRevealed.seat, chips: lastRevealed.chips }
+      : null;
+
   const heroSeat = inst?.hero === 1 ? "BTN (you)" : "BB (you)";
-  const botSeat = inst?.hero === 1 ? "BB" : "BTN";
   const botName = inst?.hero === 1 ? "BB" : "BTN";
 
   // Showdown outcome, computed with the app's own evaluator.
@@ -440,12 +495,8 @@ export function PlayShell({ seed }: PlayShellProps) {
 
   const handleAction = useCallback(
     (i: number) => {
-      if (
-        !inst || !hand || !atDecision || pendingAction !== null ||
-        !canAct || decisionLockRef.current
-      ) return;
+      if (!inst || !hand || !atDecision || !canAct || decisionLockRef.current) return;
       decisionLockRef.current = true;
-      setPendingAction(i);
       const node = atDecision.node;
       const clientDecisionId = newPlayClientId();
       const verdict = verdictAt(node, i);
@@ -453,34 +504,45 @@ export function PlayShell({ seed }: PlayShellProps) {
         clientDecisionId,
         phase: "postflop",
         street: STREET_NAME[node.st],
-        label: actionDisplay(parseAction(node.a[i]), {
-          pot: potAfter(startPot, node.tb),
-          toCall: toCallAt(node, inst.hero),
+        label: actionLabelBb(node.a[i], {
+          potChips: potAfter(startPot, node.tb),
+          toCallChips: toCallAt(node, inst.hero),
         }),
         verdict,
         lossDollars: lossDollars(node.l[i]),
       };
       recordDecision(local);
       persistDecision(local, atDecision.key || "root", node.a[i]);
+      // Non-blocking: the hand advances now and the verdict rides alongside it.
+      // Nothing here waits for the player to acknowledge anything.
+      flashSeqRef.current += 1;
+      setFlash({ verdict, lossSteps: node.l[i], nonce: flashSeqRef.current });
+      setChosen((c) => [...c, i]);
     },
-    [inst, hand, atDecision, pendingAction, canAct, startPot, recordDecision, persistDecision]
+    [inst, hand, atDecision, canAct, startPot, recordDecision, persistDecision]
   );
 
+  // The action commits synchronously, but React has not yet re-rendered with
+  // the next decision — `decisionLockRef` closes that window against a
+  // double-click or a held key. Writing a ref here is not the banned
+  // setState-in-effect: nothing re-renders as a result.
+  useEffect(() => {
+    decisionLockRef.current = false;
+  }, [chosen, preflopDone]);
+
+  /**
+   * Preflop only. It is graded against reference ranges rather than the solve,
+   * so it stays a separate, explicitly-labelled step with its own hand-off
+   * into the solved line — see the "reference range" note in its panel.
+   * Postflop has no continue: actions commit on click.
+   */
   const handleContinue = useCallback(() => {
     if (persistenceMode === "remote" && (persistenceBusy || persistenceError)) return;
-    if (!preflopDone) {
-      if (preflopChosen !== null) {
-        decisionLockRef.current = false;
-        setPreflopDone(true);
-      }
-      return;
-    }
-    if (pendingAction !== null) {
+    if (!preflopDone && preflopChosen !== null) {
       decisionLockRef.current = false;
-      setChosen((c) => [...c, pendingAction]);
-      setPendingAction(null);
+      setPreflopDone(true);
     }
-  }, [persistenceMode, persistenceBusy, persistenceError, preflopDone, preflopChosen, pendingAction]);
+  }, [persistenceMode, persistenceBusy, persistenceError, preflopDone, preflopChosen]);
 
   const completeRemoteHand = useCallback(async () => {
     if (!remoteHand) return;
@@ -551,6 +613,33 @@ export function PlayShell({ seed }: PlayShellProps) {
         else handleContinue();
         return;
       }
+
+      // Any key skips playback. Checked before the action keys so a player
+      // hammering "2" to bet does not have the skip swallow their action.
+      if (director.playing) {
+        e.preventDefault();
+        director.skip();
+        return;
+      }
+
+      // F folds and C checks-or-calls. There is deliberately no R: a node can
+      // offer several raise sizes, so one key cannot name a raise
+      // unambiguously, and "the first raise" would submit a size nobody chose.
+      if (atDecision) {
+        const key = e.key.toUpperCase();
+        if (key === "F" || key === "C") {
+          const wanted = key === "F" ? ["fold"] : ["check", "call"];
+          const idx = atDecision.node.a.findIndex((code) =>
+            wanted.includes(parseAction(code).kind)
+          );
+          if (idx >= 0) {
+            e.preventDefault();
+            handleAction(idx);
+            return;
+          }
+        }
+      }
+
       const idx = Number(e.key) - 1;
       if (!Number.isInteger(idx) || idx < 0) return;
       if (!preflopDone && preflop && preflopChosen === null) {
@@ -558,7 +647,7 @@ export function PlayShell({ seed }: PlayShellProps) {
           e.preventDefault();
           handlePreflop(preflop.options[idx].key);
         }
-      } else if (atDecision && pendingAction === null && idx < atDecision.node.a.length) {
+      } else if (atDecision && idx < atDecision.node.a.length) {
         e.preventDefault();
         handleAction(idx);
       }
@@ -566,7 +655,7 @@ export function PlayShell({ seed }: PlayShellProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
-    over, preflopDone, preflop, preflopChosen, atDecision, pendingAction,
+    over, preflopDone, preflop, preflopChosen, atDecision, director,
     handleNextHand, handleContinue, handlePreflop, handleAction,
   ]);
 
@@ -592,7 +681,6 @@ export function PlayShell({ seed }: PlayShellProps) {
     );
   }
 
-  const pendingNode = pendingAction !== null && atDecision ? atDecision.node : null;
   const decisionsThisHand = review.length;
   const accuracy =
     stats.decisions > 0 ? Math.round((stats.right / stats.decisions) * 100) : null;
@@ -666,26 +754,31 @@ export function PlayShell({ seed }: PlayShellProps) {
               </span>
             </div>
 
-            <Felt>
-              <Seat label={heroSeat}>
-                {heroCards.map((c) => <PlayingCard key={c} card={c} />)}
-              </Seat>
-              <Divider />
-              <Seat label={board.length ? `Board — ${STREET_NAME[Math.max(0, board.length - 3)].toLowerCase()}` : "Board"}>
-                {board.map((c) => <PlayingCard key={c} card={c} />)}
-                {board.length === 0 && (
-                  <span style={{ fontSize: 13, opacity: 0.6, alignSelf: "center" }}>
-                    dealt after preflop
-                  </span>
-                )}
-              </Seat>
-              <Divider />
-              <Seat label={outcome?.showdown ? `${botSeat} — shown` : botSeat} accent={outcome?.showdown === true}>
-                {botCards.map((c) => (
-                  <PlayingCard key={c} card={c} faceDown={!outcome?.showdown} />
-                ))}
-              </Seat>
-            </Felt>
+            {/* Click anywhere on the table to skip the rest of the playback. */}
+            <div className="pt-stage" onClick={director.skip}>
+              <PokerTable
+                heroPosition={inst.hero === 1 ? "BTN" : "BB"}
+                villainPosition={inst.hero === 1 ? "BB" : "BTN"}
+                heroCards={heroCards}
+                villainCards={botCards}
+                showdown={showdownShown}
+                board={boardShown}
+                potChips={potShown}
+                heroStackChips={stack - wageredShown.hero}
+                villainStackChips={stack - wageredShown.villain}
+                activeSeat={director.playing ? "villain" : atDecision ? "hero" : null}
+                chipFlight={chipFlight}
+                spotLabel={SPOT}
+              />
+              <VerdictFlash
+                verdict={flash?.verdict ?? null}
+                lossSteps={flash?.lossSteps ?? null}
+                nonce={flash?.nonce ?? 0}
+              />
+            </div>
+            {director.playing && (
+              <div className="pt-skip mono-label">press any key to skip</div>
+            )}
 
             <MoneyStrip items={strip} />
 
@@ -753,73 +846,19 @@ export function PlayShell({ seed }: PlayShellProps) {
             {preflopDone && atDecision && (
               <>
                 <h2 style={{ fontSize: 26, lineHeight: 1.1, margin: "0 0 var(--space-2)" }}>
-                  {toCallAt(atDecision.node, inst.hero) > 0
-                    ? `${botName} bets — your move.`
-                    : "Your move."}
+                  {director.playing
+                    ? "…"
+                    : toCallAt(atDecision.node, inst.hero) > 0
+                      ? `${botName} bets — your move.`
+                      : "Your move."}
                 </h2>
-                <div className={`opts ${atDecision.node.a.length === 2 ? "two" : "grid3"}`}>
-                  {atDecision.node.a.map((code, i) => {
-                    let state: OptionButtonState = canAct ? "idle" : "disabled";
-                    if (pendingNode) {
-                      const v = verdictAt(pendingNode, i);
-                      if (i === pendingAction) state = isRightVerdict(v) ? "correct" : "wrong";
-                      else state = "disabled";
-                    }
-                    return (
-                      <OptionButton key={code} keyHint={String(i + 1)} state={state} onClick={() => handleAction(i)}>
-                        {actionDisplay(parseAction(code), {
-                          pot: potAfter(startPot, atDecision.node.tb),
-                          toCall: toCallAt(atDecision.node, inst.hero),
-                        })}
-                        {pendingNode && ` — GTO ${Math.round((pendingNode.f[i] / 255) * 100)}%`}
-                      </OptionButton>
-                    );
-                  })}
-                </div>
-
-                {pendingNode && pendingAction !== null && (
-                  <div className={`fb${isRightVerdict(verdictAt(pendingNode, pendingAction)) ? "" : " no"}`}>
-                    <div className="bar">
-                      <span className="word">{VERDICT_WORD[verdictAt(pendingNode, pendingAction)]}</span>
-                      <span className="xp">
-                        {pendingNode.l[pendingAction] > 0
-                          ? `EV loss ${moneyExact(lossDollars(pendingNode.l[pendingAction]))}`
-                          : "Best play"}
-                      </span>
-                    </div>
-                    <div className="body">
-                      <WorkTable>
-                        {pendingNode.a.map((code, i) => (
-                          <WorkRow
-                            key={code}
-                            label={actionDisplay(parseAction(code), {
-                              pot: potAfter(startPot, pendingNode.tb),
-                              toCall: toCallAt(pendingNode, inst.hero),
-                            })}
-                            value={`${Math.round((pendingNode.f[i] / 255) * 100)}%${
-                              pendingNode.l[i] > 0 ? ` · −${moneyExact(lossDollars(pendingNode.l[i]))}` : ""
-                            }`}
-                          />
-                        ))}
-                        <WorkRow
-                          label="Your equity vs their range"
-                          value={`${Math.round((pendingNode.eq / 255) * 100)}%`}
-                        />
-                      </WorkTable>
-                      <div className="actions">
-                        <button
-                          className="btn btn-primary blueprint btn-caps"
-                          disabled={persistenceMode === "remote" && Boolean(persistenceBusy || persistenceError)}
-                          onClick={handleContinue}
-                        >
-                          {persistenceBusy === "Saving decision" ? "Saving…" : "Continue"}
-                          <span className="keyhint">N</span>
-                        </button>
-                        <span className="hint">or Enter</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <ActionBar
+                  codes={atDecision.node.a}
+                  potChips={potAfter(startPot, atDecision.node.tb)}
+                  toCallChips={toCallAt(atDecision.node, inst.hero)}
+                  disabled={!canAct || director.playing}
+                  onAct={handleAction}
+                />
               </>
             )}
 

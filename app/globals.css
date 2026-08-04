@@ -1458,3 +1458,10 @@ img { display: block; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .pt-flash { animation: none; opacity: 1; }
 }
+
+/* — play table: stage and skip hint — */
+.pt-stage { position: relative; }
+.pt-skip {
+  text-align: center; opacity: .6; letter-spacing: .12em;
+  margin: calc(var(--space-2) * -1) 0 var(--space-3);
+}
