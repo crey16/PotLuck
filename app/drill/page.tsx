@@ -4,6 +4,9 @@ import { DrillShell } from "@/components/drill/DrillShell";
 import { TAB_ORDER, type TabId } from "@/lib/drill/registry";
 import { OPP_MODE_COOKIE, parseOppMode } from "@/lib/drill/oppMode";
 import { fetchKindStats } from "@/lib/drill/serverStats";
+import { StartHereNudge } from "@/components/learn/StartHereNudge";
+import { NUDGE_DISMISSED_COOKIE, parseNudgeDismissed } from "@/lib/learn/nudge";
+import { fetchNewPlayerRouting } from "@/lib/placement/server";
 
 export default async function DrillPage({
   searchParams,
@@ -16,12 +19,18 @@ export default async function DrillPage({
   const initialTab: TabId =
     tab && (TAB_ORDER as string[]).includes(tab) ? (tab as TabId) : "mixed";
 
-  const kindStats = await fetchKindStats();
+  const [kindStats, routing] = await Promise.all([
+    fetchKindStats(),
+    fetchNewPlayerRouting(),
+  ]);
 
   // Opponent mode comes from a cookie so the first server-rendered hand already
   // respects the preference (localStorage is invisible to the server).
   const cookieStore = await cookies();
   const initialOppMode = parseOppMode(cookieStore.get(OPP_MODE_COOKIE)?.value);
+  const nudgeDismissed = parseNudgeDismissed(
+    cookieStore.get(NUDGE_DISMISSED_COOKIE)?.value
+  );
 
   // One seed per page load. The client derives every subsequent hand from it,
   // so SSR and hydration agree on the first question.
@@ -39,6 +48,10 @@ export default async function DrillPage({
       initialOppMode={initialOppMode}
       seed={seed}
       kindStats={kindStats}
+      // Passed as an element rather than imported by the shell: the shell is a
+      // client component and the nudge is a server one, so handing it down as
+      // a prop is the only way it renders inside that subtree.
+      nudge={<StartHereNudge routing={routing} dismissed={nudgeDismissed} />}
     />
   );
 }

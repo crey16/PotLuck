@@ -129,12 +129,23 @@ function LoginForm() {
         return;
       }
     }
+    // A brand-new account always goes to `/`, never to `next`.
+    //
+    // `next` is not usually a deliberate choice: middleware stamps it onto
+    // every signed-out request, so arriving from a shared /learn/3/12 link or
+    // simply from /drill puts a path there. Honouring it on SIGN-UP skips `/`,
+    // which is the only route that runs the placement check — so the new
+    // player is dropped straight into drills with no placement and no lessons,
+    // which is exactly the flow this is meant to fix. A brand-new account has
+    // no deep-link intent worth preserving; sign-IN still honours `next`.
+    const destination = mode === "signup" ? "/" : next;
+
     // Full document navigation, not router.push: the session cookie was just
     // written, and a hard request guarantees middleware and every server
     // component see it. It also recovers from transient RSC-fetch failures
     // (observed 503s on client navigations right after auth) that leave a
     // soft navigation stranded on this page.
-    window.location.assign(next);
+    window.location.assign(destination);
   }
 
   return (

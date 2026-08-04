@@ -9,14 +9,14 @@ export interface CourseMapProps {
 }
 
 /**
- * The ONE module/lesson list (M8.5A).
+ * The ONE module/lesson list.
  *
- * `/` and `/learn` both render the path now — `/` because a signed-in player
- * should land on their lessons rather than a statistics dashboard, `/learn`
- * because the path needs a dedicated, directly linkable home reachable from
- * the nav whatever the landing route does. Forking a second copy into the home
- * page is the specific thing the brief forbids: the two would silently
- * disagree about completion the first time either changed.
+ * `/learn` is the only route that renders it. M8.5A briefly put it on `/` too
+ * and that was reverted — steering new players is a routing job, not a reason
+ * to restructure the dashboard. If it ever needs to appear somewhere else,
+ * render THIS component there; do not paste the markup. Two copies would
+ * silently disagree about completion the first time either changed, and
+ * `coursePathSingleSource.test.ts` fails if a route re-declares these classes.
  *
  * Server component, no state, no client boundary — everything it shows is
  * already derived by `fetchLearningPath`.

@@ -4,19 +4,24 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 /**
- * Guards the "exactly one implementation of the module/lesson list" rule
- * (M8.5A).
+ * Guards the "exactly one implementation of the module/lesson list" rule.
  *
- * `/` and `/learn` both lead with the learning path now. The obvious way to
- * build that is to paste the course-map JSX into the home page, and it works
- * perfectly — until one of them gains a completion rule, a lock state or a
- * different "next lesson" derivation, at which point two pages quietly
- * disagree about where the player is in the course. Nothing throws, nothing
- * fails to build, and the player just sees different answers depending on
- * which route they arrived through.
+ * `/learn` is the only route that renders the learning path. M8.5A briefly put
+ * it on `/` too and that was reverted — a first-run problem is solved by
+ * routing (signup → placement → `/learn`), not by restructuring the dashboard
+ * every established player sees on every visit.
  *
- * So: the course-map markup and the continue action live in
- * `components/learn/`, and no route file may re-declare their class names.
+ * Two distinct rules, and they apply to different files:
+ *
+ *  1. NO route may re-declare the course-map markup. This one still covers `/`,
+ *     and covers it for two reasons now: pasting the JSX into a second page
+ *     works perfectly until one copy gains a completion rule or a different
+ *     "next lesson" derivation, at which point the two quietly disagree about
+ *     where the player is — nothing throws, nothing fails to build, and the
+ *     answer just depends on which route you came through. And it is the
+ *     tripwire for the obvious wrong fix if new-user onboarding regresses:
+ *     putting the lessons back on Home.
+ *  2. `/learn` must actually render the shared components.
  */
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
@@ -32,10 +37,14 @@ const OWNED_CLASSES = [
   "continue-path-progress",
 ];
 
-const ROUTES_THAT_RENDER_THE_PATH = ["app/page.tsx", "app/learn/page.tsx"];
+/** Every route that renders lesson-path UI at all. */
+const ROUTES = ["app/page.tsx", "app/learn/page.tsx"];
 
-for (const route of ROUTES_THAT_RENDER_THE_PATH) {
-  test(`${route}: renders the path through the shared components, not a copy`, () => {
+/** The one route that owns the path. */
+const PATH_ROUTE = "app/learn/page.tsx";
+
+for (const route of ROUTES) {
+  test(`${route}: never re-declares the course-map markup`, () => {
     const source = read(route);
     for (const cls of OWNED_CLASSES) {
       assert.ok(
@@ -44,16 +53,29 @@ for (const route of ROUTES_THAT_RENDER_THE_PATH) {
           `components/learn/CourseMap.tsx, not a second copy in the route`,
       );
     }
-    assert.ok(
-      source.includes("CourseMap"),
-      `${route} leads with the learning path, so it must render <CourseMap>`,
-    );
-    assert.ok(
-      source.includes("ContinuePath"),
-      `${route} must offer the path's single continue action via <ContinuePath>`,
-    );
   });
 }
+
+test(`${PATH_ROUTE}: renders the path through the shared components`, () => {
+  const source = read(PATH_ROUTE);
+  assert.ok(
+    source.includes("CourseMap"),
+    `${PATH_ROUTE} owns the learning path, so it must render <CourseMap>`,
+  );
+  assert.ok(
+    source.includes("ContinuePath"),
+    `${PATH_ROUTE} must offer the path's single continue action via <ContinuePath>`,
+  );
+});
+
+test("the home page stays a dashboard, not a second course map", () => {
+  // Belt and braces alongside the markup check above: the shared components
+  // must not be imported here either. Rendering <CourseMap> on `/` is the
+  // regression this whole file exists to catch.
+  const source = read("app/page.tsx");
+  assert.ok(!source.includes("CourseMap"));
+  assert.ok(!source.includes("ContinuePath"));
+});
 
 test("the learning path stays reachable at its own URL", () => {
   // `/learn` is the canonical, directly linkable home of the path. It must

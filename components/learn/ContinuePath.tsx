@@ -8,12 +8,11 @@ export interface ContinuePathProps {
 }
 
 /**
- * The path's single unambiguous "continue" action (M8.5A).
+ * The path's single unambiguous "continue" action.
  *
- * Shared by the landing route and `/learn` so a player is never offered two
- * different "next lessons" depending on which page they came in through. One
- * primary button, always — never a row of equally-weighted choices, which is
- * what turns a learning path back into a menu.
+ * One primary button, always — never a row of equally-weighted choices, which
+ * is what turns a learning path back into a menu. Rendered by `/learn` only;
+ * see `CourseMap` for why the home page does not carry the path.
  */
 export function ContinuePath({ step, progress }: ContinuePathProps) {
   const done = step === null && progress.total > 0;

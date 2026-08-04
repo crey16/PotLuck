@@ -11,11 +11,11 @@ export const metadata: Metadata = {
 };
 
 /**
- * The canonical, directly linkable home of the learning path (M8.5A).
+ * The learning path — the only route that renders it.
  *
- * `/` also leads with the path, but this route stays in the nav and keeps its
- * own URL so the course can be bookmarked and shared. Both render the same
- * `ContinuePath` + `CourseMap`; neither owns a private copy.
+ * It is also where new-player routing lands: signup goes to `/`, which sends a
+ * brand-new account through `/placement`, which hands off here. `/` itself is
+ * the dashboard and carries no course map (see `components/learn/CourseMap`).
  */
 export default async function LearnPage() {
   const [path, recommendation] = await Promise.all([

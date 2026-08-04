@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { DrillPlayer } from "@/components/drill/DrillPlayer";
 import { OpponentToggle, writeOppModeCookie } from "@/components/drill/OpponentToggle";
@@ -49,6 +49,12 @@ export interface DrillShellProps {
   seed: number;
   /** All-time per-kind aggregates, fetched server-side. */
   kindStats: Record<DrillKind, KindStat>;
+  /**
+   * The M8.5 "start with the lessons" banner, rendered by the server page and
+   * passed down as an element. It goes INSIDE `<main className="page">` — a
+   * sibling in app/drill/page.tsx would sit outside the page padding.
+   */
+  nudge?: ReactNode;
 }
 
 interface Live {
@@ -99,6 +105,7 @@ export function DrillShell({
   initialOppMode = "unknown",
   seed,
   kindStats,
+  nudge,
 }: DrillShellProps) {
   const router = useRouter();
   const startTab: DrillTab = initialTab === "reference" ? "mixed" : (initialTab as DrillTab);
@@ -313,6 +320,8 @@ export function DrillShell({
 
   return (
     <main className="page">
+      {nudge}
+
       {/* — drill switcher — */}
       <div className="switcher">
         <div className="left">

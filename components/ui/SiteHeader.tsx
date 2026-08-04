@@ -9,6 +9,11 @@ import { THEME_COOKIE, type Theme } from "@/lib/theme";
 
 const NAV = [
   { href: "/", label: "Home" },
+  // Learn sits in the top bar, ahead of Drill, because it is the on-ramp: the
+  // lessons teach the decision and the drills make it automatic. It used to
+  // live in the account dropdown, two clicks deep behind an avatar, which is
+  // the wrong place for the thing a new player should reach for first.
+  { href: "/learn", label: "Learn" },
   { href: "/drill", label: "Drill" },
   { href: "/ranges", label: "Ranges" },
   { href: "/reference", label: "Reference" },
@@ -16,7 +21,6 @@ const NAV = [
 ] as const;
 
 const ACCOUNT_NAV = [
-  { href: "/learn", label: "Learn" },
   { href: "/play", label: "Play" },
   { href: "/friends", label: "Friends" },
   { href: "/leaderboard", label: "Ranks" },

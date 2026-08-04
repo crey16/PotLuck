@@ -1,11 +1,11 @@
 /**
- * Pure derivations over a loaded `LearningPathData` (M8.5A).
+ * Pure derivations over a loaded `LearningPathData`.
  *
- * The learning path is now the product's front door: the signed-in landing
- * route and `/learn` both answer "what is my next lesson, and how far along am
- * I?". These live here rather than in either page so the two can never drift
- * into disagreeing about where a player is in the course — which is exactly
- * the failure a second copy of the module list would have produced.
+ * `/learn` answers "what is my next lesson, and how far along am I?". These
+ * live here rather than inside the page so the answer has one implementation:
+ * `recommendationHref` is shared with the home page's recommendation card, and
+ * the two traps documented below are the kind that produce a confidently wrong
+ * answer rather than an error.
  */
 import type { LearningPathData, ModuleWithProgress, Lesson, Recommendation } from "./types";
 
@@ -65,7 +65,9 @@ export const lessonHref = (moduleId: number, lessonId: number): string =>
 
 /**
  * Where a deterministic recommendation points. Was duplicated verbatim in
- * `app/page.tsx` and `app/learn/page.tsx`; both now call this.
+ * `app/page.tsx` and `app/learn/page.tsx`; both call this. The home page's
+ * "Recommended next" card and the course page's "Recommended practice" row are
+ * the same recommendation and must resolve to the same URL.
  */
 export function recommendationHref(recommendation: Recommendation): string {
   if (recommendation.type === "lesson" && recommendation.lesson_id && recommendation.module_id) {

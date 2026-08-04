@@ -898,22 +898,41 @@ img { display: block; max-width: 100%; }
   .home-hero, .home-skills, .home-bottom { grid-template-columns: 1fr; }
 }
 
-/* — M8.5A: the path leads the signed-in landing page —
-   The continue card takes the visually dominant column; the greeting and the
-   secondary practice/daily links sit beside it, never above it. */
-.home-path-hero {
-  display: grid; grid-template-columns: 1fr 1.05fr; gap: var(--space-8);
-  align-items: start; margin-bottom: calc(var(--space-8) * 1.25);
+/* — the "start with the lessons" nudge —
+   The soft on-ramp that replaced the M8.5A landing-page reorder. Sits above
+   the page's own content on / and /drill, and never blocks anything. */
+.start-here {
+  display: flex; align-items: flex-start; gap: var(--space-4); flex-wrap: wrap;
+  padding: var(--space-4); margin-bottom: var(--space-6);
+  border: 1px solid var(--color-accent);
+  border-left-width: 3px;
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
 }
-.home-path-side { display: flex; flex-direction: column; gap: var(--space-3); }
-.home-progress-tiles { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 1100px) { .home-progress-tiles { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 900px) {
-  .home-path-hero { grid-template-columns: 1fr; }
-  .home-progress-tiles { grid-template-columns: 1fr; }
+.start-here-mark { color: var(--color-accent-700); flex: none; margin-top: 2px; }
+.start-here-text { flex: 1 1 320px; display: flex; flex-direction: column; gap: 3px; }
+.start-here-text strong { font: 600 18px/1.15 var(--font-heading); }
+.start-here-text span {
+  font-size: 13.5px; max-width: 68ch;
+  color: color-mix(in srgb, var(--color-text) 68%, transparent);
+}
+.start-here-actions {
+  display: flex; align-items: center; gap: var(--space-3);
+  flex-wrap: wrap; margin-left: auto;
+}
+.start-here-dismiss {
+  background: transparent; border: none; padding: 6px 2px; cursor: pointer;
+  font-family: var(--font-body); font-size: 13px;
+  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.start-here-dismiss:hover:not(:disabled) { color: var(--color-text); }
+.start-here-dismiss:disabled { cursor: default; opacity: 0.5; }
+@media (max-width: 640px) {
+  .start-here-actions { margin-left: 0; }
+  .start-here-dismiss { min-height: 44px; }
 }
 
-/* The path's one primary action, shared by / and /learn. */
+/* The path's one primary action, used by /learn. */
 .continue-path { padding: var(--space-6); border-color: var(--color-accent); }
 .continue-path h2 {
   margin: 5px 0 2px; font-size: 29px; line-height: 1.05;

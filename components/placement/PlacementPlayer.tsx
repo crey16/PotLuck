@@ -126,7 +126,10 @@ export function PlacementPlayer({ seed: initialSeed }: PlacementPlayerProps) {
     setPhase("saving");
     void skipPlacement(assessmentId)
       .then(() => {
-        router.push("/");
+        // Skipping declines the placement, not the course. The player still
+        // lands on the lessons — just un-placed, at module 1 and level 1,
+        // which is exactly the cold start.
+        router.push("/learn");
         router.refresh();
       })
       .catch((cause: unknown) => {
@@ -168,11 +171,14 @@ export function PlacementPlayer({ seed: initialSeed }: PlacementPlayerProps) {
               ))}
           </div>
           <div className="placement-actions">
-            <Link href="/" className="btn btn-primary blueprint btn-caps">
+            {/* Placement's job was to decide where the path starts, so it hands
+                off to the path. The secondary goes to the dashboard rather than
+                also to /learn — two buttons to one route is worse than either. */}
+            <Link href="/learn" className="btn btn-primary blueprint btn-caps">
               Start learning
             </Link>
-            <Link href="/learn" className="btn btn-secondary btn-caps">
-              Course map
+            <Link href="/" className="btn btn-secondary btn-caps">
+              Go to your dashboard
             </Link>
           </div>
         </section>
