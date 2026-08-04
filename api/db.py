@@ -32,6 +32,13 @@ def get_pool() -> ConnectionPool:
             min_size=0,
             max_size=2,
             open=True,
+            # DATABASE_URL is the TRANSACTION pooler (port 6543), where server
+            # connections are shared between clients. psycopg auto-prepares a
+            # statement after 5 executions and names them _pg3_0, _pg3_1, …;
+            # a later request landing on a backend that already holds that name
+            # dies with DuplicatePreparedStatement. Disabling auto-preparation
+            # is the supported fix for PgBouncer transaction mode.
+            kwargs={"prepare_threshold": None},
         )
     return _pool
 
