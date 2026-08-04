@@ -56,14 +56,6 @@
   --wash-a: color-mix(in srgb, var(--color-accent) 26%, transparent);
   --wash-b: color-mix(in srgb, var(--color-accent) 20%, transparent);
   --wash-c: color-mix(in srgb, var(--color-accent) 13%, transparent);
-
-  /* Mesh backdrop — /login only. See .auth-mesh. */
-  --mesh-base: #fbfcfe;
-  --mesh-periwinkle: rgba(163, 175, 224, 0.44);
-  --mesh-ice: rgba(174, 205, 233, 0.42);
-  --mesh-lavender: rgba(197, 186, 228, 0.36);
-  --mesh-white: rgba(255, 255, 255, 0.85);
-
   --r: 14px;
   --r-sm: 10px;
 
@@ -122,14 +114,6 @@
   --wash-a: color-mix(in srgb, var(--color-accent) 20%, transparent);
   --wash-b: color-mix(in srgb, var(--color-accent) 15%, transparent);
   --wash-c: color-mix(in srgb, var(--color-accent) 10%, transparent);
-
-  /* The same mesh, dropped to a dusk register so the panels still read. */
-  --mesh-base: #15171a;
-  --mesh-periwinkle: rgba(104, 118, 176, 0.24);
-  --mesh-ice: rgba(98, 138, 178, 0.22);
-  --mesh-lavender: rgba(132, 120, 174, 0.20);
-  --mesh-white: rgba(226, 234, 246, 0.07);
-
   --lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 30px -16px rgba(0, 0, 0, 0.7);
   --lift-hi: 0 1px 2px rgba(0, 0, 0, 0.5), 0 20px 44px -18px rgba(0, 0, 0, 0.85);
   color-scheme: dark;
@@ -1301,27 +1285,62 @@ img { display: block; max-width: 100%; }
 }
 
 /* auth layout */
-/* — auth mesh backdrop (login only) —
-   Large diffused clouds of periwinkle, icy blue, lavender and white over a
-   near-white base. Radial stops with soft falloffs, no blur filter and no
-   hard edges. It stands in for the site-wide `.ambient-wash`, which is
-   hidden on this route below so the two washes never stack. */
-.auth-mesh {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background-color: var(--mesh-base);
-  background-image:
-    radial-gradient(58% 48% at 10% 6%, var(--mesh-periwinkle) 0%, transparent 68%),
-    radial-gradient(54% 46% at 90% 2%, var(--mesh-ice) 0%, transparent 70%),
-    radial-gradient(48% 42% at 70% 32%, var(--mesh-lavender) 0%, transparent 72%),
-    radial-gradient(66% 54% at 4% 50%, var(--mesh-ice) 0%, transparent 70%),
-    radial-gradient(52% 46% at 98% 64%, var(--mesh-periwinkle) 0%, transparent 72%),
-    radial-gradient(74% 52% at 38% 98%, var(--mesh-lavender) 0%, transparent 74%),
-    radial-gradient(50% 40% at 32% 60%, var(--mesh-white) 0%, transparent 66%);
+/* — /login backdrop —
+   Lifted 1:1 from the auth screen in `Potluck Poker Math.html`: that file's
+   cloud palette on the wash tokens, the site wash retuned to match, and a
+   seven-blob `.mesh` layer over it.
+
+   The reference retunes `--wash-*`, `--color-bg` and `.wash` GLOBALLY. Doing
+   that here would restyle every route, so every rule below is gated on
+   `body:has(.auth-mesh)` — the login page is the only page that renders
+   `.auth-mesh`, and nothing else moves. */
+body:has(.auth-mesh) {
+  --wash-a: #8fb0cf;
+  --wash-b: #a3c3dc;
+  --wash-c: #9aa8ca;
+  --wash-d: #b6d0e4;
+  --wash-e: #ffffff;
+  /* The reference's page base. Scoped here it also reaches the sign-in card,
+     which is painted with --color-bg. */
+  --color-bg: #fafbfd;
+  background: var(--color-bg);
 }
-body:has(.auth-layout) .ambient-wash { display: none; }
+[data-theme="dark"] body:has(.auth-mesh) {
+  --wash-a: #3d4c73;
+  --wash-b: #33506b;
+  --wash-c: #443f66;
+  --wash-d: #2c3f57;
+  --wash-e: #1e2126;
+  /* Dark keeps the normal base — the light override above would otherwise
+     leak through and paint the card near-white under light-on-dark text. */
+  --color-bg: #15171a;
+}
+/* The reference's `.wash`: same geometry as ours, but four blobs move to
+   `--wash-d` and the whole layer drops to half opacity under the mesh. */
+body:has(.auth-mesh) .ambient-wash i { opacity: 0.5; }
+body:has(.auth-mesh) .ambient-wash i:nth-child(2),
+body:has(.auth-mesh) .ambient-wash i:nth-child(3),
+body:has(.auth-mesh) .ambient-wash i:nth-child(5),
+body:has(.auth-mesh) .ambient-wash i:nth-child(6) { background: var(--wash-d); }
+
+.auth-mesh {
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none; overflow: hidden;
+}
+.auth-mesh i {
+  position: absolute; display: block; border-radius: 50%;
+  filter: blur(110px); opacity: 0.85;
+}
+.auth-mesh i:nth-child(1) { width: 46%; height: 34%; left: -12%; top: -6%; background: var(--wash-a); }
+.auth-mesh i:nth-child(2) { width: 40%; height: 30%; right: -10%; top: -2%; background: var(--wash-c); }
+.auth-mesh i:nth-child(3) { width: 34%; height: 26%; left: 4%; top: 24%; background: var(--wash-b); }
+.auth-mesh i:nth-child(4) { width: 38%; height: 28%; right: -6%; top: 30%; background: var(--wash-a); }
+.auth-mesh i:nth-child(5) { width: 44%; height: 30%; left: -10%; top: 56%; background: var(--wash-c); }
+.auth-mesh i:nth-child(6) { width: 36%; height: 28%; right: 0%; top: 66%; background: var(--wash-b); }
+.auth-mesh i:nth-child(7) {
+  width: 58%; height: 40%; left: 20%; top: 32%;
+  background: var(--wash-e); filter: blur(150px); opacity: 0.9;
+}
 
 .auth-layout {
   position: relative; z-index: 1; max-width: 1180px; margin: 0 auto;
