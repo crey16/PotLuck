@@ -1,0 +1,208 @@
+/**
+ * Preflop best response for the BTN-vs-BB slice, on top of solved postflop EVs.
+ *
+ *   npx tsx solver/preflop-br.ts <ev-dir>
+ *
+ * WHY BEST RESPONSE AND NOT CFR. With the postflop EVs held fixed, BB's
+ * call/fold threshold does not depend on BTN's opening frequency — the EVs
+ * already encode the ranges that produced them. So the preflop step for this
+ * tree is a threshold computation, not a game to solve. The strategic coupling
+ * reappears only across ITERATIONS: new preflop ranges change the postflop
+ * subgame, which changes the EVs, which moves the thresholds. A tree with
+ * 3-bets and 4-bets would need real CFR within the preflop step; this one
+ * does not, and pretending otherwise would add machinery that does nothing.
+ *
+ * THE TREE (chips: 10 = 1bb; SB posts 5 and folds, BB posts 10):
+ *
+ *   BTN  fold                      -> BTN   0
+ *        open to 25
+ *          BB fold                 -> BTN +15, BB -10
+ *          BB call                 -> BTN ev_ip-25, BB ev_oop-25   (postflop)
+ *
+ * Every terminal sums to +5 across the two players — the dead small blind they
+ * split. That invariant is asserted below, because a sign error in this
+ * accounting is invisible in the output and fatal to the result.
+ *
+ * UNITS: EVs from root-ev are each player's SHARE OF THE FINAL POT in chips,
+ * measured, not assumed — see docs/14-m87a-solver-scope.md.
+ */
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { cellFrequency, getScenario, handAt } from "../lib/poker/ranges";
+
+const OPEN = 25; // BTN's open, in chips
+const DEAD_SB = 5;
+const BB_POST = 10;
+
+interface EvFile {
+  flop: string;
+  pot: number;
+  stack: number;
+  players: { hands: string[]; ev: number[]; weight: number[] }[];
+}
+
+const dir = process.argv[2];
+if (!dir) {
+  console.error("usage: npx tsx solver/preflop-br.ts <ev-dir>");
+  process.exit(2);
+}
+
+const files = readdirSync(dir).filter((f) => f.endsWith(".ev.json"));
+if (files.length === 0) {
+  console.error(`no .ev.json files in ${dir}`);
+  process.exit(2);
+}
+
+// combo -> running weighted EV, per player
+const acc: Map<string, { ev: number; w: number }>[] = [new Map(), new Map()];
+let pot = 0;
+for (const f of files) {
+  const d: EvFile = JSON.parse(readFileSync(join(dir, f), "utf8"));
+  pot = d.pot;
+  for (let p = 0; p < 2; p++) {
+    const { hands, ev, weight } = d.players[p];
+    for (let i = 0; i < hands.length; i++) {
+      // Weight by the hand's weight within the range: a hand present at 0.3
+      // in the range should not count as much as one present at 1.0.
+      const cur = acc[p].get(hands[i]) ?? { ev: 0, w: 0 };
+      cur.ev += ev[i] * weight[i];
+      cur.w += weight[i];
+      acc[p].set(hands[i], cur);
+    }
+  }
+}
+
+const meanEv = (p: number, combo: string): number | null => {
+  const a = acc[p].get(combo);
+  return a && a.w > 0 ? a.ev / a.w : null;
+};
+
+/** "8s7h" -> "87o", "8s7s" -> "87s", "8s8h" -> "88". */
+const RANKS = "23456789TJQKA";
+function comboToClass(c: string): string {
+  const r1 = c[0], s1 = c[1], r2 = c[2], s2 = c[3];
+  if (r1 === r2) return r1 + r2;
+  const [hi, lo] = RANKS.indexOf(r1) > RANKS.indexOf(r2) ? [r1, r2] : [r2, r1];
+  return hi + lo + (s1 === s2 ? "s" : "o");
+}
+
+// ---- coverage: the blocker this slice found -------------------------------
+// Card ids must match postflop-solver exactly: `rank << 2 | suit`, with
+// rank 0 = deuce and suit 0 = clubs, and `hole_to_string` emitting the HIGHER
+// card id first. Getting either wrong silently fails every lookup rather than
+// erroring, which shows up as absurd output (AA missing from a raising range).
+const SUITS = "cdhs";
+const cardToString = (card: number) => RANKS[card >> 2] + SUITS[card & 3];
+const ALL_COMBOS: string[] = [];
+for (let a = 0; a < 52; a++) {
+  for (let b = a + 1; b < 52; b++) {
+    ALL_COMBOS.push(cardToString(b) + cardToString(a));
+  }
+}
+const covered = (p: number) =>
+  ALL_COMBOS.filter((c) => acc[p].has(c)).length;
+
+console.log(`flops averaged: ${files.length}   pot: ${pot} chips`);
+console.log(
+  `coverage — OOP ${covered(0)}/${ALL_COMBOS.length} combos, ` +
+    `IP ${covered(1)}/${ALL_COMBOS.length}`,
+);
+if (covered(0) < ALL_COMBOS.length * 0.99) {
+  console.log(
+    "\n*** INCOMPLETE: hands missing from the postflop solve cannot be\n" +
+      "    evaluated here, because they never reach the flop in that solve.\n" +
+      "    Re-run the postflop solves with wider ranges before trusting the\n" +
+      "    ranges below — see docs/14-m87a-solver-scope.md.\n",
+  );
+}
+
+// ---- BB's best response: call iff calling beats folding --------------------
+// fold = -BB_POST; call = ev_oop - OPEN.  So call iff ev_oop > OPEN - BB_POST.
+const BB_CALL_THRESHOLD = OPEN - BB_POST; // 15 chips
+const bbCalls = new Set<string>();
+for (const c of ALL_COMBOS) {
+  const ev = meanEv(0, c);
+  if (ev !== null && ev > BB_CALL_THRESHOLD) bbCalls.add(c);
+}
+
+// ---- BTN's best response, with card removal -------------------------------
+const cardsOf = (c: string) => [c.slice(0, 2), c.slice(2, 4)];
+function btnOpenEv(y: string): number | null {
+  const evIp = meanEv(1, y);
+  if (evIp === null) return null;
+  const [y1, y2] = cardsOf(y);
+  let live = 0, calls = 0;
+  for (const x of ALL_COMBOS) {
+    const [x1, x2] = cardsOf(x);
+    if (x1 === y1 || x1 === y2 || x2 === y1 || x2 === y2) continue;
+    live++;
+    if (bbCalls.has(x)) calls++;
+  }
+  const pCall = live > 0 ? calls / live : 0;
+  return (1 - pCall) * (DEAD_SB + BB_POST) + pCall * (evIp - OPEN);
+}
+
+const btnOpens = new Set<string>();
+for (const c of ALL_COMBOS) {
+  const ev = btnOpenEv(c);
+  if (ev !== null && ev > 0) btnOpens.add(c);
+}
+
+// ---- the payoff invariant, asserted ---------------------------------------
+// Every terminal must sum to the dead small blind across both players.
+{
+  const bbFold = 15 + -10;
+  if (bbFold !== DEAD_SB) throw new Error(`BB-fold terminal sums to ${bbFold}, expected ${DEAD_SB}`);
+  const postflop = pot - 2 * OPEN;
+  if (postflop !== DEAD_SB) {
+    throw new Error(`postflop terminal sums to ${postflop}, expected ${DEAD_SB}`);
+  }
+}
+
+// ---- report, as 169-class frequencies, against the reference ranges --------
+function classFreq(set: Set<string>): Map<string, number> {
+  const total = new Map<string, number>();
+  const hit = new Map<string, number>();
+  for (const c of ALL_COMBOS) {
+    const k = comboToClass(c);
+    total.set(k, (total.get(k) ?? 0) + 1);
+    if (set.has(c)) hit.set(k, (hit.get(k) ?? 0) + 1);
+  }
+  const out = new Map<string, number>();
+  for (const [k, t] of total) out.set(k, (hit.get(k) ?? 0) / t);
+  return out;
+}
+
+const solvedBtn = classFreq(btnOpens);
+const solvedBb = classFreq(bbCalls);
+const refBtn = getScenario("btn");
+const refBb = getScenario("bb-btn");
+if (!refBtn || !refBb) throw new Error("reference scenarios missing");
+
+function compare(name: string, solved: Map<string, number>, ref: (h: string) => number) {
+  let sumSolved = 0, sumRef = 0, absDiff = 0, worst: [string, number][] = [];
+  for (let i = 0; i < 13; i++) {
+    for (let j = 0; j < 13; j++) {
+      const hand = handAt(i, j);
+      const s = solved.get(hand) ?? 0;
+      const r = ref(hand);
+      const combos = hand.length === 2 ? 6 : hand.endsWith("s") ? 4 : 12;
+      sumSolved += s * combos;
+      sumRef += r * combos;
+      absDiff += Math.abs(s - r) * combos;
+      worst.push([hand, s - r]);
+    }
+  }
+  worst.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  console.log(`\n${name}`);
+  console.log(`  solved range: ${(100 * sumSolved / 1326).toFixed(1)}% of hands`);
+  console.log(`  reference:    ${(100 * sumRef / 1326).toFixed(1)}%`);
+  console.log(`  total combo divergence: ${(100 * absDiff / 1326).toFixed(1)} points`);
+  console.log(
+    "  biggest moves: " +
+      worst.slice(0, 8).map(([h, d]) => `${h}${d > 0 ? "+" : ""}${(100 * d).toFixed(0)}`).join(" "),
+  );
+}
+
+compare("BTN open", solvedBtn, (h) => cellFrequency(refBtn, h).r);
+compare("BB call", solvedBb, (h) => cellFrequency(refBb, h).c);
