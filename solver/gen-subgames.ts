@@ -1,57 +1,38 @@
 /**
- * Generate the postflop subgame configurations for the full 6-max preflop tree.
+ * Generate the postflop subgame configurations, DRIVEN BY THE TREE.
  *
  *   npx tsx solver/gen-subgames.ts <out-dir>
  *
- * The pruned tree (no overcalls — see docs/14-m87a-solver-scope.md) reaches a
- * flop heads-up in 1,257 terminal states, but a postflop subgame depends only
- * on WHICH TWO POSITIONS are in and AT WHICH RAISE LEVEL — not on the order the
- * other four folded. That collapses to 35 distinct solves.
+ * This used to re-derive the subgame list with its own loop over position
+ * pairs, and it was wrong: it assumed the caller at level 2 is always the
+ * original opener, so it missed every line where a third player cold-calls a
+ * 3-bet and the opener folds — a perfectly ordinary heads-up pot. Ten of forty
+ * subgames were absent, and the batch would have solved a set the solver never
+ * actually reaches.
  *
- * Only levels 1 and 2 produce subgames. Level 3 is the 4-bet, which is all-in
- * by the settled tree, so a called 4-bet never sees a postflop decision — it is
- * an all-in equity terminal instead.
- *
- * SIZINGS (one per level, per the settled tree):
- *   open  2.5bb
- *   3-bet 3x the open in position, 4x out of position — standard, and the
- *         asymmetry is real poker rather than a complication: 3-betting out of
- *         position needs a bigger size to deny equity and realise less of it.
- *   4-bet all-in (no postflop, so not generated here)
- *
- * POT = the two players' contributions + the blinds of everyone who folded.
- * STACK = 100bb minus what that player put in preflop.
- * Chips are tenths of a big blind, matching the existing srp-btn-bb pack.
+ * Now the tree is the single source of truth. Every configuration comes from a
+ * terminal the tree really produces, and pot and effective stack are read from
+ * that terminal's own contribution table rather than recomputed here. Two
+ * independent derivations of the same arithmetic is exactly the pattern
+ * CLAUDE.md warns about.
  *
  * Ranges are 100% for iteration 1. That is deliberate and temporary: it is the
- * only way every hand gets an EV, which is what the preflop solve needs in
- * order to decide a hand belongs in a range at all. The EVs are consequently
- * conditional on a 100% opponent and over-state marginal hands, so the ranges
- * converge FROM ABOVE and iteration is mandatory. See §"BLOCKER" in the scope.
+ * only way every hand gets an EV, and a hand with no EV cannot be evaluated for
+ * inclusion in a range at all. The EVs are consequently conditional on a 100%
+ * opponent and over-state marginal hands, so ranges converge FROM ABOVE and
+ * iteration is mandatory. See docs/14-m87a-solver-scope.md.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const POS = ["UTG", "HJ", "CO", "BTN", "SB", "BB"] as const;
-type Pos = (typeof POS)[number];
-
-const POSTED: Record<Pos, number> = { UTG: 0, HJ: 0, CO: 0, BTN: 0, SB: 0.5, BB: 1 };
-const START_STACK = 100;
-const OPEN = 2.5;
+import { buildTree, POS, START_STACK, type Pos } from "./preflop/tree";
 
 const RANKS = "AKQJT98765432";
 const FULL_RANGE = ["22+", ...RANKS.slice(0, -1).split("").map((r) => `${r}2+`)].join(",");
 
-/** In a heads-up pot the later position acts last postflop — except vs blinds. */
-function isInPosition(a: Pos, b: Pos): boolean {
-  return POS.indexOf(a) > POS.indexOf(b);
-}
+const tree = buildTree();
 
-function threeBetSize(aggressor: Pos, opener: Pos): number {
-  return isInPosition(aggressor, opener) ? OPEN * 3 : OPEN * 4;
-}
-
-interface Subgame {
+interface Config {
   spot: string;
   level: number;
   oopPos: Pos;
@@ -62,64 +43,60 @@ interface Subgame {
   stack: number;
 }
 
-const out: Subgame[] = [];
+const configs = new Map<string, Config>();
 
-for (let i = 0; i < POS.length; i++) {
-  for (let j = 0; j < POS.length; j++) {
-    if (i === j) continue;
-    const aggressor = POS[i];
-    const caller = POS[j];
+for (const node of tree.nodes) {
+  if (node.kind !== "terminal") continue;
+  const t = node.terminal;
+  if (t.kind !== "postflop" || !t.subgame) continue;
 
-    for (const level of [1, 2] as const) {
-      // Level 1: aggressor opens, caller calls the open.
-      // Level 2: caller opened, aggressor 3-bet, caller called the 3-bet.
-      const bet = level === 1 ? OPEN : threeBetSize(aggressor, caller);
-
-      // The aggressor must act before the caller at level 1 (you cannot call a
-      // bet that has not happened), and after them at level 2 (you cannot
-      // 3-bet before someone opens).
-      if (level === 1 && !(i < j)) continue;
-      if (level === 2 && !(i > j)) continue;
-
-      const inPot = new Set<Pos>([aggressor, caller]);
-      const dead = POS.filter((p) => !inPot.has(p)).reduce((s, p) => s + POSTED[p], 0);
-
-      const potBb = bet * 2 + dead;
-      const stackBb = START_STACK - bet;
-
-      const ipPos = isInPosition(aggressor, caller) ? aggressor : caller;
-      const oopPos = ipPos === aggressor ? caller : aggressor;
-
-      out.push({
-        spot: `L${level}-${aggressor}-${caller}`.toLowerCase(),
-        level,
-        oopPos,
-        ipPos,
-        oop: FULL_RANGE,
-        ip: FULL_RANGE,
-        pot: Math.round(potBb * 10),
-        stack: Math.round(stackBb * 10),
-      });
-    }
+  const pot = POS.reduce((s, p) => s + t.contrib[p], 0);
+  const [a, b] = t.live;
+  // Both live players have matched the same amount — that is what "called"
+  // means. If this ever fails the contribution bookkeeping is broken, and the
+  // effective stack below would be meaningless.
+  if (t.contrib[a] !== t.contrib[b]) {
+    throw new Error(
+      `${t.subgame}: live players contributed ${t.contrib[a]} and ${t.contrib[b]}`,
+    );
   }
+  const stack = START_STACK - t.contrib[a];
+
+  const existing = configs.get(t.subgame);
+  if (existing && (existing.pot !== pot || existing.stack !== stack)) {
+    // The same named subgame reached with different money in it would mean the
+    // name is not specific enough to identify the solve.
+    throw new Error(
+      `${t.subgame} reached with pot ${pot}/${stack} and ${existing.pot}/${existing.stack}`,
+    );
+  }
+
+  configs.set(t.subgame, {
+    spot: t.subgame,
+    level: Number(t.subgame[1]),
+    oopPos: t.oop!,
+    ipPos: t.ip!,
+    oop: FULL_RANGE,
+    ip: FULL_RANGE,
+    pot,
+    stack,
+  });
 }
 
 const dir = process.argv[2] ?? "subgames";
 mkdirSync(dir, { recursive: true });
-for (const sg of out) {
-  writeFileSync(join(dir, `${sg.spot}.json`), JSON.stringify(sg, null, 2) + "\n");
+for (const cfg of configs.values()) {
+  writeFileSync(join(dir, `${cfg.spot}.json`), JSON.stringify(cfg, null, 2) + "\n");
 }
 
-console.log(`${out.length} subgames -> ${dir}/`);
-const byLevel = out.reduce<Record<number, number>>((a, s) => {
-  a[s.level] = (a[s.level] ?? 0) + 1;
-  return a;
-}, {});
+console.log(`${configs.size} subgames -> ${dir}/`);
+const byLevel: Record<number, number> = {};
+for (const c of configs.values()) byLevel[c.level] = (byLevel[c.level] ?? 0) + 1;
 for (const [lvl, n] of Object.entries(byLevel)) console.log(`  level ${lvl}: ${n}`);
 console.log("\nsample:");
-for (const sg of out.slice(0, 4)) {
+for (const c of [...configs.values()].slice(0, 5)) {
   console.log(
-    `  ${sg.spot.padEnd(16)} ${sg.oopPos} (OOP) vs ${sg.ipPos} (IP)  ` +
-      `pot ${sg.pot} (${sg.pot / 10}bb)  stack ${sg.stack} (${sg.stack / 10}bb)`,
+    `  ${c.spot.padEnd(14)} ${c.oopPos} (OOP) vs ${c.ipPos} (IP)  ` +
+      `pot ${c.pot} (${c.pot / 10}bb)  stack ${c.stack} (${c.stack / 10}bb)`,
   );
 }
