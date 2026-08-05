@@ -147,7 +147,14 @@ body {
 }
 
 .ambient-wash {
-  position: absolute;
+  /* `fixed`, not `absolute`. `body` is `position: relative`, so an absolute
+     wash sized itself to the whole SCROLLABLE DOCUMENT — and its blobs are
+     sized in % of that. On a long page (/learn, /drill, /reference) each
+     blurred layer became enormous, and `filter: blur()` allocates an offscreen
+     GPU buffer of roughly the element plus three times the radius on every
+     side. Fixed pins it to the viewport, so the cost stops depending on how
+     much content the page has. */
+  position: fixed;
   inset: 0;
   z-index: 0;
   overflow: hidden;
@@ -365,6 +372,17 @@ img { display: block; max-width: 100%; }
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
   backdrop-filter: blur(14px) saturate(1.4);
   border-bottom: 1px solid var(--line-soft);
+}
+@media (max-width: 900px) {
+  /* A sticky `backdrop-filter` re-composites the region behind it on every
+     scroll frame. On a phone that is a permanent GPU cost for a translucency
+     effect nobody is studying, so the header goes opaque instead. See the
+     wash note further down for why blur layers matter so much on iOS. */
+  .site-header {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface);
+  }
 }
 .site-header .inner {
   max-width: 1180px; margin: 0 auto;
@@ -1371,6 +1389,50 @@ body:has(.auth-mesh) .ambient-wash i:nth-child(6) { background: var(--wash-d); }
 .auth-mesh i:nth-child(7) {
   width: 58%; height: 40%; left: 20%; top: 32%;
   background: var(--wash-e); filter: blur(150px); opacity: 0.9;
+}
+
+/* ------------------------------------------------------------------
+   Phones paint the wash, they do not blur it.
+
+   Every route renders `.ambient-wash` (7 x blur(120px)); `/login` stacks
+   `.auth-mesh` on top (6 x blur(110px) + 1 x blur(150px)), so the sign-in
+   page asked a phone for FOURTEEN simultaneous blurred layers on top of the
+   header's `backdrop-filter`. Each one needs its own offscreen GPU buffer.
+   iOS Safari has a hard per-tab budget for those, and when it is exceeded the
+   tab does not error — it simply never finishes loading.
+
+   A blurred circle and a radial gradient look practically identical at this
+   opacity, and a gradient is painted directly with no buffer at all. Desktop
+   keeps the real blurs. Same picture, none of the cost.
+   ------------------------------------------------------------------ */
+@media (max-width: 900px) {
+  .ambient-wash i,
+  .auth-mesh i { display: none; }
+
+  .ambient-wash {
+    background:
+      radial-gradient(60% 18% at 12% 8%,  var(--wash-b), transparent 70%),
+      radial-gradient(55% 16% at 86% 13%, var(--wash-c), transparent 70%),
+      radial-gradient(55% 16% at 44% 28%, var(--wash-c), transparent 70%),
+      radial-gradient(50% 15% at 94% 44%, var(--wash-b), transparent 70%),
+      radial-gradient(58% 17% at 10% 60%, var(--wash-c), transparent 70%),
+      radial-gradient(52% 16% at 84% 75%, var(--wash-c), transparent 70%),
+      radial-gradient(56% 17% at 30% 91%, var(--wash-b), transparent 70%);
+  }
+
+  /* Under the mesh the wash is the reference's half-opacity backing layer. */
+  body:has(.auth-mesh) .ambient-wash { opacity: 0.5; }
+
+  .auth-mesh {
+    background:
+      radial-gradient(52% 34% at 8%  10%, var(--wash-a), transparent 72%),
+      radial-gradient(46% 30% at 92% 12%, var(--wash-c), transparent 72%),
+      radial-gradient(40% 26% at 20% 36%, var(--wash-b), transparent 72%),
+      radial-gradient(44% 28% at 95% 44%, var(--wash-a), transparent 72%),
+      radial-gradient(50% 30% at 8%  70%, var(--wash-c), transparent 72%),
+      radial-gradient(42% 28% at 88% 80%, var(--wash-b), transparent 72%),
+      radial-gradient(64% 42% at 50% 52%, var(--wash-e), transparent 76%);
+  }
 }
 
 .auth-layout {
