@@ -5552,6 +5552,641 @@ on conflict (id) do update set
   rule_of_thumb = excluded.rule_of_thumb,
   is_active = excluded.is_active;
 
+-- ====================================================================
+-- M8.6A — Module 06: Bluffing & Aggression
+--
+-- `bluff` has been a shipped drill kind since M2, but the course taught it
+-- in exactly one lesson ("Value Betting vs Bluffing", module 2). A player
+-- could be drilled on break-even bluff frequency having never been taught
+-- it. This module is that missing prerequisite.
+--
+-- A dedicated module rather than lessons scattered through the existing
+-- five: bluffing is one coherent skill, and keeping it together gives the
+-- `bluff` drill a single obvious prerequisite to route to. Appended at the
+-- end so no existing module or lesson order changes.
+--
+-- EVERY NUMBER BELOW IS DERIVED FROM lib/poker/math.ts, not hand arithmetic,
+-- per the poker-math correctness rules in CLAUDE.md:
+--   breakEvenFoldRate(100, bet):  33 -> 24.8%   50 -> 33.3%
+--                                 66 -> 39.8%  100 -> 50.0%
+--   minDefenceFrequency(100, bet):33 -> 75.2%   50 -> 66.7%
+--                                 66 -> 60.2%  100 -> 50.0%
+--   requiredEquity(pot, call):    vs pot-sized bet (200, 100) -> 33.3%
+--   evOfCall(equity, 200, 100):   25% -> -25   33.3% -> 0   50% -> +50
+--   hitByRiver(9):                35.0%
+--
+-- The one betting convention is respected throughout and named on screen:
+-- `potBefore` when the player is the one betting, `pot` (total after
+-- villain's bet) when the player is calling. Mixing them is the single
+-- biggest source of confidently wrong answers in this domain.
+-- ====================================================================
+
+insert into public.modules (id, title, description, order_index, is_active)
+values
+  (
+    6,
+    'Bluffing & Aggression',
+    'Semi-bluffs, break-even frequency, minimum defence, bluff-catching, blockers, and knowing when to give up.',
+    6,
+    true
+  )
+on conflict (id) do update set
+  title = excluded.title,
+  description = excluded.description,
+  order_index = excluded.order_index,
+  is_active = excluded.is_active;
+
+insert into public.lessons
+  (id, module_id, lesson_type, title, order_index, content_json,
+   estimated_time_seconds, difficulty, version, is_active)
+values
+  -- lesson 21: Why a Bluff Has to Work
+  (
+    21,
+    6,
+    'concept'::public.lesson_type,
+    'Why a Bluff Has to Work',
+    1,
+    $json$
+    {
+      "screens": [
+        {
+          "type": "info",
+          "content": "## A bluff is a price, not a mood\n\nA bluff is not a feeling about your opponent. It is a bet that risks a known amount to win a known amount, and it only makes money if it works **often enough**.\n\nThat threshold has a name: the **break-even fold rate**. Below it you are lighting money on fire. Above it you are printing."
+        },
+        {
+          "type": "info",
+          "content": "## Risk over risk-plus-reward\n\nYou bet into a pot. Two things matter:\n\n- **Risk** — the size of your bet, which you lose when called.\n- **Reward** — the pot as it stood *before* your bet, which you win when they fold.\n\n```\nbreak-even fold rate = bet / (pot before your bet + bet)\n```\n\nNote which pot that is. When **you** are betting, the pot has not yet been raised by your own bet. Getting this backwards is the most common way to produce a confident wrong number."
+        },
+        {
+          "type": "info",
+          "content": "## The four sizes worth memorising\n\nBluffing into a pot of 100:\n\n| Bet | Risking | Needs folds |\n|---|---|---|\n| 1/3 pot | 33 | **24.8%** |\n| 1/2 pot | 50 | **33.3%** |\n| 2/3 pot | 66 | **39.8%** |\n| Pot | 100 | **50.0%** |\n\nA third-pot bluff has to work only about a quarter of the time. A pot-sized bluff has to work half the time. That is a big difference in how often you need to be right."
+        },
+        {
+          "type": "info",
+          "content": "## The size is the argument\n\nThis table cuts both ways.\n\nBetting bigger wins more when it works, but it has to work more often. Betting smaller is forgiving — it needs fewer folds — but it also gives your opponent a cheap price to continue.\n\nSo the question is never \"should I bluff?\" in the abstract. It is: **is this opponent, on this board, folding more often than my size requires?**"
+        },
+        {
+          "type": "question",
+          "content": "The pot is 100. You bet 50 as a pure bluff with a hand that cannot win at showdown.\n\nHow often does your opponent need to fold for this to break even?",
+          "choices": [
+            { "id": "a", "label": "25.0%" },
+            { "id": "b", "label": "33.3%" },
+            { "id": "c", "label": "50.0%" },
+            { "id": "d", "label": "66.7%" }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "type": "question",
+          "content": "You are choosing between a 1/3-pot and a pot-sized bluff against an opponent you think folds about 30% of the time.\n\nWhich is profitable?",
+          "choices": [
+            { "id": "a", "label": "Only the 1/3-pot bluff — it needs 24.8%" },
+            { "id": "b", "label": "Only the pot-sized bluff — bigger bets fold more hands" },
+            { "id": "c", "label": "Both — 30% clears every threshold" },
+            { "id": "d", "label": "Neither — 30% is never enough to bluff" }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "type": "recap",
+          "content": "## Key takeaways\n\n- A bluff breaks even at `bet / (pot before + bet)`.\n- 1/3 pot needs **24.8%** folds · 1/2 pot **33.3%** · 2/3 pot **39.8%** · pot **50.0%**.\n- Bigger bluffs win more but must work more often.\n- The pot in that formula is the pot **before** your bet. When you are calling instead, the convention flips — that is the next few lessons."
+        }
+      ],
+      "skill_tags": ["bluffing", "bet_sizing"],
+      "xp_reward": 10
+    }
+    $json$::jsonb,
+    420,
+    2,
+    1,
+    true
+  ),
+  -- lesson 22: Semi-Bluffs
+  (
+    22,
+    6,
+    'concept'::public.lesson_type,
+    'Semi-Bluffs: Betting With Outs',
+    2,
+    $json$
+    {
+      "screens": [
+        {
+          "type": "info",
+          "content": "## Two ways to win\n\nA **pure bluff** wins exactly one way: they fold.\n\nA **semi-bluff** wins two ways: they fold, or they call and you improve. That second path is why semi-bluffs are the most reliably profitable aggression in poker."
+        },
+        {
+          "type": "info",
+          "content": "## Equity when called\n\nThe previous lesson said a 2/3-pot bet must work **39.8%** of the time. That is true for a hand with no equity.\n\nNow hold a flush draw on the flop. Nine outs wins **35.0%** of the time by the river. So when your bet gets called, you are not dead — you are a 35% underdog with two cards to come.\n\nThe fold equity and the hand equity add together. Your bet no longer needs anywhere near 39.8% folds to show a profit."
+        },
+        {
+          "type": "info",
+          "content": "## Why this changes which hands you bet\n\nGiven a choice of bluffing candidates, prefer the one that can still win.\n\n- **Flush draw** — 9 outs, 35.0% by the river. Excellent semi-bluff.\n- **Open-ended straight draw** — 8 outs, around 31%. Excellent.\n- **Gutshot** — 4 outs, around 17%. Thin, but real.\n- **Ace-high, no draw** — near zero when called. This is a pure bluff, and needs the full fold rate.\n\nDeriving the count from the actual board matters here: a flush draw is not always nine clean outs. A card that pairs the board can complete a full house for your opponent — those outs are dead."
+        },
+        {
+          "type": "info",
+          "content": "## The trap: drawing is not a licence\n\nA semi-bluff is still a bet. If your opponent never folds, you are simply building a pot as an underdog, and a 35% hand putting in money against a range that always continues is losing money on the bet itself.\n\nSemi-bluffing is strongest when **both** halves are live: they fold sometimes, and you improve sometimes."
+        },
+        {
+          "type": "question",
+          "content": "You hold a flush draw on the flop and bet two-thirds of the pot.\n\nWhy does this need fewer folds than the 39.8% a pure bluff would need?",
+          "choices": [
+            { "id": "a", "label": "Because you still win about 35% of the time when called" },
+            { "id": "b", "label": "Because flush draws make opponents fold more often" },
+            { "id": "c", "label": "Because the pot odds change when you have a draw" },
+            { "id": "d", "label": "It does not — the break-even fold rate is the same for every hand" }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "type": "question",
+          "content": "You can bluff the flop with exactly one of these. Which is the best semi-bluff?",
+          "choices": [
+            { "id": "a", "label": "King-high with no draw" },
+            { "id": "b", "label": "An open-ended straight draw" },
+            { "id": "c", "label": "Bottom pair, no draw" },
+            { "id": "d", "label": "A hand already beating everything — bet it as a bluff" }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "type": "recap",
+          "content": "## Key takeaways\n\n- Semi-bluffs win two ways: folds now, or improvement later.\n- Nine outs is **35.0%** by the river — that equity offsets the fold rate your size demands.\n- Prefer bluffing hands that can improve over hands that cannot.\n- Count outs from the actual board. Board-pairing cards can kill outs you assumed were clean.\n- Fold equity plus hand equity — a semi-bluff needs both to be live."
+        }
+      ],
+      "skill_tags": ["bluffing", "equity_estimation"],
+      "xp_reward": 10
+    }
+    $json$::jsonb,
+    420,
+    2,
+    1,
+    true
+  ),
+  -- lesson 23: Minimum Defence Frequency
+  (
+    23,
+    6,
+    'concept'::public.lesson_type,
+    'Minimum Defence Frequency',
+    3,
+    $json$
+    {
+      "screens": [
+        {
+          "type": "info",
+          "content": "## Now you are the one being bluffed\n\nEvery previous lesson had you betting. Turn it around.\n\nIf you fold too often, your opponent can bet **any two cards** at a profit. Minimum defence frequency (MDF) is the share of your range you must continue with to stop that."
+        },
+        {
+          "type": "info",
+          "content": "## The mirror of the break-even fold rate\n\n```\nMDF = pot before their bet / (pot before their bet + bet)\n```\n\nIt is exactly the complement of the fold rate their bluff needs. Facing a bet into a pot of 100:\n\n| Their bet | Their bluff needs | You must defend |\n|---|---|---|\n| 1/3 pot | 24.8% folds | **75.2%** |\n| 1/2 pot | 33.3% folds | **66.7%** |\n| 2/3 pot | 39.8% folds | **60.2%** |\n| Pot | 50.0% folds | **50.0%** |\n\nThe two columns add to 100%. That is the whole idea: defend enough that their bluff is exactly break-even."
+        },
+        {
+          "type": "info",
+          "content": "## Small bets demand more defence\n\nRead that table again, because the intuition runs backwards.\n\nA **small** bet is the one you must defend most widely — 75.2% against a third-pot bet. It is cheap, so folding to it hands over the pot far too easily.\n\nA **pot-sized** bet lets you fold half your range. It is expensive, so you are entitled to give up more often."
+        },
+        {
+          "type": "info",
+          "content": "## What MDF is not\n\nMDF is a defence against **exploitation**, not a rule for every hand.\n\nIt assumes your opponent could be betting any two cards. Against someone who has never bluffed a river in their life, folding far more than MDF is correct — you are not obliged to defend against bluffs that do not exist.\n\nUse MDF as the floor that stops a thinking opponent from running you over. Deviate from it deliberately, not by accident."
+        },
+        {
+          "type": "question",
+          "content": "Your opponent bets one-third of the pot on the river.\n\nWhat share of your range must you continue with so that betting any two cards is not automatically profitable for them?",
+          "choices": [
+            { "id": "a", "label": "24.8%" },
+            { "id": "b", "label": "50.0%" },
+            { "id": "c", "label": "66.7%" },
+            { "id": "d", "label": "75.2%" }
+          ],
+          "correct_choice_id": "d"
+        },
+        {
+          "type": "question",
+          "content": "Against which bet size are you allowed to fold the most?",
+          "choices": [
+            { "id": "a", "label": "1/3 pot — small bets are usually value" },
+            { "id": "b", "label": "Pot — you only need to defend 50.0%" },
+            { "id": "c", "label": "The size makes no difference to how often you fold" },
+            { "id": "d", "label": "1/2 pot — it is the middle, so it is the safest to fold" }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "type": "recap",
+          "content": "## Key takeaways\n\n- MDF = `pot before their bet / (pot before + bet)`.\n- 1/3 pot → defend **75.2%** · 1/2 pot → **66.7%** · 2/3 pot → **60.2%** · pot → **50.0%**.\n- Small bets demand **more** defence, not less.\n- MDF and the break-even fold rate are complements of each other.\n- It is a floor against exploitation, not a law. Against a player who never bluffs, over-folding is correct."
+        }
+      ],
+      "skill_tags": ["bluffing", "pot_odds"],
+      "xp_reward": 10
+    }
+    $json$::jsonb,
+    420,
+    2,
+    1,
+    true
+  ),
+  -- lesson 24: Bluff-Catching
+  (
+    24,
+    6,
+    'concept'::public.lesson_type,
+    'Bluff-Catching',
+    4,
+    $json$
+    {
+      "screens": [
+        {
+          "type": "info",
+          "content": "## The hand that only beats bluffs\n\nA **bluff-catcher** is a hand that loses to every value hand your opponent could have, and beats every bluff.\n\nMiddle pair on a river where they have bet three streets is a bluff-catcher. It is not calling because it is strong. It is calling because they might have nothing."
+        },
+        {
+          "type": "info",
+          "content": "## The convention flips here\n\nYou are calling now, not betting. So:\n\n- **pot** = the total pot **after** their bet — what you win.\n- **call** = what it costs you.\n\n```\nrequired equity = call / (pot + call)\n```\n\nThey bet 100 into 100. The pot is now 200 and it costs you 100. You need **33.3%** equity.\n\nWatch the difference from lesson 1: there, a pot-sized bet needed 50% folds. Here, calling one needs 33.3% equity. Different question, different pot, different number."
+        },
+        {
+          "type": "info",
+          "content": "## Your equity is their bluff frequency\n\nHere is the step that makes bluff-catching click.\n\nYour hand beats their bluffs and loses to their value. So your equity **is** the share of their betting range that is bluffs.\n\nNeeding 33.3% equity means: *call if at least a third of the hands they bet here are bluffs.*\n\nYou are no longer estimating your hand. You are estimating their range."
+        },
+        {
+          "type": "info",
+          "content": "## What that costs when you are wrong\n\nFacing a pot-sized river bet (pot 200, call 100):\n\n| Their bluffs | EV of calling |\n|---|---|\n| 25% of bets | **−25 chips** |\n| 33.3% of bets | **0 — break-even** |\n| 50% of bets | **+50 chips** |\n\nThe gap between a bad call and a good one is not subtle, and it is entirely decided by a read on their range rather than by how much you like your pair."
+        },
+        {
+          "type": "question",
+          "content": "The pot is 100. Your opponent bets 100 on the river, so the pot is 200 and it costs you 100 to call. You hold a hand that beats all of their bluffs and none of their value hands.\n\nHow often must they be bluffing for the call to break even?",
+          "choices": [
+            { "id": "a", "label": "25.0%" },
+            { "id": "b", "label": "33.3%" },
+            { "id": "c", "label": "50.0%" },
+            { "id": "d", "label": "66.7%" }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "type": "question",
+          "content": "Facing that same pot-sized river bet, you judge your opponent is bluffing about a quarter of the time.\n\nWhat is the call worth?",
+          "choices": [
+            { "id": "a", "label": "About −25 chips — a losing call" },
+            { "id": "b", "label": "Exactly break-even" },
+            { "id": "c", "label": "About +50 chips — a clear call" },
+            { "id": "d", "label": "It cannot be calculated without knowing your exact hand" }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "type": "recap",
+          "content": "## Key takeaways\n\n- A bluff-catcher beats their bluffs and loses to their value — nothing in between.\n- When calling, `pot` is the total **after** their bet. Required equity = `call / (pot + call)`.\n- A pot-sized river bet needs **33.3%** — so call if a third or more of their bets are bluffs.\n- Your equity is their bluff frequency. Estimate their range, not your hand.\n- At 25% bluffs that call is worth about **−25 chips**; at 50% it is worth **+50**."
+        }
+      ],
+      "skill_tags": ["bluffing", "pot_odds"],
+      "xp_reward": 10
+    }
+    $json$::jsonb,
+    480,
+    3,
+    1,
+    true
+  ),
+  -- lesson 25: Blockers and Unblockers
+  (
+    25,
+    6,
+    'concept'::public.lesson_type,
+    'Blockers and Unblockers',
+    5,
+    $json$
+    {
+      "screens": [
+        {
+          "type": "info",
+          "content": "## The cards you hold are missing from their range\n\nEvery card in your hand is a card your opponent cannot have. That is all a **blocker** is — and on the river it is often the tiebreaker between two hands that are otherwise identical bluffs."
+        },
+        {
+          "type": "info",
+          "content": "## Blocking their value\n\nThe board is K♠ 9♠ 4♦ 2♣ 7♠ — the flush came in. You have nothing and are deciding whether to bluff.\n\nHold the **A♠** and you block every nut-flush combination. They cannot hold it, because you do. The strongest part of their calling range just shrank, so they must fold more often.\n\nThat is the good blocker: it removes hands that would have **called** you."
+        },
+        {
+          "type": "info",
+          "content": "## Unblocking their folds\n\nThe mirror matters just as much, and it is the half people forget.\n\nYou want them to hold hands they will **fold**. If you are bluffing, holding cards that make up their missed draws is bad — every busted draw you hold is one they do not, and busted draws are exactly the hands that fold.\n\nSo the ideal river bluff **blocks their calls** and **unblocks their folds**."
+        },
+        {
+          "type": "info",
+          "content": "## For calling, invert it\n\nBluff-catching flips the logic. Now you want to hold cards that block their **value** hands, because that shifts their range toward bluffs — and lesson 4 showed your equity *is* their bluff frequency.\n\nAn ace that blocks their strongest value combinations makes a marginal call better. The same card that makes a bluff good can make a call good, for the same underlying reason: it changes what they are allowed to have."
+        },
+        {
+          "type": "question",
+          "content": "The river completes a spade flush. You have a busted hand and are deciding whether to bluff.\n\nWhich holding makes the better bluff?",
+          "choices": [
+            { "id": "a", "label": "A♠ x — it blocks the nut flush they would call with" },
+            { "id": "b", "label": "Two red cards — no spades at all" },
+            { "id": "c", "label": "A busted spade draw with two small spades" },
+            { "id": "d", "label": "It makes no difference which two cards you hold" }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "type": "question",
+          "content": "You are bluffing the river. Why is it *bad* to hold cards that make up your opponent's missed draws?",
+          "choices": [
+            { "id": "a", "label": "Because missed draws are the hands that would have folded to you" },
+            { "id": "b", "label": "Because missed draws beat your hand at showdown" },
+            { "id": "c", "label": "Because it means the board is too dry to bluff" },
+            { "id": "d", "label": "It is not bad — blocking anything is always good" }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "type": "recap",
+          "content": "## Key takeaways\n\n- A card you hold is a card they cannot have.\n- Bluff well: **block their calls**, **unblock their folds**.\n- Holding their busted draws is a reason not to bluff — those were your folds.\n- Bluff-catch well: block their **value**, which shifts their range toward bluffs.\n- Blockers break ties. They do not turn a bad spot into a good one."
+        }
+      ],
+      "skill_tags": ["bluffing", "hand_selection"],
+      "xp_reward": 10
+    }
+    $json$::jsonb,
+    420,
+    3,
+    1,
+    true
+  ),
+  -- lesson 26: Choosing Your Bluffs, and Giving Up
+  (
+    26,
+    6,
+    'quiz'::public.lesson_type,
+    'Choosing Your Bluffs, and Giving Up',
+    6,
+    $json$
+    {
+      "screens": [
+        {
+          "type": "info",
+          "content": "## Not every hand that missed is a bluff\n\nBy the river you will have far more missed hands than you can profitably bet. Choosing between them is a real skill, and the default is not \"bet them all\"."
+        },
+        {
+          "type": "info",
+          "content": "## Selection, street by street\n\n**Flop** — bluff with equity. Draws, backdoors, overcards. You have two more streets to improve, so semi-bluffs are cheap and win two ways.\n\n**Turn** — narrow. The good turn bluffs are draws that picked up more equity, plus hands whose story the board now supports. Barrelling every flop bluff is the single most expensive habit in low-stakes poker.\n\n**River** — no equity left, so it is pure. Now selection is entirely about blockers and about which hands can no longer win at showdown."
+        },
+        {
+          "type": "info",
+          "content": "## Bluff the hands that cannot win\n\nA hand that might win at showdown has value you destroy by bluffing with it.\n\nAce-high on the river can beat a missed draw. Bet it and every worse hand folds while every better hand calls — you turned a hand with *some* equity into a hand with none.\n\nBluff the hands at the very bottom. Check the ones that can still win."
+        },
+        {
+          "type": "info",
+          "content": "## Giving up is a line\n\nChecking and folding is not weakness or a failure of nerve. It is the correct play with most of your range most of the time.\n\nIf the board favours their range, if they have shown no capacity to fold, if your hand blocks nothing useful — give up. The money you do not lose on a doomed third barrel spends exactly the same as the money you win.\n\nThe players who lose most to bluffing are not the ones who never bluff. They are the ones who cannot stop."
+        },
+        {
+          "type": "question",
+          "content": "It is the river. You hold ace-high, which can still beat your opponent's missed draws. You have no pair and no draw.\n\nWhat is usually best?",
+          "choices": [
+            { "id": "a", "label": "Bet — you cannot win without betting" },
+            { "id": "b", "label": "Check — ace-high can win at showdown, and betting folds out only worse" },
+            { "id": "c", "label": "Bet small so worse aces call" },
+            { "id": "d", "label": "Bet pot — maximum pressure with a blocker" }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "type": "question",
+          "content": "You bluffed the flop with a gutshot. The turn bricks and your opponent calls again, showing no sign of folding.\n\nWhat is the disciplined line?",
+          "choices": [
+            { "id": "a", "label": "Barrel the river — you have to follow through on the story" },
+            { "id": "b", "label": "Give up unless the river gives you a reason to bet" },
+            { "id": "c", "label": "Always barrel: stopping makes your flop bluff wasted money" },
+            { "id": "d", "label": "Bet small on the river to save money while still bluffing" }
+          ],
+          "correct_choice_id": "b"
+        },
+        {
+          "type": "question",
+          "content": "Which is the strongest reason to pick one busted hand over another as a river bluff?",
+          "choices": [
+            { "id": "a", "label": "It blocks their calling hands and unblocks their folding hands" },
+            { "id": "b", "label": "It was the prettiest draw on the flop" },
+            { "id": "c", "label": "It has the highest card, so it is the strongest bluff" },
+            { "id": "d", "label": "You have already invested the most money with it" }
+          ],
+          "correct_choice_id": "a"
+        },
+        {
+          "type": "recap",
+          "content": "## Key takeaways\n\n- Flop bluffs want equity; river bluffs want blockers.\n- Barrelling every flop bluff is the most expensive habit in low-stakes poker.\n- Bluff the hands that cannot win at showdown. Check the ones that can.\n- **Giving up is a line.** Money not lost counts exactly as much as money won.\n- You now have the whole picture: what a bluff must earn, what defends against one, and which hands to pick. The `bluff` drill is where it becomes automatic."
+        }
+      ],
+      "skill_tags": ["bluffing", "discipline"],
+      "xp_reward": 15
+    }
+    $json$::jsonb,
+    480,
+    3,
+    1,
+    true
+  )
+on conflict (id) do update set
+  module_id = excluded.module_id,
+  lesson_type = excluded.lesson_type,
+  title = excluded.title,
+  order_index = excluded.order_index,
+  content_json = excluded.content_json,
+  estimated_time_seconds = excluded.estimated_time_seconds,
+  difficulty = excluded.difficulty,
+  version = excluded.version,
+  is_active = excluded.is_active;
+
+-- Authored practice for module 06, so the module ends in a decision.
+insert into public.scenarios
+  (id, module_id, skill_tag, difficulty, scenario_json, version, is_active)
+values
+  (
+    34,
+    6,
+    'bluffing',
+    2,
+    $json$
+    {
+      "street": "flop",
+      "board": ["J♠", "7♠", "3♦"],
+      "hero_cards": ["A♠", "5♠"],
+      "prompt": "Flop: J♠ 7♠ 3♦. You hold A♠ 5♠ — the nut flush draw. Pot: $100. Villain checks to you. What is the best line?",
+      "game_state": { "pot": 100, "stack": 400 },
+      "villain_archetype": "Straightforward",
+      "choices": [
+        { "id": "a", "label": "Check — keep the pot small with a draw" },
+        { "id": "b", "label": "Bet $66 — semi-bluff with two ways to win" },
+        { "id": "c", "label": "Bet $250 — maximum fold equity" }
+      ],
+      "evaluation": { "correct_choice_id": "b", "acceptable_choice_ids": [] },
+      "explanation": "As a pure bluff, betting 66 into 100 would need folds 39.8% of the time. But nine flush outs win 35.0% of the time by the river, so the bet wins two ways and needs far fewer folds than that to profit. Checking gives up the fold equity entirely; the huge overbet risks 250 to win 100 and needs folds far too often for a hand that is happy to see cards.",
+      "rule_of_thumb": "Semi-bluff when both halves are live: they fold sometimes, and you improve sometimes."
+    }
+    $json$::jsonb,
+    1,
+    true
+  ),
+  (
+    35,
+    6,
+    'bluffing',
+    3,
+    $json$
+    {
+      "street": "river",
+      "board": ["K♦", "9♣", "4♥", "2♠", "8♦"],
+      "hero_cards": ["A♥", "Q♣"],
+      "prompt": "River: K♦ 9♣ 4♥ 2♠ 8♦. You hold A♥ Q♣ — ace-high, no pair, no draw. Pot: $100. Villain checks. Every draw missed. What do you do?",
+      "game_state": { "pot": 100, "stack": 300 },
+      "villain_archetype": "Calling station",
+      "choices": [
+        { "id": "a", "label": "Check — ace-high can still win at showdown" },
+        { "id": "b", "label": "Bet $100 — represent the king" },
+        { "id": "c", "label": "Bet $33 — a cheap stab at the pot" }
+      ],
+      "evaluation": { "correct_choice_id": "a", "acceptable_choice_ids": [] },
+      "explanation": "Ace-high beats every missed draw and every worse high card in their checking range. Betting it turns a hand with real showdown value into a pure bluff: worse hands fold, better hands call. Against a calling station the fold equity a bluff needs — 50.0% for the pot-sized bet, 24.8% even for the small one — is not there. Checking wins the pot outright often enough to beat both bets.",
+      "rule_of_thumb": "Bluff the hands that cannot win at showdown. Check the ones that can."
+    }
+    $json$::jsonb,
+    1,
+    true
+  ),
+  (
+    36,
+    6,
+    'bluffing',
+    3,
+    $json$
+    {
+      "street": "river",
+      "board": ["Q♠", "8♠", "5♦", "J♣", "3♠"],
+      "hero_cards": ["A♠", "7♥"],
+      "prompt": "River: Q♠ 8♠ 5♦ J♣ 3♠ — the flush completed. You hold A♠ 7♥: no pair, but the ace of spades. Pot: $120. Villain checks. What is the best line?",
+      "game_state": { "pot": 120, "stack": 400 },
+      "villain_archetype": "Thinking regular",
+      "choices": [
+        { "id": "a", "label": "Check — you have no pair" },
+        { "id": "b", "label": "Bet $120 — you block the nut flush" },
+        { "id": "c", "label": "Bet $40 — a small probe" }
+      ],
+      "evaluation": { "correct_choice_id": "b", "acceptable_choice_ids": [] },
+      "explanation": "The A♠ blocks every nut-flush combination, so the strongest part of their calling range cannot exist — they must fold more often than usual. Your own hand cannot win at showdown, which makes it the right hand to bluff with rather than a hand you are throwing away. A pot-sized bet needs 50.0% folds; blocking the nuts against a thinking opponent is exactly the condition that gets you there. The small bet gives a price that defeats the point.",
+      "rule_of_thumb": "The best river bluff blocks their calls and unblocks their folds."
+    }
+    $json$::jsonb,
+    1,
+    true
+  )
+on conflict (id) do update set
+  module_id = excluded.module_id,
+  skill_tag = excluded.skill_tag,
+  difficulty = excluded.difficulty,
+  scenario_json = excluded.scenario_json,
+  version = excluded.version,
+  is_active = excluded.is_active;
+
+insert into public.table_scenarios
+  (id, module_id, difficulty, skill_tag, street, prompt_title, situation_json,
+   choices_json, correct_choice_id, acceptable_choice_ids, explanation,
+   rule_of_thumb, is_active)
+values
+  (
+    21,
+    6,
+    2,
+    'bluffing',
+    'flop',
+    'Two ways to win',
+    $json$
+    {
+      "hero": { "seat": 5, "position": "CO", "cards": ["Ts", "9s"] },
+      "villains": [
+        { "seat": 2, "position": "BB", "label": "Villain", "style": "straightforward" }
+      ],
+      "board": ["8s", "6h", "2c"],
+      "blinds": { "sb": 0.5, "bb": 1 },
+      "pot_bb": 6.5,
+      "effective_stack_bb": 100,
+      "pre_action": [
+        { "seat": 3, "action": "fold" },
+        { "seat": 4, "action": "fold" },
+        { "seat": 5, "action": "raise", "amount_bb": 3 },
+        { "seat": 6, "action": "fold" },
+        { "seat": 1, "action": "fold" },
+        { "seat": 2, "action": "call", "amount_bb": 3 },
+        { "seat": 2, "action": "check" }
+      ]
+    }
+    $json$::jsonb,
+    $json$
+    [
+      { "id": "a", "label": "Check", "action": "check" },
+      { "id": "b", "label": "Bet 4.3bb (two-thirds pot)", "action": "bet", "amount_bb": 4.3 },
+      { "id": "c", "label": "Bet 13bb (two times pot)", "action": "bet", "amount_bb": 13 }
+    ]
+    $json$::jsonb,
+    'b',
+    null,
+    'You hold a flush draw plus a gutshot — a hand that wins two ways. As a pure bluff, betting two-thirds of the pot would need folds 39.8% of the time, but this hand still wins a large share of the pot when called, so the bet clears that bar comfortably. Checking surrenders the fold equity with a hand that wants to build a pot it will often win. The double-pot overbet risks far more than the situation requires and folds out exactly the weak hands you want to keep in.',
+    'Semi-bluff with equity: folds now, or a winning hand later.',
+    true
+  ),
+  (
+    22,
+    6,
+    3,
+    'bluffing',
+    'river',
+    'The third barrel that should not come',
+    $json$
+    {
+      "hero": { "seat": 5, "position": "BTN", "cards": ["Qh", "Jh"] },
+      "villains": [
+        { "seat": 2, "position": "BB", "label": "Villain", "style": "passive" }
+      ],
+      "board": ["9c", "7d", "3s", "4h", "2c"],
+      "blinds": { "sb": 0.5, "bb": 1 },
+      "pot_bb": 30,
+      "effective_stack_bb": 70,
+      "pre_action": [
+        { "seat": 5, "action": "raise", "amount_bb": 3 },
+        { "seat": 2, "action": "call", "amount_bb": 3 },
+        { "seat": 2, "action": "check" },
+        { "seat": 5, "action": "bet", "amount_bb": 4 },
+        { "seat": 2, "action": "call", "amount_bb": 4 },
+        { "seat": 2, "action": "check" },
+        { "seat": 5, "action": "bet", "amount_bb": 9 },
+        { "seat": 2, "action": "call", "amount_bb": 9 },
+        { "seat": 2, "action": "check" }
+      ]
+    }
+    $json$::jsonb,
+    $json$
+    [
+      { "id": "a", "label": "Check back", "action": "check" },
+      { "id": "b", "label": "Bet 30bb (pot)", "action": "bet", "amount_bb": 30 },
+      { "id": "c", "label": "Bet 10bb (one-third pot)", "action": "bet", "amount_bb": 10 }
+    ]
+    $json$::jsonb,
+    'a',
+    null,
+    'Your straight draw missed and queen-high cannot win a called pot. A passive opponent who has called two barrels on a board where nothing got there is not folding a third time: the pot-sized bet needs folds 50.0% of the time and the small one still needs 24.8%, and neither is available against this player. Queen-high also beats the occasional missed draw at showdown, so checking wins some pots outright. Giving up here is the line — the money you do not lose on a doomed third barrel counts the same as money won.',
+    'Giving up is a line. Barrelling every flop bluff is the most expensive habit in low-stakes poker.',
+    true
+  )
+on conflict (id) do update set
+  module_id = excluded.module_id,
+  difficulty = excluded.difficulty,
+  skill_tag = excluded.skill_tag,
+  street = excluded.street,
+  prompt_title = excluded.prompt_title,
+  situation_json = excluded.situation_json,
+  choices_json = excluded.choices_json,
+  correct_choice_id = excluded.correct_choice_id,
+  acceptable_choice_ids = excluded.acceptable_choice_ids,
+  explanation = excluded.explanation,
+  rule_of_thumb = excluded.rule_of_thumb,
+  is_active = excluded.is_active;
+
 select setval(pg_get_serial_sequence('public.modules', 'id'),
               greatest((select max(id) from public.modules), 1), true);
 select setval(pg_get_serial_sequence('public.lessons', 'id'),

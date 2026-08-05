@@ -22,7 +22,11 @@ def json_blocks(text: str) -> list[object]:
 
 def test_seed_has_the_full_authored_catalog():
     text = seed_text()
-    assert len(re.findall(r"^\s*-- lesson \d{2}:", text, flags=re.MULTILINE)) == 20
+    # M4 authored 20 lessons; M8.6A added module 06 (Bluffing & Aggression),
+    # lessons 21-26. The scenario/table-scenario comment counts stay at the M4
+    # numbers because the M8.6A block does not use those "-- scenario NN:"
+    # comment markers; its inventory is asserted separately below.
+    assert len(re.findall(r"^\s*-- lesson \d{2}:", text, flags=re.MULTILINE)) == 26
     assert len(re.findall(r"^\s*-- scenario \d{2}:", text, flags=re.MULTILINE)) == 33
     assert (
         len(re.findall(r"^\s*-- table scenario \d{2}:", text, flags=re.MULTILINE))
@@ -34,42 +38,78 @@ def test_seed_has_the_full_authored_catalog():
         "Flop Fundamentals",
         "Counting Outs",
         "Mental Game",
+        "Bluffing & Aggression",
     ):
         assert f"'{title}'" in text
+
+
+def test_the_bluffing_module_is_seeded_with_practice_of_its_own():
+    """M8.6A: the module must end in a decision, not a read.
+
+    `bluff` was a shipped drill kind with one lesson behind it, so the course
+    could drill a concept it never taught. These ids are explicit and stable;
+    if one is reused for something else the upsert would silently rewrite the
+    bluffing content.
+    """
+    text = seed_text()
+    assert "-- M8.6A — Module 06" in text
+    for lesson_id in range(21, 27):
+        assert re.search(rf"^\s*{lesson_id},\n\s*6,", text, flags=re.MULTILINE), (
+            f"lesson {lesson_id} is not seeded into module 6"
+        )
+    # Three authored scenarios and two table scenarios carry the module.
+    assert text.count("'bluffing',") >= 5
 
 
 def test_every_dollar_quoted_json_value_parses():
     text = seed_text()
     blocks = json_blocks(text)
-    assert len(blocks) == 97
+    # 97 from M4; +13 from M8.6A (6 lessons, 3 scenarios, 2 table scenarios
+    # x situation_json + choices_json). Empty acceptable_choice_ids are
+    # seeded as SQL null, matching M4, so they add no $json$ block.
+    assert len(blocks) == 110
     assert text.count("$json$") == len(blocks) * 2
 
 
 def test_every_authored_answer_points_to_a_real_choice():
+    """Selected by SHAPE, not by position.
+
+    This used to slice `blocks[:20]` and `blocks[20:53]`, which silently
+    stopped covering anything appended after M4 — the M8.6A bluffing content
+    would have been skipped entirely while the test still passed. Matching on
+    structure means new authored content is checked the moment it is seeded.
+    """
     blocks = json_blocks(seed_text())
-    lessons = blocks[:20]
-    scenarios = blocks[20:53]
+    lessons = [b for b in blocks if isinstance(b, dict) and "screens" in b]
+    scenarios = [b for b in blocks if isinstance(b, dict) and "evaluation" in b]
+
+    assert len(lessons) == 26
+    assert len(scenarios) == 36
 
     for lesson in lessons:
-        assert isinstance(lesson, dict)
         assert lesson["screens"]
         for screen in lesson["screens"]:
             if screen["type"] not in {"question", "drill"}:
                 continue
             choice_ids = {choice["id"] for choice in screen["choices"]}
             assert screen["correct_choice_id"] in choice_ids
+            # An authored choice must never collide with the M8.5C sentinel,
+            # or an honest "Not sure" would grade as a real answer.
+            assert "__unsure__" not in choice_ids
 
     for scenario in scenarios:
-        assert isinstance(scenario, dict)
         choice_ids = {choice["id"] for choice in scenario["choices"]}
         evaluation = scenario["evaluation"]
         assert evaluation["correct_choice_id"] in choice_ids
         assert set(evaluation["acceptable_choice_ids"]) <= choice_ids
+        assert "__unsure__" not in choice_ids
 
 
 def test_seed_is_repeatable_and_never_resets_user_data():
     text = seed_text().lower()
-    assert text.count("on conflict (id) do update set") == 4
+    # Four upserts per authored block: modules, lessons, scenarios,
+    # table_scenarios. M4 contributes one set and M8.6A a second.
+    assert text.count("on conflict (id) do update set") == 8
     assert "delete from" not in text
     assert "truncate" not in text
     assert "drop table" not in text
