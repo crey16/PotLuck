@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { supabaseConfigured } from "@/lib/supabase/env";
 import { safeNext } from "@/lib/supabase/authRules";
+import { PasswordField } from "@/components/ui/PasswordField";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -263,19 +264,15 @@ function LoginForm() {
               </div>
 
               {mode !== "forgot" && (
-                <div className="field" style={{ marginBottom: "var(--space-4)" }}>
-                  <label htmlFor="password">Password</label>
-                  <input
-                    id="password"
-                    className="input"
-                    type="password"
-                    autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                    required
-                    minLength={6}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
+                <PasswordField
+                  id="password"
+                  label="Password"
+                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={setPassword}
+                />
               )}
 
               {mode === "signup" && password.length >= 6 && (

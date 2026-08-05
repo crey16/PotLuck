@@ -91,6 +91,22 @@ export function formatLessonTime(seconds: number | null): string {
   return `${Math.round(seconds / 60)} min`;
 }
 
+const NUMERALS = [
+  "zero", "one", "two", "three", "four", "five", "six",
+  "seven", "eight", "nine", "ten", "eleven", "twelve",
+];
+
+/**
+ * Spell a small count for prose like "six-module course".
+ *
+ * `/learn` used to hard-code "Five-module course" in its eyebrow, which went
+ * stale the moment M8.6A added the Bluffing module. Deriving it from the
+ * modules actually loaded means the page cannot misdescribe itself again.
+ */
+export function spellCount(n: number): string {
+  return NUMERALS[n] ?? String(n);
+}
+
 export function lessonTypeLabel(type: LessonType): string {
   if (type === "micro_hand") return "Micro hand";
   return type.slice(0, 1).toUpperCase() + type.slice(1);

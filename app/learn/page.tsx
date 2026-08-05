@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { fetchLearningPath, fetchServerRecommendation } from "../../lib/learn/server";
 import { nextPathStep, pathProgress, recommendationHref } from "../../lib/learn/path";
+import { spellCount } from "../../lib/learn/content";
 import { ContinuePath } from "../../components/learn/ContinuePath";
 import { CourseMap } from "../../components/learn/CourseMap";
 
 export const metadata: Metadata = {
   title: "Learn · PotLuck",
-  description: "A five-module learning path from poker foundations to disciplined decisions.",
+  description: "A guided learning path from poker foundations to disciplined decisions.",
 };
 
 /**
@@ -29,7 +30,9 @@ export default async function LearnPage() {
     <main className="page learn-page">
       <div className="learn-hero">
         <div>
-          <div className="mono-label accent">Five-module course · authored lessons</div>
+          <div className="mono-label accent">
+            {spellCount(path.modules.length)}-module course · authored lessons
+          </div>
           <h1>Learn the decision before you drill it.</h1>
           <p>
             Short reads, checks, and retries build the idea. The drill room makes it automatic.
@@ -72,6 +75,28 @@ export default async function LearnPage() {
         </span>
       </div>
 
+      {path.error && <div className="note critl" role="alert">{path.error}</div>}
+      {!path.error && path.modules.length === 0 && (
+        <div className="blueprint learn-empty">
+          <div className="mono-label accent">Content seed required</div>
+          <h2>The learning tables are ready, but empty.</h2>
+          <p>Apply <code>supabase/seed.sql</code> to load the course.</p>
+        </div>
+      )}
+
+      <CourseMap modules={path.modules} completedLessonIds={path.completedLessonIds} />
+
+      {/* M8.6B: the labs sit AFTER the map. They used to render between the
+          "Course map" heading and the map itself, so the heading introduced
+          the wrong thing and the path — the page's actual subject — started
+          two full-width blocks further down. */}
+      <div className="section-head learn-section-head">
+        <h2>Practice labs</h2>
+        <span className="lede">
+          Authored spots and full table decisions, outside the sequence.
+        </span>
+      </div>
+
       <div className="learn-labs-grid">
         <Link href="/learn/practice" className="blueprint learn-lab-card">
           <div className="mono-label accent">Practice lab 01</div>
@@ -86,17 +111,6 @@ export default async function LearnPage() {
           <span>Take a seat →</span>
         </Link>
       </div>
-
-      {path.error && <div className="note critl" role="alert">{path.error}</div>}
-      {!path.error && path.modules.length === 0 && (
-        <div className="blueprint learn-empty">
-          <div className="mono-label accent">Content seed required</div>
-          <h2>The learning tables are ready, but empty.</h2>
-          <p>Apply <code>supabase/seed.sql</code> to load the five-module course.</p>
-        </div>
-      )}
-
-      <CourseMap modules={path.modules} completedLessonIds={path.completedLessonIds} />
     </main>
   );
 }

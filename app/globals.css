@@ -282,6 +282,23 @@ img { display: block; max-width: 100%; }
 .input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
 .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
 
+/* — input with a trailing control (the hold-to-reveal password eye) — */
+.field-with-affix { position: relative; display: block; }
+.input-affixed { padding-right: 38px; }
+.field-affix {
+  position: absolute; top: 0; right: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 100%; min-height: 36px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  border-radius: var(--r-sm) !important;
+}
+.field-affix:hover { color: var(--color-text); }
+.field-affix:focus-visible {
+  outline: 1px solid var(--color-accent); outline-offset: -2px;
+  color: var(--color-text);
+}
+
 /* — segmented control — */
 .seg {
   display: inline-flex; overflow: hidden;
@@ -1067,33 +1084,49 @@ img { display: block; max-width: 100%; }
 .learn-empty h1, .learn-empty h2 { margin: 5px 0; }
 .learn-empty p { color: color-mix(in srgb, var(--color-text) 65%, transparent); }
 
-.course-map { max-width: 920px; margin: 0 auto; }
-.course-map-row {
-  position: relative; display: grid; grid-template-columns: 54px 1fr;
-  gap: var(--space-6); padding-bottom: var(--space-6);
+/* M8.6B: a responsive grid, not a stack. Five full-width cards pushed the last
+   modules below the fold; `auto-fit` keeps the whole path visible and absorbs
+   the sixth (Bluffing) module without the page growing. */
+.course-map {
+  /* Full page width, matching `.learn-labs-grid` below it. The old 920px cap
+     was right for one column of full-width cards and wrong for a grid — it
+     left the map visibly inset from every other block on the page. */
+  display: grid; gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  margin-bottom: var(--space-8);
 }
+/* The cell. Stretches so cards in a row share a height and their feet line up. */
+.course-map-row { display: flex; }
 .course-node {
-  position: relative; z-index: 2; width: 54px; height: 54px;
+  flex: none; width: 30px; height: 30px;
   display: grid; place-items: center; border: 1px solid var(--color-accent);
   border-radius: 999px; background: var(--surface); color: var(--color-accent-700);
-  font: 12px var(--font-mono); letter-spacing: .08em;
+  font: 11px var(--font-mono); letter-spacing: .06em;
 }
 .course-node.complete { background: var(--color-accent); color: var(--color-bg); }
-.course-line {
-  position: absolute; left: 26px; top: 54px; bottom: 0; width: 1px;
-  background: var(--color-divider);
-}
 .course-module {
-  padding: var(--space-6); color: var(--color-text); border-color: var(--color-divider);
+  display: flex; flex-direction: column; width: 100%;
+  padding: var(--space-4); color: var(--color-text); border-color: var(--color-divider);
 }
 .course-module.complete { border-color: var(--color-accent); }
-.course-module-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-6); }
-.course-module h2 { margin: 3px 0 0; font-size: 31px; letter-spacing: -.01em; }
-.course-module > p { max-width: 66ch; margin: var(--space-3) 0 var(--space-4); font-size: 13.5px; color: color-mix(in srgb, var(--color-text) 65%, transparent); }
-.course-module-count { text-align: right; display: flex; flex-direction: column; }
-.course-module-count strong { font: 600 27px/1 var(--font-heading); }
-.course-module-count span { font: 9.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 55%, transparent); }
-.course-module-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); margin-top: var(--space-4); }
+.course-module-head {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.course-module h2 {
+  flex: 1; min-width: 0; margin: 0; font-size: 19px; letter-spacing: -.01em;
+  /* Long module titles wrap rather than pushing the count off the card. */
+  overflow-wrap: anywhere;
+}
+.course-module-count { flex: none; text-align: right; display: flex; flex-direction: column; }
+.course-module-count strong { font: 600 18px/1 var(--font-heading); }
+.course-module-count span { font: 9px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+/* `margin-top: auto` pins the foot to the bottom, so a card with a short
+   "Next:" line still lines its button up with its neighbour's. */
+.course-module-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: var(--space-3); margin-top: auto; padding-top: var(--space-4);
+}
 .course-module-foot > span { font: 10.5px var(--font-mono); letter-spacing: .04em; text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 58%, transparent); }
 
 .learn-breadcrumb {
@@ -1254,12 +1287,10 @@ img { display: block; max-width: 100%; }
   .home-learning, .learn-labs-grid { grid-template-columns: 1fr; }
   .home-learn-next { grid-column: auto; align-items: flex-start; flex-direction: column; }
   .learn-hero { gap: var(--space-6); }
-  .course-map-row { grid-template-columns: 36px 1fr; gap: var(--space-4); }
-  .course-node { width: 36px; height: 36px; }
-  .course-line { left: 17px; top: 36px; }
-  .course-module { padding: var(--space-4); }
-  .course-module-head, .course-module-foot { align-items: flex-start; flex-direction: column; }
-  .course-module-count { text-align: left; }
+  /* One column on a phone — `auto-fit` already collapses, but the 300px track
+     minimum would overflow a 390px viewport once padding is counted. */
+  .course-map { grid-template-columns: 1fr; }
+  .course-module-foot { align-items: flex-start; flex-direction: column; }
   .lesson-ledger-row { grid-template-columns: 42px 1fr 36px; gap: var(--space-2); }
   .lesson-ledger .pips, .lesson-ledger-status { display: none; }
   .lesson-player-top { grid-template-columns: 36px 1fr; }

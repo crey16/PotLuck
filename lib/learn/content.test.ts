@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatLessonTime, lessonFromRow, parseLessonContent, recommendationDifficulty } from "./content";
+import { formatLessonTime, lessonFromRow, parseLessonContent, recommendationDifficulty, spellCount } from "./content";
 
 const content = {
   screens: [
@@ -55,4 +55,18 @@ test("recommendation difficulty matches the backend thresholds", () => {
   assert.equal(recommendationDifficulty(1, 5), 1);
   assert.equal(recommendationDifficulty(2, 5), 2);
   assert.equal(recommendationDifficulty(3, 4), 3);
+});
+
+test("spellCount spells the small counts /learn puts in prose", () => {
+  assert.equal(spellCount(5), "five");
+  assert.equal(spellCount(6), "six");
+  assert.equal(spellCount(1), "one");
+  assert.equal(spellCount(12), "twelve");
+});
+
+test("spellCount falls back to digits rather than printing undefined", () => {
+  // The eyebrow reads "{n}-module course". An out-of-range count must degrade
+  // to "13-module course", never "undefined-module course".
+  assert.equal(spellCount(13), "13");
+  assert.equal(spellCount(0), "zero");
 });
