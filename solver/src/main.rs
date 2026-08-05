@@ -309,39 +309,10 @@ fn main() {
     let pot = ranges_json["pot"].as_i64().expect("pot") as i32;
     let stack = ranges_json["stack"].as_i64().expect("stack") as i32;
 
-    let card_config = CardConfig {
-        range: [oop_str.parse().unwrap(), ip_str.parse().unwrap()],
-        flop: flop_from_str(flop_str).unwrap(),
-        turn: NOT_DEALT,
-        river: NOT_DEALT,
-    };
-
-    // A deliberately small tree: one bet size per street, one raise size,
-    // all-in where the threshold forces it. The trainer teaches lines, not
-    // exhaustive sizing menus, and every extra size multiplies solve time,
-    // artifact size and UI clutter. Labelled a simplified tree in the UI.
-    let flop_sizes = BetSizeOptions::try_from(("33%", "2.5x")).unwrap();
-    let turn_sizes = BetSizeOptions::try_from(("66%", "2.5x")).unwrap();
-    let river_sizes = BetSizeOptions::try_from(("66%", "2.5x")).unwrap();
-
-    let tree_config = TreeConfig {
-        initial_state: BoardState::Flop,
-        starting_pot: pot,
-        effective_stack: stack,
-        rake_rate: 0.0,
-        rake_cap: 0.0,
-        flop_bet_sizes: [flop_sizes.clone(), flop_sizes.clone()],
-        turn_bet_sizes: [turn_sizes.clone(), turn_sizes.clone()],
-        river_bet_sizes: [river_sizes.clone(), river_sizes.clone()],
-        turn_donk_sizes: None,
-        river_donk_sizes: None,
-        add_allin_threshold: 1.5,
-        force_allin_threshold: 0.15,
-        merging_threshold: 0.1,
-    };
-
-    let action_tree = ActionTree::new(tree_config).unwrap();
-    let mut game = PostFlopGame::with_config(card_config, action_tree).unwrap();
+    // The tree lives in lib.rs so this exporter and `root-ev` cannot drift.
+    // An EV computed against a different tree than the one played describes a
+    // different game, and nothing would fail — see the note there.
+    let mut game = potluck_solver::build_game(flop_str, oop_str, ip_str, pot, stack);
 
     let (mem_raw, mem_comp) = game.memory_usage();
     eprintln!(
