@@ -1584,6 +1584,29 @@ body:has(.auth-mesh) .ambient-wash i:nth-child(6) { background: var(--wash-d); }
   /* Pull the side columns toward the centre: at phone widths a seat's cards
      are wide enough to hang off the felt at the full 12%/88% spread. */
   .pt-seat { left: calc(50% + (var(--seat-left) - 50%) * 0.7); }
+
+  /* M8.9A: the felt is the tightest layout in the product, and pulling the
+     side seats inward (above) puts the villain's cards straight through the
+     centre label. Drop the label rather than shrink everything: it is the
+     one thing on the felt that is already stated twice — in the page
+     heading and in the chip at the top of the card — so it is the only
+     thing here that costs nothing to lose. Pot and board stay. */
+  .pt-spot { display: none; }
+  /* Hole cards scale down so two seats' cards cannot meet in the middle. */
+  .pt-seat-cards { gap: 2px; }
+  .pt-seat-cards .card { transform: scale(0.78); transform-origin: center bottom; }
+  /* Drop the pot and board below the upper side seats. Their cards render
+     ABOVE their plate, so at 45% the pot's label ran into the villain's
+     cards — visible only as a 2px box overlap, which is exactly the kind of
+     thing a screenshot reads as fine and a measurement does not. */
+  .pt-center { top: 50%; gap: 4px; }
+  /* A full five-card board is 256px wide inside a 300px oval, which runs
+     straight through the SB and CO plates once the river lands. Scaling the
+     board container (not each card) shrinks the laid-out box too, because a
+     transform is reflected in getBoundingClientRect — so the collision goes
+     away in fact and not just visually. Only ever visible on the river,
+     which is exactly why it needed measuring rather than eyeballing. */
+  .pt-board { transform: scale(0.65); transform-origin: center; min-height: 0; }
 }
 
 /* — play table: action bar — */
