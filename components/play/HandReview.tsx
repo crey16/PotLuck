@@ -1,3 +1,5 @@
+import { HandSummary } from "./HandSummary";
+import { buildReviewFromHistory } from "@/lib/play/review";
 import type { PlayHandReview } from "@/lib/play/api";
 import { PLAY_SOLVE_PACK_ID } from "@/lib/play/constants";
 import {
@@ -105,6 +107,21 @@ export function HandReview({
           </div>
         )}
       </section>
+
+      {/*
+        The SAME review the live panel shows, rebuilt from the stored rows —
+        score, street tabs, decision navigation and the node table. Before
+        this, finishing a hand and reloading the identical hand gave two
+        different views that disagreed about how much they could tell you.
+
+        The audited per-decision list below is kept rather than replaced: it
+        carries the provenance the summary deliberately omits (solve node ids,
+        grading status and version, pack id), which is what makes a saved hand
+        auditable rather than merely readable.
+      */}
+      {review.decisions.length > 0 && (
+        <HandSummary model={buildReviewFromHistory(review)} />
+      )}
 
       {review.decisions.length === 0 ? (
         <div className="blueprint" style={{ padding: "var(--space-6)" }}>

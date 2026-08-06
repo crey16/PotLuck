@@ -26,29 +26,34 @@ import {
   type ReviewDecision,
   type ReviewStreet,
 } from "@/lib/play/review";
-import { SCORE_BAND_LABEL, gtoScore, scoreBand } from "@/lib/play/score";
-import type { Verdict } from "@/lib/play/verdict";
+import { SCORE_BAND_LABEL, gtoScore, scoreBand, type ScoredVerdict } from "@/lib/play/score";
 
-const VERDICT_WORD: Record<Verdict, string> = {
+// "ungraded" reaches here only from M8's legacy archive, where a decision
+// predates normalized grading. It is a statement about the RECORD, not about
+// the play, so it reads neutrally rather than as a fourth quality band.
+const VERDICT_WORD: Record<ScoredVerdict, string> = {
   correct: "Best move",
   acceptable: "Also fine",
   inaccuracy: "Inaccuracy",
   blunder: "Blunder",
+  ungraded: "Not graded",
 };
 
 /** Colour is never the only cue — see VerdictFlash for the same rule. */
-const VERDICT_GLYPH: Record<Verdict, string> = {
+const VERDICT_GLYPH: Record<ScoredVerdict, string> = {
   correct: "✓",
   acceptable: "≈",
   inaccuracy: "!",
   blunder: "✕",
+  ungraded: "?",
 };
 
-const VERDICT_TONE: Record<Verdict, string> = {
+const VERDICT_TONE: Record<ScoredVerdict, string> = {
   correct: "good",
   acceptable: "good",
   inaccuracy: "warn",
   blunder: "crit",
+  ungraded: "warn",
 };
 
 const STREET_LABEL: Record<ReviewStreet, string> = {
@@ -159,9 +164,12 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
         <p className="pt-review-caveat">
           {/* The noun agrees with the TOTAL, not the count: "1 of 4 decisions",
               never "1 of 4 decision". */}
-          {score.unscored} of {total} decision{total === 1 ? "" : "s"} could not be scored:
-          preflop is graded against reference ranges, not solver EVs, so{" "}
-          {score.unscored === 1 ? "its cost is" : "their costs are"} unknown rather than zero.
+          {score.unscored} of {total} decision{total === 1 ? "" : "s"} could not be scored
+          {score.counts.ungraded > 0
+            ? ": they predate normalized grading, so no EV was ever recorded for them"
+            : ": preflop is graded against reference ranges, not solver EVs"}
+          , so {score.unscored === 1 ? "its cost is" : "their costs are"} unknown rather than
+          zero.
         </p>
       )}
 

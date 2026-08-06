@@ -71,10 +71,17 @@ export function decisionScore(evLossBb: number): number {
   return 100 * Math.exp(-loss / DECAY_BB);
 }
 
+/**
+ * "ungraded" is not a fifth quality band — it means no grade exists. M8's
+ * legacy archive carries rows imported before normalized history, and they
+ * must be countable without being scored or silently dropped.
+ */
+export type ScoredVerdict = Verdict | "ungraded";
+
 export interface ScoredDecision {
   /** Null when the decision was not graded from solver EVs. */
   evLossBb: number | null;
-  verdict: Verdict;
+  verdict: ScoredVerdict;
 }
 
 export interface GtoScore {
@@ -90,15 +97,16 @@ export interface GtoScore {
   totalEvLossBb: number;
   /** Worst single known EV loss, in big blinds. Null when none were known. */
   worstEvLossBb: number | null;
-  counts: Record<Verdict, number>;
+  counts: Record<ScoredVerdict, number>;
   version: string;
 }
 
-const EMPTY_COUNTS = (): Record<Verdict, number> => ({
+const EMPTY_COUNTS = (): Record<ScoredVerdict, number> => ({
   correct: 0,
   acceptable: 0,
   inaccuracy: 0,
   blunder: 0,
+  ungraded: 0,
 });
 
 /**

@@ -121,7 +121,22 @@ test("gtoScore: counts every verdict, including the unscored ones", () => {
     acceptable: 1,
     inaccuracy: 1,
     blunder: 2,
+    ungraded: 0,
   });
+});
+
+/**
+ * M8's legacy archive holds decisions imported before normalized history.
+ * They have no grade at all — not a bad one — so they must be countable
+ * without entering the mean and without being silently dropped from the
+ * total the player sees.
+ */
+test("gtoScore: an ungraded legacy decision is counted but never scored", () => {
+  const result = gtoScore([d(0, "correct"), d(null, "ungraded")]);
+  assert.equal(result.counts.ungraded, 1);
+  assert.equal(result.scored, 1);
+  assert.equal(result.unscored, 1);
+  assert.equal(result.score, 100, "the ungraded row must not move the mean");
 });
 
 test("gtoScore: stamps the version so a stored score stays interpretable", () => {

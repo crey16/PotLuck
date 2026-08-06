@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   MIXED_FREQ,
+  REVIEW_STREETS,
   buildHandReview,
+  buildReviewFromHistory,
   firstDecisionOn,
   stepDecision,
   streetOf,
@@ -11,6 +13,7 @@ import {
 import { gtoScore } from "./score";
 import { EV_STEP_BB } from "./verdict";
 import type { PlayInstance, PlayNode } from "./types";
+import type { PlayDecisionReview, PlayHandReview } from "./api";
 
 /**
  * The same miniature instance `timeline.test.ts` uses — hero OOP with 7h7d on
@@ -331,4 +334,122 @@ test("review: the model feeds the score directly, with preflop excluded", () => 
 test("review: a hand with only a preflop decision has no score", () => {
   const model = buildHandReview({ ...base, chosen: [], preflop: PREFLOP });
   assert.equal(gtoScore(model.decisions).score, null);
+});
+
+/* ------------------------------------------------------------------ *
+ * Rebuilding the model from SAVED history — the /play/history path
+ * ------------------------------------------------------------------ */
+
+/** A minimal server-shaped hand: one graded flop decision, played to the river. */
+const savedDecision = (over: Partial<PlayDecisionReview> = {}): PlayDecisionReview =>
+  ({
+    id: "d1", hand_id: "h1", client_decision_id: "c1", attempt_id: 1,
+    solve_pack_id: "pack", decision_index: 1, solve_node_id: "pack/Ts9s5h#0@root",
+    street: "flop", position: "BB", spot: "srp-btn-bb", stack_depth_bb: 100,
+    board_cards: ["Ts", "9s", "5h"], board_texture: "wet", hand_class: "pair",
+    action_context: { pot_bb: 5.5, to_call_bb: 0, behind_bb: 97.5 },
+    chosen_action_code: "X", grading_source: "solver", grading_status: "validated",
+    grading_version: "v1", chosen_frequency: 0.8, ev_basis: "relative_to_best",
+    chosen_ev_bb: null, best_ev_bb: null, ev_loss_bb: 0, verdict: "correct",
+    is_correct: true, alternatives_complete: true, occurred_at: "2026-08-06T00:00:00Z",
+    created_at: "2026-08-06T00:00:00Z",
+    actions: [
+      { decision_id: "d1", action_code: "X", ordinal: 0, action_label: "Check",
+        action_kind: "check", amount_bb: null, frequency: 0.8, ev_bb: null,
+        ev_delta_bb: 0, ev_loss_bb: 0, is_chosen: true, created_at: "" },
+      { decision_id: "d1", action_code: "B18", ordinal: 1, action_label: "Bet 1.8bb",
+        action_kind: "bet", amount_bb: 1.8, frequency: 0.2, ev_bb: null,
+        ev_delta_bb: -0.3, ev_loss_bb: 0.3, is_chosen: false, created_at: "" },
+    ],
+    ...over,
+  }) as PlayDecisionReview;
+
+const savedHand = (decisions: PlayDecisionReview[], over: Record<string, unknown> = {}) =>
+  ({
+    id: "h1", session_id: "s1", client_hand_id: "ch1", source_hand_id: "src",
+    solve_pack_id: "pack", status: "completed", hand_index: 0, hero_position: "BB",
+    opponent_positions: ["BTN"], spot: "srp-btn-bb", stack_depth_bb: 100,
+    starting_street: "preflop", starting_node_id: "n", hero_cards: ["7h", "7d"],
+    opponent_cards: {}, initial_board_cards: ["Ts", "9s", "5h"], runout_cards: [],
+    action_history_snapshot: [], deal_snapshot: {}, result_snapshot: null,
+    started_at: "", last_activity_at: "", completed_at: "", abandoned_at: null,
+    decisions, ...over,
+  }) as unknown as PlayHandReview;
+
+test("history: a saved hand rebuilds the same model shape as a live one", () => {
+  const model = buildReviewFromHistory(savedHand([savedDecision()]));
+  assert.equal(model.decisions.length, 1);
+  const d = model.decisions[0];
+  assert.equal(d.street, "flop");
+  assert.equal(d.gradingSource, "solver");
+  assert.deepEqual(d.board, ["Ts", "9s", "5h"]);
+  assert.equal(d.potBb, 5.5);
+  assert.equal(d.behindBb, 97.5);
+  assert.equal(d.chosenLabel, "Check");
+  assert.equal(d.evLossBb, 0);
+  assert.deepEqual(model.streets.map((s) => s.street), REVIEW_STREETS);
+});
+
+test("history: the action table keeps the stored frequencies and losses", () => {
+  const actions = buildReviewFromHistory(savedHand([savedDecision()])).decisions[0].actions;
+  assert.deepEqual(actions.map((a) => a.label), ["Check", "Bet 1.8bb"]);
+  assert.deepEqual(actions.map((a) => a.frequency), [0.8, 0.2]);
+  assert.deepEqual(actions.map((a) => a.evLossBb), [0, 0.3]);
+  assert.deepEqual(actions.map((a) => a.isChosen), [true, false]);
+  assert.deepEqual(actions.map((a) => a.isBest), [true, false]);
+  assert.deepEqual(actions.map((a) => a.isMixed), [true, true]);
+});
+
+/**
+ * An imported row with only the action that was taken has nothing to compare
+ * against. Promoting that single action to "best" would invent a solver
+ * preference from one data point.
+ */
+test("history: an incomplete legacy row marks nothing as best", () => {
+  const legacy = savedDecision({
+    alternatives_complete: false,
+    verdict: "ungraded",
+    ev_loss_bb: null,
+    grading_source: "ungraded",
+    actions: [
+      { decision_id: "d1", action_code: "X", ordinal: 0, action_label: "Check",
+        action_kind: "check", amount_bb: null, frequency: null, ev_bb: null,
+        ev_delta_bb: null, ev_loss_bb: null, is_chosen: true, created_at: "" },
+    ],
+  } as Partial<PlayDecisionReview>);
+  const d = buildReviewFromHistory(savedHand([legacy])).decisions[0];
+  assert.deepEqual(d.actions.map((a) => a.isBest), [false]);
+  assert.equal(d.verdict, "ungraded");
+  assert.equal(d.evLossBb, null);
+  assert.equal(d.gradingSource, "reference", "a non-solver grade must not read as solver");
+  // And it must not be scored.
+  const score = gtoScore(buildReviewFromHistory(savedHand([legacy])).decisions);
+  assert.equal(score.score, null);
+  assert.equal(score.counts.ungraded, 1);
+});
+
+test("history: a saved hand can never offer a replay", () => {
+  // Replaying needs the scripted instance; history holds decisions, not the
+  // tree they came from. Offering it would deal something else.
+  const model = buildReviewFromHistory(savedHand([savedDecision()]));
+  assert.deepEqual(model.decisions.map((d) => d.replayPrefix), [null]);
+});
+
+test("history: streets reached follow the runout, not just the decisions", () => {
+  // One flop decision, but the hand ran out to the river — those streets were
+  // reached even though nothing was decided on them.
+  const model = buildReviewFromHistory(
+    savedHand([savedDecision()], { runout_cards: ["2d", "8c"] })
+  );
+  const reached = Object.fromEntries(model.streets.map((s) => [s.street, s.reached]));
+  assert.deepEqual(reached, { preflop: true, flop: true, turn: true, river: true });
+  assert.equal(model.streets.find((s) => s.street === "river")!.decisions.length, 0);
+});
+
+test("history: a hand that ended on the flop never reaches the turn", () => {
+  const model = buildReviewFromHistory(savedHand([savedDecision()]));
+  const reached = Object.fromEntries(model.streets.map((s) => [s.street, s.reached]));
+  assert.equal(reached.flop, true);
+  assert.equal(reached.turn, false);
+  assert.equal(reached.river, false);
 });
