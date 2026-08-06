@@ -325,13 +325,23 @@ export function DrillShell({
       {/* — drill switcher — */}
       <div className="switcher">
         <div className="left">
-          <button className="stepbtn" title="Previous drill" onClick={() => handleSelectTab(prevTab)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <button
+            className="stepbtn"
+            aria-label="Previous drill"
+            title="Previous drill"
+            onClick={() => handleSelectTab(prevTab)}
+          >
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </button>
-          <button className="stepbtn" title="Next drill" onClick={() => handleSelectTab(nextTab)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <button
+            className="stepbtn"
+            aria-label="Next drill"
+            title="Next drill"
+            onClick={() => handleSelectTab(nextTab)}
+          >
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M9 6l6 6-6 6" />
             </svg>
           </button>
