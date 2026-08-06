@@ -920,6 +920,13 @@ img { display: block; max-width: 100%; }
 
 /* drill page layout */
 .drill-layout { display: grid; grid-template-columns: 1fr 320px; gap: var(--space-6); align-items: start; }
+/* Grid items default to min-width:auto, so a wide child — the M10D node
+   table, a long code string, any pre — stretches its track and pushes the
+   whole page sideways, and an `overflow-x: auto` on that child never gets a
+   chance to engage. `body { overflow-x: hidden }` then hides the symptom by
+   clipping the text instead of scrolling it. Found at 390px, where the node
+   table's 440px minimum clipped its own prose mid-word. */
+.drill-layout > * { min-width: 0; }
 @media (max-width: 900px) { .drill-layout { grid-template-columns: 1fr; } }
 .drill-rail { display: flex; flex-direction: column; gap: var(--space-4); position: sticky; top: 78px; }
 @media (max-width: 900px) { .drill-rail { position: static; } }
@@ -1799,6 +1806,29 @@ body:has(.auth-mesh) .ambient-wash i:nth-child(6) { background: var(--wash-d); }
   .pt-score-value { font-size: 42px; }
   .pt-score-facts { grid-template-columns: repeat(2, 1fr); width: 100%; }
   .pt-verdict-toggle { margin-left: 0; width: 100%; justify-content: center; }
+  /* Four tabs across 330px of usable width leaves three on the first row and
+     the river stranded on a second, with the wrap breaking the left-border
+     rule that separates them. A 2x2 grid is tidier and gives each tab a
+     bigger target, which matters more on the surface with no keyboard. */
+  .pt-streets { display: grid; grid-template-columns: 1fr 1fr; }
+  .pt-street + .pt-street { border-left: 0; }
+  .pt-street:nth-child(even) { border-left: 1px solid var(--color-divider); }
+  .pt-street:nth-child(n + 3) { border-top: 1px solid var(--color-divider); }
+  .pt-decision-nav { justify-content: space-between; }
+  .pt-decision-nav .mono-label { order: 3; width: 100%; text-align: center; }
+  /* Let the table fit rather than relying on the player finding a horizontal
+     scroll inside a card. The bar shrinks; the percentage beside it does not,
+     because that number is what makes the bar readable without colour. */
+  .pt-nodetable table { min-width: 300px; }
+  /* The review's own controls meet the 44px minimum. The global sweep over
+     every .btn is M8.9's; these are new controls on a new surface and should
+     not be added to that debt. */
+  .pt-decision-nav .btn,
+  .pt-review-actions .btn,
+  .pt-verdict-toggle { min-height: 44px; }
+  .pt-freq { min-width: 84px; gap: 6px; }
+  .pt-freq-track { min-width: 34px; }
+  .pt-action-tag { margin-left: 4px; padding: 1px 4px; }
 }
 
 /* — play: replay banner (M10D) —
@@ -1876,3 +1906,21 @@ body:has(.auth-mesh) .ambient-wash i:nth-child(6) { background: var(--wash-d); }
   color: color-mix(in srgb, var(--color-text) 57%, transparent); flex: none;
 }
 .pt-assumptions dd { margin: 0; font-size: 12.5px; text-align: right; }
+
+/* — play: the seat map in selection mode (M10A) —
+   Seats are controls here, not labels, so they need a real touch target.
+   44px is the M8.9 minimum and these are new controls; shipping them under
+   it would be adding to the debt that milestone exists to pay off. */
+.pt-seat.selectable .pt-seat-plate {
+  min-height: 44px;
+  display: flex; flex-direction: column; justify-content: center;
+}
+/* With no centre block the oval can be a little tighter, which keeps the
+   whole selector on screen at 390px without shrinking the seats. */
+.pt-oval.selecting { aspect-ratio: 3 / 2; }
+@container (max-width: 620px) {
+  .pt-oval.selecting { aspect-ratio: 1 / 1.05; }
+  /* Do NOT pull the side columns inward here: with no centre text to avoid,
+     the seats want the full spread so their plates stay clear of each other. */
+  .pt-oval.selecting .pt-seat { left: var(--seat-left); }
+}

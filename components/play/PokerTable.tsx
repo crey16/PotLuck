@@ -77,19 +77,27 @@ export function PokerTable({
 
   return (
     <div className="pt-wrap">
-      <div className="pt-oval">
-        <div className="pt-center">
-          <div className="pt-spot mono-label">{spotLabel}</div>
-          <div className="pt-pot">
-            <span className="mono-label">Pot</span>
-            <strong>{bb(potChips)}</strong>
+      <div className={`pt-oval${selectPosition ? " selecting" : ""}`}>
+        {/*
+          No centre block in selection mode. There is no pot, no board and no
+          spot to name before a hand exists, and at phone widths the container
+          query pulls the side seats inward until they land on top of whatever
+          is written there. The instruction lives above the table instead.
+        */}
+        {!selectPosition && (
+          <div className="pt-center">
+            <div className="pt-spot mono-label">{spotLabel}</div>
+            <div className="pt-pot">
+              <span className="mono-label">Pot</span>
+              <strong>{bb(potChips)}</strong>
+            </div>
+            <div className="pt-board">
+              {board.map((c) => (
+                <PlayingCard key={c} card={c} />
+              ))}
+            </div>
           </div>
-          <div className="pt-board">
-            {board.map((c) => (
-              <PlayingCard key={c} card={c} />
-            ))}
-          </div>
-        </div>
+        )}
 
         {SPOTS.map((slot, i) => {
           const spot = SPOTS[(i + offset) % SPOTS.length];
