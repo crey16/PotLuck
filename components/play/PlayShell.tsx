@@ -676,10 +676,16 @@ export function PlayShell({ seed }: PlayShellProps) {
 
   const handleNextHand = useCallback(() => {
     if (!manifest || dealingRef.current || !canDealNext) return;
-    // A replay never counted as a hand, so it must not count on the way out.
-    if (!replaying) setStats((s) => ({ ...s, hands: s.hands + 1 }));
+    // Counts DEALT hands, and this fires exactly once per dealt hand however
+    // many replays happened in between — so it must not be gated on
+    // `replaying`. It was, briefly, on the reasoning that a replay is not a
+    // hand: true, but the hand being left is the original, which had not been
+    // counted yet, so replaying before moving on silently lost it from the
+    // session total. The replay is kept out of the count by never reaching
+    // here, not by a guard.
+    setStats((s) => ({ ...s, hands: s.hands + 1 }));
     dealNext(manifest, heroSeatWanted);
-  }, [manifest, canDealNext, dealNext, replaying, heroSeatWanted]);
+  }, [manifest, canDealNext, dealNext, heroSeatWanted]);
 
   /**
    * Start a replay of the current hand from `prefix` — the hero actions to
