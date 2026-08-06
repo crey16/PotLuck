@@ -214,22 +214,62 @@ compare("BB call", solvedBb, (h) => cellFrequency(refBb, h).c);
 // is FROM ABOVE, and the whole point of iteration 2 is to see it tighten.
 const outPath = process.argv[3];
 if (outPath) {
-  const rangeString = (freq: Map<string, number>) => {
+  // TWO FIXES, both standard, both learned from iteration 2.
+  //
+  // 1. EXPLORATION FLOOR. Iteration 1 solved at 100% ranges so every hand had
+  //    an EV. Iteration 2's ranges are narrower, so the excluded hands drop
+  //    out of the postflop solve and lose their EVs — coverage fell from
+  //    1326/1326 to 1194/1326 and the loop can no longer tell whether a
+  //    folded hand should come back. Keeping every hand at a small weight
+  //    costs almost nothing strategically and keeps every EV computable.
+  //
+  // 2. FICTITIOUS PLAY. Replacing the range with the raw best response each
+  //    iteration makes the two players chase each other: BB tightened
+  //    81% -> 72%, so BTN widened 76% -> 79%, which will push BB back the
+  //    other way. Averaging the best response into the running range is the
+  //    textbook damping, and it is what converges where alternating best
+  //    response oscillates.
+  const FLOOR = 0.02;
+  const rangeString = (freq: Map<string, number>, prev?: Map<string, number>, n = 1) => {
     const parts: string[] = [];
     for (let i = 0; i < 13; i++) {
       for (let j = 0; j < 13; j++) {
         const hand = handAt(i, j);
-        const f = freq.get(hand) ?? 0;
-        if (f <= 0) continue;
+        const br = freq.get(hand) ?? 0;
+        // Fictitious play: the new range is the running average of every best
+        // response so far, not the latest one.
+        const p = prev?.get(hand);
+        const avg = p === undefined ? br : (p * n + br) / (n + 1);
+        const f = Math.max(avg, FLOOR);
         parts.push(f >= 0.999 ? hand : `${hand}:${+f.toFixed(3)}`);
       }
     }
     return parts.join(",");
   };
+
+  // The previous iteration's ranges, so they can be averaged rather than
+  // replaced. Parsed back out of the solver range string.
+  const prevPath = process.argv[4];
+  const iterN = Number(process.argv[5] ?? 1);
+  let prevIp: Map<string, number> | undefined;
+  let prevOop: Map<string, number> | undefined;
+  if (prevPath) {
+    const prev = JSON.parse(readFileSync(prevPath, "utf8"));
+    const parse = (str: string) => {
+      const m = new Map<string, number>();
+      for (const tok of str.split(",")) {
+        const [h, f] = tok.split(":");
+        m.set(h, f === undefined ? 1 : Number(f));
+      }
+      return m;
+    };
+    prevIp = parse(prev.ip);
+    prevOop = parse(prev.oop);
+  }
   writeFileSync(outPath, JSON.stringify({
     spot: "srp-btn-bb",
-    oop: rangeString(solvedBb),
-    ip: rangeString(solvedBtn),
+    oop: rangeString(solvedBb, prevOop, iterN),
+    ip: rangeString(solvedBtn, prevIp, iterN),
     pot: 55,
     stack: 975,
   }, null, 2) + "\n");
