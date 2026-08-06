@@ -180,7 +180,8 @@ const refBb = getScenario("bb-btn");
 if (!refBtn || !refBb) throw new Error("reference scenarios missing");
 
 function compare(name: string, solved: Map<string, number>, ref: (h: string) => number) {
-  let sumSolved = 0, sumRef = 0, absDiff = 0, worst: [string, number][] = [];
+  let sumSolved = 0, sumRef = 0, absDiff = 0;
+  const worst: [string, number][] = [];
   for (let i = 0; i < 13; i++) {
     for (let j = 0; j < 13; j++) {
       const hand = handAt(i, j);

@@ -6,9 +6,14 @@
  * answered question's signature pushed into the window — and asserts that no
  * question's signature reappears within the REPEAT_WINDOW answers before it.
  *
- * The concepts bank holds only 15 items, fewer than the window, so its
- * guarantee is necessarily weaker: the first 15 questions are all distinct
- * (the bank cycles rather than repeats early).
+ * **Updated 2026-08-06, M5 completion.** `concepts` used to be the one kind
+ * excluded from this guarantee: its 15-item static bank was smaller than the
+ * window, so the best that could be asserted was "the first 15 are distinct,
+ * then it cycles". `generateFresh` can only re-roll a collision when there is
+ * something else to roll into, and a finite bank runs out. Both concept banks
+ * (`concepts`, and the concept half of `implied`) are now generated from
+ * rule-backed templates, so all NINE kinds meet the same guarantee and
+ * `concepts` has moved into `GENERATED_KINDS` below.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -46,6 +51,10 @@ function repeatsWithinWindow(sigs: string[]): number {
 
 const GENERATED_KINDS: DrillKind[] = [
   "outs", "rule24", "potodds", "decision", "implied", "ev", "bluff", "preflop",
+  // M5 completion: `concepts` earns its place here only because its bank
+  // became templates. If it is ever reverted to a fixed list of items, this
+  // test is the one that will fail, and it should — see the file header.
+  "concepts",
 ];
 
 for (const kind of GENERATED_KINDS) {
@@ -62,12 +71,22 @@ for (const kind of GENERATED_KINDS) {
   });
 }
 
-test("variety: the first 15 concepts questions are all distinct (bank of 15)", () => {
-  for (const seed of [1000, 5000]) {
-    const sigs = sessionSignatures("concepts", 15, 2, seed);
-    assert.equal(new Set(sigs).size, 15, `seed ${seed}: bank should cycle before repeating`);
-  }
-});
+/**
+ * The concept kinds specifically: not merely "no repeat inside the window",
+ * but a question space big enough that a long session keeps finding new
+ * material. A 15-item bank scores 15 here however long the session runs.
+ */
+for (const kind of ["concepts", "implied"] as DrillKind[]) {
+  test(`variety: a 60-question ${kind} session keeps finding new questions`, () => {
+    for (const seed of [1000, 5000]) {
+      const sigs = sessionSignatures(kind, 60, 2, seed);
+      assert.ok(
+        new Set(sigs).size >= 45,
+        `${kind} seed ${seed}: only ${new Set(sigs).size} distinct questions in 60`
+      );
+    }
+  });
+}
 
 test("variety: preflop sweeps the grid — 50 questions reach many distinct hands", () => {
   const sigs = sessionSignatures("preflop", 50, 2, 1234);
