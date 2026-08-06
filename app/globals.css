@@ -1924,3 +1924,45 @@ body:has(.auth-mesh) .ambient-wash i:nth-child(6) { background: var(--wash-d); }
      the seats want the full spread so their plates stay clear of each other. */
   .pt-oval.selecting .pt-seat { left: var(--seat-left); }
 }
+
+/* — M8.9A: touch targets and the iOS zoom trap —
+   Scoped to phone/tablet widths on purpose. Desktop sizing is settled and
+   M14 explicitly rules out another broad restyle; what is wrong is that
+   these sizes were only ever chosen for a mouse. */
+@media (max-width: 900px) {
+  /* THE IMPORTANT ONE. iOS Safari zooms the page in when a text input under
+     16px receives focus, and it does not zoom back out — every form in the
+     product felt broken on an iPhone because `.input` was 14px. This is the
+     single highest-value line in this block. */
+  /* Matched by EXCLUSION, not by listing types. A bare `<input>` defaults to
+     type=text but has no type ATTRIBUTE, so `input[type="text"]` never
+     selects it — and /drill has exactly such an input, which is how this was
+     caught. Checkboxes and radios are excluded because font-size is
+     meaningless for them and a 44px min-height would distort their layout;
+     their tap area is the label. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .btn { min-height: 44px; }
+  .iconbtn { width: 44px; height: 44px; }
+  .switcher .stepbtn { width: 44px; height: 44px; }
+  .lesson-close { width: 44px; height: 44px; }
+  /* The password eye sits inside the field and inherits its height, so it
+     only needs the extra width to match. */
+  .field-affix { width: 44px; }
+  .input-affixed { padding-right: 48px; }
+  /* "Not sure" is a first-class answer (M8.5C) and must be as pressable as
+     the real choices, not a 30px afterthought below them. */
+  .not-sure-btn { min-height: 44px; padding-block: 8px; }
+  .btn-outline-accent { min-height: 44px; }
+  /* The drill switcher's trigger is inline-styled with no class of its own.
+     Inline styles only win for the properties they actually set — padding —
+     so min-height from here still applies. Reached structurally rather than
+     by adding a class, to keep this a CSS-only mobile pass. */
+  .switcher button { min-height: 44px; }
+  /* The /ranges scenario picker — the primary control on that page. */
+  .scen { min-height: 44px; }
+}

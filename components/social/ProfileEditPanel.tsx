@@ -67,17 +67,6 @@ export function ProfileEditPanel({ initial }: { initial: ProfileEditInitial }) {
     color: "color-mix(in srgb, var(--color-text) 60%, transparent)",
     marginBottom: 4,
   } as const;
-  const inputStyle = {
-    width: "100%",
-    border: "1px solid var(--line)",
-    borderRadius: "var(--r-sm)",
-    background: "var(--color-surface)",
-    color: "var(--color-text)",
-    fontFamily: "var(--font-body)",
-    fontSize: 14,
-    padding: "8px 10px",
-  } as const;
-
   return (
     <div
       style={{
@@ -90,7 +79,7 @@ export function ProfileEditPanel({ initial }: { initial: ProfileEditInitial }) {
         <label htmlFor="profile-display-name" style={labelStyle}>Display name</label>
         <input
           id="profile-display-name"
-          style={inputStyle}
+          className="input"
           value={displayName}
           maxLength={40}
           onChange={(e) => setDisplayName(e.target.value)}
@@ -101,7 +90,8 @@ export function ProfileEditPanel({ initial }: { initial: ProfileEditInitial }) {
         <label htmlFor="profile-bio" style={labelStyle}>Bio</label>
         <textarea
           id="profile-bio"
-          style={{ ...inputStyle, resize: "vertical", minHeight: 64 }}
+          className="input"
+          style={{ resize: "vertical", minHeight: 64 }}
           value={bio}
           maxLength={280}
           onChange={(e) => setBio(e.target.value)}

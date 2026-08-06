@@ -160,17 +160,6 @@ export function FriendsShell() {
       });
   }
 
-  const inputStyle = {
-    width: "100%",
-    border: "1px solid var(--line)",
-    borderRadius: "var(--r-sm)",
-    background: "var(--color-surface)",
-    color: "var(--color-text)",
-    fontFamily: "var(--font-body)",
-    fontSize: 14,
-    padding: "8px 10px",
-  } as const;
-
   if (load === "loading") {
     return <p className="text-dim">Loading…</p>;
   }
@@ -309,7 +298,7 @@ export function FriendsShell() {
           Add friends
         </div>
         <input
-          style={inputStyle}
+          className="input"
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
           placeholder="Search by username"
