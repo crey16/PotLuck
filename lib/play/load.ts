@@ -50,3 +50,38 @@ export function pickHand(
   }
   return { flop: manifest.flops[0].flop, index: 0 };
 }
+
+/**
+ * Choose an instance WITHIN a fetched solve file, honouring the hero
+ * position the player picked at setup (M10A).
+ *
+ * The hero's seat is a property of the instance, not of the flop, so it
+ * cannot be known until the file is loaded — `pickHand` above chooses the
+ * flop, this chooses the seat. Without it the setup screen's position
+ * selector would be decoration: the player picks BTN and gets dealt the BB
+ * half the time, which is precisely the "offered and then quietly
+ * substituted" failure the setup model exists to prevent.
+ *
+ * Preferences in order: unused and the right seat; the right seat; anything.
+ * The last fallback only matters once a session has exhausted a flop, and an
+ * arbitrary repeat beats spinning or throwing mid-session.
+ */
+export function pickInstance(
+  solve: SolveFile,
+  used: ReadonlySet<string>,
+  wantHero: 0 | 1 | null,
+  rng: Rng
+): number {
+  const count = solve.instances.length;
+  if (count === 0) throw new Error(`solve ${solve.flop} has no instances`);
+  const start = Math.floor(rng() * count);
+
+  let seatMatch = -1;
+  for (let step = 0; step < count; step++) {
+    const i = (start + step) % count;
+    if (wantHero !== null && solve.instances[i].hero !== wantHero) continue;
+    if (!used.has(handId(solve.flop, i))) return i;
+    if (seatMatch < 0) seatMatch = i;
+  }
+  return seatMatch >= 0 ? seatMatch : start;
+}

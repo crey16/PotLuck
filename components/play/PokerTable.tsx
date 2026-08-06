@@ -37,6 +37,21 @@ export interface PokerTableProps {
   /** The chips currently sliding into the pot, if any. */
   chipFlight: { seat: SeatId; chips: number } | null;
   spotLabel: string;
+  /**
+   * Setup mode (M10A). When present, each seat becomes a control for
+   * choosing the hero position, and seats with no solve behind them are
+   * disabled with their reason.
+   *
+   * This lives here rather than in a second component on purpose: the seat
+   * order, the dealer button and which seats read as folded are facts about
+   * the game, and a duplicate seat map would eventually disagree with this
+   * one about all three. Standing M10B rule.
+   */
+  selectPosition?: {
+    selected: string;
+    availability: (position: string) => { available: boolean; reason?: string };
+    onSelect: (position: string) => void;
+  };
 }
 
 export function PokerTable({
@@ -53,6 +68,7 @@ export function PokerTable({
   bets,
   chipFlight,
   spotLabel,
+  selectPosition,
 }: PokerTableProps) {
   // Rotate the identities, not the coordinates, so the hero's real position
   // lands in the bottom-centre slot while everyone keeps their true seat order.
@@ -80,6 +96,7 @@ export function PokerTable({
           const isHero = spot.pos === heroPosition;
           const isVillain = spot.pos === villainPosition;
           const involved = isHero || isVillain;
+          const choice = selectPosition?.availability(spot.pos);
           return (
             <TableSeat
               key={spot.pos}
@@ -93,8 +110,17 @@ export function PokerTable({
                 (isHero && activeSeat === "hero") ||
                 (isVillain && activeSeat === "villain")
               }
-              isFolded={!involved}
+              // In setup, an unselectable seat is dimmed as "not part of this
+              // spot" for the same reason it is during a hand: it is not.
+              isFolded={selectPosition ? !choice?.available : !involved}
               betChips={isHero ? bets.hero : isVillain ? bets.villain : 0}
+              {...(selectPosition
+                ? {
+                    onSelect: () => selectPosition.onSelect(spot.pos),
+                    isSelected: selectPosition.selected === spot.pos,
+                    ...(choice?.available ? {} : { unavailableReason: choice?.reason }),
+                  }
+                : {})}
               left={slot.left}
               top={slot.top}
             />

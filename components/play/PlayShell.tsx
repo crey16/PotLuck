@@ -16,6 +16,7 @@ import { WorkTable, WorkRow } from "@/components/ui/FeedbackPanel";
 import { ActionBar } from "./ActionBar";
 import { HandSummary } from "./HandSummary";
 import { PokerTable } from "./PokerTable";
+import { PracticeSetup } from "./PracticeSetup";
 import { VerdictFlash } from "./VerdictFlash";
 import { useHandDirector } from "./useHandDirector";
 import { beatsFor, streetBets } from "@/lib/play/beats";
@@ -34,8 +35,9 @@ import {
   type PlayHandSummary,
   type PlaySession,
 } from "@/lib/play/api";
-import { fetchManifest, fetchSolve, handId, pickHand, SPOT } from "@/lib/play/load";
+import { fetchManifest, fetchSolve, handId, pickHand, pickInstance, SPOT } from "@/lib/play/load";
 import { buildHandReview, type ReviewDecision } from "@/lib/play/review";
+import { DEFAULT_CONFIG, type PracticeConfig } from "@/lib/play/setup";
 import { parseAction } from "@/lib/play/actions";
 import { bb, signedBb } from "@/lib/play/units";
 import { preflopDecision, type PreflopDecision } from "@/lib/play/preflop";
@@ -120,6 +122,12 @@ export interface PlayShellProps {
 }
 
 export function PlayShell({ seed }: PlayShellProps) {
+  // M10A: the session starts at the setup screen, not mid-hand. `started`
+  // gates the whole training view — /play used to load srp-btn-bb the instant
+  // the page opened, which meant the configuration was never the player's.
+  const [config, setConfig] = useState<PracticeConfig>(DEFAULT_CONFIG);
+  const [started, setStarted] = useState(false);
+
   const [manifest, setManifest] = useState<SolveManifest | null>(null);
   const [hand, setHand] = useState<LoadedHand | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -181,18 +189,22 @@ export function PlayShell({ seed }: PlayShellProps) {
   const dealingRef = useRef(false);
 
   const dealNext = useCallback(
-    (m: SolveManifest) => {
+    (m: SolveManifest, wantHero: 0 | 1) => {
       if (dealingRef.current) return;
       dealingRef.current = true;
+      // `pickHand` chooses the flop; the hero's seat is a property of the
+      // INSTANCE and so can only be honoured once the file is in memory —
+      // hence the second pick inside `ready`.
       const pick = pickHand(m, usedRef.current, rngRef.current);
-      usedRef.current.add(handId(pick.flop, pick.index));
       const cached = solveCache.current.get(pick.flop);
       const ready = (solve: SolveFile) => {
         dealingRef.current = false;
+        const index = pickInstance(solve, usedRef.current, wantHero, rngRef.current);
+        usedRef.current.add(handId(pick.flop, index));
         setHand({
           solve,
-          inst: solve.instances[pick.index],
-          index: pick.index,
+          inst: solve.instances[index],
+          index,
           clientHandId: newPlayClientId(),
         });
         setRemoteHand(null);
@@ -233,7 +245,6 @@ export function PlayShell({ seed }: PlayShellProps) {
       .then((m) => {
         if (cancelled) return;
         setManifest(m);
-        dealNext(m);
       })
       .catch((err) => {
         if (!cancelled) setLoadError(String(err));
@@ -650,6 +661,15 @@ export function PlayShell({ seed }: PlayShellProps) {
     void completeRemoteHand();
   }, [over, replaying, persistenceMode, remoteHand, persistenceBusy, persistenceError, completeRemoteHand]);
 
+  /** The seat the player chose at setup, in the pack's 0=BB / 1=BTN terms. */
+  const heroSeatWanted: 0 | 1 = config.heroPosition === "BTN" ? 1 : 0;
+
+  const handleStartTraining = useCallback(() => {
+    if (!manifest || started) return;
+    setStarted(true);
+    dealNext(manifest, config.heroPosition === "BTN" ? 1 : 0);
+  }, [manifest, started, dealNext, config.heroPosition]);
+
   const canDealNext =
     persistenceMode === "local" ||
     (persistenceMode === "remote" && remoteHand?.status === "completed");
@@ -658,8 +678,8 @@ export function PlayShell({ seed }: PlayShellProps) {
     if (!manifest || dealingRef.current || !canDealNext) return;
     // A replay never counted as a hand, so it must not count on the way out.
     if (!replaying) setStats((s) => ({ ...s, hands: s.hands + 1 }));
-    dealNext(manifest);
-  }, [manifest, canDealNext, dealNext, replaying]);
+    dealNext(manifest, heroSeatWanted);
+  }, [manifest, canDealNext, dealNext, replaying, heroSeatWanted]);
 
   /**
    * Start a replay of the current hand from `prefix` — the hero actions to
@@ -741,6 +761,17 @@ export function PlayShell({ seed }: PlayShellProps) {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // On the setup screen Enter starts training. The button advertises the
+      // shortcut, so it has to exist — a keyhint for a key that does nothing
+      // is worse than no keyhint.
+      if (!started) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleStartTraining();
+        }
+        return;
+      }
+
       if (e.key === "Enter" || e.key.toUpperCase() === "N") {
         e.preventDefault();
         if (over) handleNextHand();
@@ -798,6 +829,7 @@ export function PlayShell({ seed }: PlayShellProps) {
   }, [
     over, preflopDone, preflop, preflopChosen, atDecision, director,
     handleNextHand, handleContinue, handlePreflop, handleAction, handleRepeatHand,
+    started, handleStartTraining,
   ]);
 
   if (loadError) {
@@ -810,6 +842,21 @@ export function PlayShell({ seed }: PlayShellProps) {
             <code> solver/run-all.sh</code> and <code>solver/publish.sh</code> to build them.
           </p>
         </div>
+      </main>
+    );
+  }
+
+  // M10A: the setup screen IS the entry state. Nothing is dealt until the
+  // player has said what they want to practise.
+  if (!started) {
+    return (
+      <main className="page">
+        <PracticeSetup
+          config={config}
+          onChange={setConfig}
+          onStart={handleStartTraining}
+          loading={!manifest}
+        />
       </main>
     );
   }
@@ -874,6 +921,21 @@ export function PlayShell({ seed }: PlayShellProps) {
         <div className="right">
           <span className="tag tag-neutral tag-mono">100bb · simplified tree</span>
           <span className="tag tag-outline tag-mono">{heroSeat}</span>
+          {/* Back to setup between hands, never mid-hand: leaving a dealt
+              hand would strand its incomplete server record. */}
+          <button
+            type="button"
+            className="btn btn-secondary btn-caps"
+            disabled={!over && review.length > 0}
+            title={
+              !over && review.length > 0
+                ? "Finish the hand first — leaving now would strand its saved record."
+                : undefined
+            }
+            onClick={() => setStarted(false)}
+          >
+            Change setup
+          </button>
         </div>
       </div>
 

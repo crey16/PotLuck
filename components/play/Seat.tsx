@@ -18,6 +18,15 @@ export interface TableSeatProps {
   isFolded?: boolean;
   /** Chips this seat currently has in front of them on this street. */
   betChips?: number;
+  /**
+   * Setup mode (M10A): the seat becomes a control for picking the hero
+   * position. `onSelect` is what turns the seat into a button — without it
+   * the seat stays the plain read-only plate the live table uses.
+   */
+  onSelect?: () => void;
+  isSelected?: boolean;
+  /** Offered, but no solve covers it. Disabled with `title` as the reason. */
+  unavailableReason?: string;
   /** Placement on the oval, as a percentage of the table box. */
   left: number;
   top: number;
@@ -45,6 +54,9 @@ export function TableSeat({
   isActive = false,
   isFolded = false,
   betChips = 0,
+  onSelect,
+  isSelected = false,
+  unavailableReason,
   left,
   top,
 }: TableSeatProps) {
@@ -53,6 +65,9 @@ export function TableSeat({
     isHero ? "hero" : "",
     isActive ? "active" : "",
     isFolded ? "folded" : "",
+    onSelect ? "selectable" : "",
+    isSelected ? "selected" : "",
+    unavailableReason ? "unavailable" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -62,8 +77,8 @@ export function TableSeat({
   // left/top would beat any stylesheet and the seats would spill off the felt.
   const placement = { "--seat-left": `${left}%`, "--seat-top": `${top}%` } as CSSProperties;
 
-  return (
-    <div className={classes} style={placement}>
+  const body = (
+    <>
       {cards.length > 0 && (
         <div className="pt-seat-cards">
           {cards.map((c) => (
@@ -85,6 +100,31 @@ export function TableSeat({
       {betChips > 0 && (
         <span className="pt-seat-bet">{bb(betChips)}</span>
       )}
+    </>
+  );
+
+  // A seat is a button ONLY in setup mode. Making the live table's seats
+  // focusable would put six tab stops between the player and the action bar
+  // in a loop that is deliberately keyboard-first.
+  if (onSelect) {
+    return (
+      <button
+        type="button"
+        className={classes}
+        style={placement}
+        onClick={onSelect}
+        disabled={Boolean(unavailableReason)}
+        aria-pressed={isSelected}
+        title={unavailableReason}
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return (
+    <div className={classes} style={placement}>
+      {body}
     </div>
   );
 }

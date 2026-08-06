@@ -156,9 +156,11 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
       */}
       {score.unscored > 0 && (
         <p className="pt-review-caveat">
-          {score.unscored} of {total} decision{score.unscored === 1 ? "" : "s"} could not be
-          scored: preflop is graded against reference ranges, not solver EVs, so its cost is
-          unknown rather than zero.
+          {/* The noun agrees with the TOTAL, not the count: "1 of 4 decisions",
+              never "1 of 4 decision". */}
+          {score.unscored} of {total} decision{total === 1 ? "" : "s"} could not be scored:
+          preflop is graded against reference ranges, not solver EVs, so{" "}
+          {score.unscored === 1 ? "its cost is" : "their costs are"} unknown rather than zero.
         </p>
       )}
 
@@ -260,7 +262,10 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
           </div>
 
           {/* — M10D: every action, its frequency and its EV cost — */}
-          {showDetail && decision.actions.length > 0 && (
+          {showDetail && decision.actions.length > 0 && (() => {
+            const bestCount = decision.actions.filter((a) => a.isBest).length;
+            const indifferent = bestCount > 1;
+            return (
             <div className="pt-nodetable">
               <table className="table">
                 <thead>
@@ -273,6 +278,14 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
                   </tr>
                 </thead>
                 <tbody>
+                  {/*
+                    "Solver's pick" claims uniqueness, so it is only shown when
+                    exactly one action is best. At a genuinely mixed node —
+                    check 78% / bet 22% with identical EV — several actions tie,
+                    and tagging them all "solver's pick" reads as a bug while
+                    also hiding the actual lesson, which is that the node is
+                    indifferent.
+                  */}
                   {decision.actions.map((action) => (
                     <tr key={action.code} className={action.isChosen ? "chosen" : undefined}>
                       <th scope="row" style={{ fontWeight: action.isChosen ? 700 : 400 }}>
@@ -281,8 +294,10 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
                         </span>
                         {action.label}
                         {action.isChosen && <span className="pt-action-tag">you</span>}
-                        {action.isBest && <span className="pt-action-tag">solver&apos;s pick</span>}
-                        {!action.isBest && action.isMixed && (
+                        {action.isBest && !indifferent && (
+                          <span className="pt-action-tag">solver&apos;s pick</span>
+                        )}
+                        {action.isMixed && (!action.isBest || indifferent) && (
                           <span className="pt-action-tag">mixed</span>
                         )}
                       </th>
@@ -301,12 +316,19 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
                 </tbody>
               </table>
               <p className="pt-nodetable-note">
+                {indifferent && (
+                  <>
+                    <strong>This node is indifferent:</strong> {bestCount} actions have the same
+                    EV, so the solver mixes between them and none of them is a mistake.{" "}
+                  </>
+                )}
                 Costs are shown against the best action at this node, which is what the solve
                 exports. Absolute action EVs are not published in this pack, so none is shown
                 rather than one being inferred.
               </p>
             </div>
-          )}
+            );
+          })()}
 
           {/* — continuations — */}
           <div className="pt-review-actions">
