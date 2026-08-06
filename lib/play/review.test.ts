@@ -169,6 +169,31 @@ test("review: the best action is the node's minimum loss, not an assumed zero", 
   assert.deepEqual(model2.decisions[0].actions.map((a) => a.isBest), [true, false]);
 });
 
+/**
+ * `isBest` means "minimum EXPORTED loss", and the export quantises loss into
+ * 0.05bb steps — so an action the solver plays 0% of the time can tie for
+ * best when the real difference is under 0.025bb. That is not a defect in the
+ * model, and it must not be "fixed" here: the pack genuinely does not carry a
+ * finer number. It is the DISPLAY's job to not read that tie as indifference,
+ * which is why HandSummary breaks the tie on frequency.
+ */
+test("review: a zero-frequency action can tie for best — quantisation, not indifference", () => {
+  const pure: PlayNode = {
+    pre: [], a: ["X", "B18"], f: [0, 255], l: [0, 0], tb: [0, 0], st: 0, eq: 130,
+  };
+  const inst: PlayInstance = {
+    ...INSTANCE,
+    nodes: { "": pure },
+    ends: { "0": { pre: [], tb: [0, 0], k: "sd" }, "1": { pre: [], tb: [0, 0], k: "sd" } },
+  };
+  const actions = buildHandReview({ ...base, inst, chosen: [0] }).decisions[0].actions;
+
+  assert.deepEqual(actions.map((a) => a.isBest), [true, true], "both tie on exported loss");
+  assert.deepEqual(actions.map((a) => a.isMixed), [false, true], "only one is really played");
+  // The pair the display needs to tell them apart.
+  assert.equal(actions.filter((a) => a.isBest && a.isMixed).length, 1);
+});
+
 test("review: mixed actions are those the solver plays at a meaningful rate", () => {
   const model = buildHandReview({ ...base, chosen: [0, 1] });
   const actions = model.decisions[1].actions;

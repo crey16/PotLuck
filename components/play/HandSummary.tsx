@@ -97,6 +97,7 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
   const index = Math.min(selected, Math.max(0, total - 1));
   const decision: ReviewDecision | undefined = model.decisions[index];
   const activeStreet = decision?.street ?? "preflop";
+  const chosenIsMixed = decision?.actions.find((a) => a.isChosen)?.isMixed ?? false;
 
   if (total === 0) {
     return (
@@ -246,7 +247,12 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
                   ? " · EV unknown (reference range)"
                   : decision.evLossBb > 0
                     ? ` · −${bbText(decision.evLossBb)}`
-                    : " · the solver's own choice"}
+                    : chosenIsMixed
+                      ? " · the solver's own choice"
+                      : // Zero cost but a frequency the solver barely uses. Saying
+                        // "the solver's own choice" there is an overclaim: the
+                        // cost rounded to zero, it was not preferred.
+                        " · costs nothing measurable, though the solver rarely takes it"}
               </div>
             </div>
             {decision.actions.length > 0 && (
@@ -263,8 +269,17 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
 
           {/* — M10D: every action, its frequency and its EV cost — */}
           {showDetail && decision.actions.length > 0 && (() => {
-            const bestCount = decision.actions.filter((a) => a.isBest).length;
-            const indifferent = bestCount > 1;
+            // Ties on EV loss are NOT proof of indifference. `l` is exported
+            // as a u8 in 0.05bb steps, so two actions differing by less than
+            // 0.025bb both round to zero — and a node where the solver checks
+            // 0% and bets 100% arrives here as a "tie". Frequency is the
+            // tiebreaker in both directions: it decides which tied action is
+            // actually preferred, AND whether the node is really mixed.
+            const best = decision.actions.filter((a) => a.isBest);
+            const played = best.filter((a) => a.isMixed);
+            const preferred = new Set((played.length > 0 ? played : best).map((a) => a.code));
+            const indifferent = preferred.size > 1;
+            const bestCount = best.length;
             return (
             <div className="pt-nodetable">
               <table className="table">
@@ -294,10 +309,10 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
                         </span>
                         {action.label}
                         {action.isChosen && <span className="pt-action-tag">you</span>}
-                        {action.isBest && !indifferent && (
+                        {preferred.has(action.code) && !indifferent && (
                           <span className="pt-action-tag">solver&apos;s pick</span>
                         )}
-                        {action.isMixed && (!action.isBest || indifferent) && (
+                        {action.isMixed && (!preferred.has(action.code) || indifferent) && (
                           <span className="pt-action-tag">mixed</span>
                         )}
                       </th>
@@ -318,8 +333,17 @@ export function HandSummary({ model, onRepeatHand, onPlayFrom, busy = false }: H
               <p className="pt-nodetable-note">
                 {indifferent && (
                   <>
-                    <strong>This node is indifferent:</strong> {bestCount} actions have the same
-                    EV, so the solver mixes between them and none of them is a mistake.{" "}
+                    <strong>This node is indifferent:</strong>{" "}
+                    {bestCount} actions have the same EV, so the solver mixes between them and
+                    none of them is a mistake.{" "}
+                  </>
+                )}
+                {!indifferent && bestCount > preferred.size && (
+                  <>
+                    <strong>Ties here are a rounding artefact:</strong>{" "}
+                    EV costs are exported in 0.05bb steps, so an action the solver almost never
+                    takes can still show &ldquo;best&rdquo;. The frequency column is the better
+                    guide at this node.{" "}
                   </>
                 )}
                 Costs are shown against the best action at this node, which is what the solve
