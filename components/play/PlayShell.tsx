@@ -14,6 +14,7 @@ import { MoneyStrip } from "@/components/ui/MoneyStrip";
 import { OptionButton, type OptionButtonState } from "@/components/ui/OptionButton";
 import { WorkTable, WorkRow } from "@/components/ui/FeedbackPanel";
 import { ActionBar } from "./ActionBar";
+import { HandSummary } from "./HandSummary";
 import { PokerTable } from "./PokerTable";
 import { VerdictFlash } from "./VerdictFlash";
 import { useHandDirector } from "./useHandDirector";
@@ -34,6 +35,7 @@ import {
   type PlaySession,
 } from "@/lib/play/api";
 import { fetchManifest, fetchSolve, handId, pickHand, SPOT } from "@/lib/play/load";
+import { buildHandReview, type ReviewDecision } from "@/lib/play/review";
 import { parseAction } from "@/lib/play/actions";
 import { bb, signedBb } from "@/lib/play/units";
 import { preflopDecision, type PreflopDecision } from "@/lib/play/preflop";
@@ -148,6 +150,17 @@ export function PlayShell({ seed }: PlayShellProps) {
   // hand continuing, because that pause is what made this feel like a quiz.
   const [chosen, setChosen] = useState<number[]>([]);
 
+  // M10C/M10D replay. `replayFrom` non-null means the player is re-running
+  // this hand from a reviewed node. A replay is deliberately NOT persisted
+  // and NOT counted in session stats — the runout is already known, so it is
+  // practice rather than a measured sample (see HandSummary's REPLAY_NOTE).
+  // `originalRef` holds the real attempt so "Back to the original review"
+  // restores it exactly; the saved server record is never touched either way.
+  const [replayFrom, setReplayFrom] = useState<{ index: number; street: string } | null>(null);
+  const originalRef = useRef<
+    { chosen: number[]; preflopChosen: string | null; review: DecisionRecord[] } | null
+  >(null);
+
   // The transient verdict, rendered concurrently with the hand rather than
   // queued ahead of it. `nonce` restarts the animation when the same verdict
   // lands twice in a row.
@@ -192,6 +205,8 @@ export function PlayShell({ seed }: PlayShellProps) {
         setChosen([]);
         setFlash(null);
         setReview([]);
+        setReplayFrom(null);
+        originalRef.current = null;
       };
       if (cached) {
         ready(cached);
@@ -416,17 +431,52 @@ export function PlayShell({ seed }: PlayShellProps) {
     return rows;
   }, [inst, preflopDone, events, botName]);
 
+  /**
+   * The reviewable model of this hand — streets, decisions, and every action
+   * that was available at each. Derived by `lib/play/review.ts` from the
+   * instance and the hero's path, so the panel cannot drift from the hand
+   * that was actually played.
+   *
+   * Preflop's verdict is carried in from the reference-range grading; its EV
+   * stays null all the way through, which is what keeps it out of the score.
+   */
+  const reviewModel = useMemo(() => {
+    if (!inst || !hand) return null;
+    const preflopRecord = review.find((r) => r.phase === "preflop");
+    return buildHandReview({
+      inst,
+      flop: hand.solve.flop,
+      startPot,
+      stack,
+      chosen,
+      ...(preflopDone && preflopRecord
+        ? {
+            preflop: {
+              chosenLabel: preflopRecord.label,
+              verdict: preflopRecord.verdict,
+            },
+          }
+        : {}),
+    });
+  }, [inst, hand, startPot, stack, chosen, preflopDone, review]);
+
   const currentRemoteReady = Boolean(
     hand && remoteHand && remoteHand.client_hand_id === hand.clientHandId
   );
   const canAct =
+    replayFrom !== null ||
     persistenceMode === "local" ||
     (persistenceMode === "remote" && currentRemoteReady && !persistenceBusy && !persistenceError);
 
+  const replaying = replayFrom !== null;
+
   const recordDecision = useCallback(
     (rec: DecisionRecord) => {
-      const right = isRightVerdict(rec.verdict);
       setReview((r) => [...r, rec]);
+      // A replay is graded on screen but never scored: counting it would
+      // inflate accuracy and EV with a hand whose runout is already known.
+      if (replaying) return;
+      const right = isRightVerdict(rec.verdict);
       setStats((s) => ({
         ...s,
         decisions: s.decisions + 1,
@@ -435,7 +485,7 @@ export function PlayShell({ seed }: PlayShellProps) {
         blunders: s.blunders + (rec.verdict === "blunder" ? 1 : 0),
       }));
     },
-    []
+    [replaying]
   );
 
   const reconcileDecision = useCallback(
@@ -462,6 +512,9 @@ export function PlayShell({ seed }: PlayShellProps) {
 
   const persistDecision = useCallback(
     (local: DecisionRecord, nodePath: string, chosenActionCode: string) => {
+      // Replays are never written: the server record of the original attempt
+      // must survive its own "play it again" button.
+      if (replaying) return;
       if (persistenceMode === "local") return;
       if (persistenceMode !== "remote" || !remoteHand) return;
       const savedHandId = remoteHand.id;
@@ -482,7 +535,7 @@ export function PlayShell({ seed }: PlayShellProps) {
       };
       void submit();
     },
-    [persistenceMode, remoteHand, reconcileDecision]
+    [replaying, persistenceMode, remoteHand, reconcileDecision]
   );
 
   const handlePreflop = useCallback(
@@ -589,13 +642,13 @@ export function PlayShell({ seed }: PlayShellProps) {
   // not called complete until its stored path reaches this instance's terminal.
   useEffect(() => {
     if (
-      !over || persistenceMode !== "remote" || !remoteHand ||
+      !over || replaying || persistenceMode !== "remote" || !remoteHand ||
       remoteHand.status !== "incomplete" || persistenceBusy || persistenceError ||
       completionAttemptedRef.current === remoteHand.id
     ) return;
     completionAttemptedRef.current = remoteHand.id;
     void completeRemoteHand();
-  }, [over, persistenceMode, remoteHand, persistenceBusy, persistenceError, completeRemoteHand]);
+  }, [over, replaying, persistenceMode, remoteHand, persistenceBusy, persistenceError, completeRemoteHand]);
 
   const canDealNext =
     persistenceMode === "local" ||
@@ -603,9 +656,68 @@ export function PlayShell({ seed }: PlayShellProps) {
 
   const handleNextHand = useCallback(() => {
     if (!manifest || dealingRef.current || !canDealNext) return;
-    setStats((s) => ({ ...s, hands: s.hands + 1 }));
+    // A replay never counted as a hand, so it must not count on the way out.
+    if (!replaying) setStats((s) => ({ ...s, hands: s.hands + 1 }));
     dealNext(manifest);
-  }, [manifest, canDealNext, dealNext]);
+  }, [manifest, canDealNext, dealNext, replaying]);
+
+  /**
+   * Start a replay of the current hand from `prefix` — the hero actions to
+   * re-apply before handing control back.
+   *
+   * `[]` with `restartPreflop` is Repeat Hand; a longer prefix is Play From
+   * Here. Both keep the identical instance, so the cards, the bot's scripted
+   * responses, the runout and the solve version are all unchanged by
+   * construction: nothing is re-sampled, because the instance IS the script.
+   */
+  const startReplay = useCallback(
+    (prefix: number[], from: { index: number; street: string }, restartPreflop: boolean) => {
+      if (!inst) return;
+      // Captured once: a replay of a replay must still return to the real
+      // attempt, not to the previous replay.
+      if (!originalRef.current) {
+        originalRef.current = { chosen, preflopChosen, review };
+      }
+      setReplayFrom(from);
+      setChosen(prefix);
+      setFlash(null);
+      decisionLockRef.current = false;
+      if (restartPreflop) {
+        setPreflopChosen(null);
+        setPreflopDone(false);
+        setReview([]);
+      } else {
+        setReview((r) => r.slice(0, prefix.length + (preflopChosen !== null ? 1 : 0)));
+      }
+    },
+    [inst, chosen, preflopChosen, review]
+  );
+
+  const handleRepeatHand = useCallback(() => {
+    startReplay([], { index: 0, street: "preflop" }, true);
+  }, [startReplay]);
+
+  const handlePlayFrom = useCallback(
+    (decision: ReviewDecision) => {
+      if (decision.replayPrefix === null) return;
+      startReplay(decision.replayPrefix, { index: decision.index, street: decision.street }, false);
+    },
+    [startReplay]
+  );
+
+  /** Restore the real attempt exactly as it was played. */
+  const exitReplay = useCallback(() => {
+    const saved = originalRef.current;
+    if (!saved) return;
+    setChosen(saved.chosen);
+    setPreflopChosen(saved.preflopChosen);
+    setPreflopDone(true);
+    setReview(saved.review);
+    setReplayFrom(null);
+    originalRef.current = null;
+    setFlash(null);
+    decisionLockRef.current = false;
+  }, []);
 
   const retryPersistence = useCallback(() => {
     if (retryDecisionRef.current) {
@@ -633,6 +745,13 @@ export function PlayShell({ seed }: PlayShellProps) {
         e.preventDefault();
         if (over) handleNextHand();
         else handleContinue();
+        return;
+      }
+      // R repeats the completed hand. Only once it is over: mid-hand it would
+      // be a way to take a decision back after seeing the verdict.
+      if (over && e.key.toUpperCase() === "R") {
+        e.preventDefault();
+        handleRepeatHand();
         return;
       }
 
@@ -678,7 +797,7 @@ export function PlayShell({ seed }: PlayShellProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
     over, preflopDone, preflop, preflopChosen, atDecision, director,
-    handleNextHand, handleContinue, handlePreflop, handleAction,
+    handleNextHand, handleContinue, handlePreflop, handleAction, handleRepeatHand,
   ]);
 
   if (loadError) {
@@ -775,6 +894,28 @@ export function PlayShell({ seed }: PlayShellProps) {
                 {SPOT}
               </span>
             </div>
+
+            {replayFrom && (
+              <div className="pt-replay-banner">
+                <span className="pt-replay-mark" aria-hidden="true">↺</span>
+                <div>
+                  <strong>
+                    Replaying from the {replayFrom.street}
+                  </strong>
+                  <span>
+                    Same cards, same runout, same solve. Graded live, but not recorded — your
+                    original hand is saved and unchanged.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-caps"
+                  onClick={exitReplay}
+                >
+                  Back to the original
+                </button>
+              </div>
+            )}
 
             {/* Click anywhere on the table to skip the rest of the playback. */}
             <div className="pt-stage" onClick={director.skip}>
@@ -887,27 +1028,40 @@ export function PlayShell({ seed }: PlayShellProps) {
 
             {/* — hand over — */}
             {over && outcome && (
-              <div className={`fb${(outcome.net ?? 0) >= 0 ? "" : " no"}`}>
-                <div className="bar">
-                  <span className="word">{outcome.text}</span>
-                  <span className="xp">{signedBb(outcome.net)}</span>
+              <>
+                <div className={`fb${(outcome.net ?? 0) >= 0 ? "" : " no"}`}>
+                  <div className="bar">
+                    <span className="word">{outcome.text}</span>
+                    <span className="xp">{signedBb(outcome.net)}</span>
+                  </div>
+                  <div className="body">
+                    <WorkTable>
+                      {review.map((r) => (
+                        <WorkRow
+                          key={r.clientDecisionId}
+                          label={`${r.street} — ${r.label}`}
+                          value={`${VERDICT_WORD[r.verdict]}${
+                            r.lossDollars === null
+                              ? " · EV unknown"
+                              : r.lossDollars > 0 ? ` · −${bb(r.lossDollars)}` : ""
+                          }`}
+                        />
+                      ))}
+                    </WorkTable>
+                  </div>
                 </div>
-                <div className="body">
-                  <WorkTable>
-                    {review.map((r) => (
-                      <WorkRow
-                        key={r.clientDecisionId}
-                        label={`${r.street} — ${r.label}`}
-                        value={`${VERDICT_WORD[r.verdict]}${
-                          r.lossDollars === null
-                            ? " · EV unknown"
-                            : r.lossDollars > 0 ? ` · −${bb(r.lossDollars)}` : ""
-                        }`}
-                      />
-                    ))}
-                  </WorkTable>
-                </div>
-              </div>
+
+                {/* M10C/M10D: score, street tabs, decision navigation, node
+                    detail, and the two replay continuations. */}
+                {reviewModel && (
+                  <HandSummary
+                    model={reviewModel}
+                    onRepeatHand={handleRepeatHand}
+                    onPlayFrom={handlePlayFrom}
+                    busy={Boolean(persistenceBusy)}
+                  />
+                )}
+              </>
             )}
 
             {/* The hand-complete controls live in the same slot as the action
@@ -1038,6 +1192,10 @@ export function PlayShell({ seed }: PlayShellProps) {
                 <span className="keycap">N</span>
                 <span className="keycap">Enter</span>
                 next hand
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="keycap">R</span>
+                repeat the hand
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span className="keycap">any</span>

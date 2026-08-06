@@ -1658,3 +1658,162 @@ body:has(.auth-mesh) .ambient-wash i:nth-child(6) { background: var(--wash-d); }
   background: var(--color-bg);
 }
 .pt-endbar .hint { font-size: 12.5px; opacity: .6; }
+
+/* — play: hand review (M10C score + street tabs, M10D node detail) —
+   Lives beside the play-table block above because it shares its vocabulary:
+   bb everywhere, verdict tones from --good/--warn/--crit, and never colour
+   as the only cue. */
+.pt-review { margin-top: var(--space-6); padding: var(--space-6); }
+
+.pt-review-head {
+  display: flex; flex-wrap: wrap; gap: var(--space-6);
+  align-items: flex-start; justify-content: space-between;
+}
+.pt-score-value {
+  font: 600 52px/1 var(--font-heading);
+  letter-spacing: .01em; margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.pt-score-max { font-size: 20px; opacity: .45; margin-left: 3px; }
+.pt-score-band {
+  margin-top: 4px; font: 11px var(--font-mono);
+  letter-spacing: .1em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 62%, transparent);
+}
+.pt-score-facts {
+  display: grid; grid-template-columns: repeat(2, minmax(96px, auto));
+  gap: var(--space-2) var(--space-6); margin: 0;
+}
+.pt-score-facts dt {
+  font: 10px var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 57%, transparent);
+}
+.pt-score-facts dd {
+  margin: 1px 0 0; font: 600 19px var(--font-heading);
+  font-variant-numeric: tabular-nums;
+}
+.pt-review-caveat {
+  margin: var(--space-4) 0 0; padding: 9px 12px;
+  border-left: 2px solid var(--warn);
+  background: var(--warn-fill);
+  font-size: 12.5px; line-height: 1.55;
+}
+
+/* — street tabs — */
+.pt-streets {
+  display: flex; flex-wrap: wrap; gap: 0;
+  margin: var(--space-6) 0 var(--space-4);
+  border: 1px solid var(--color-divider);
+}
+.pt-street {
+  flex: 1 1 0; min-width: 96px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px 12px; border: 0; background: transparent; cursor: pointer;
+  font: 600 12px var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
+  color: inherit;
+}
+.pt-street + .pt-street { border-left: 1px solid var(--color-divider); }
+.pt-street:not(:disabled):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.pt-street.active { background: var(--color-accent); color: var(--color-bg); }
+/* A street the hand never reached is disabled, not merely empty — the two
+   mean different things and must not look the same. */
+.pt-street:disabled { opacity: .38; cursor: not-allowed; }
+.pt-street:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.pt-street-count { font-size: 10px; opacity: .7; font-variant-numeric: tabular-nums; }
+
+/* — the selected decision — */
+.pt-decision-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3);
+}
+.pt-decision-context {
+  display: flex; flex-wrap: wrap; gap: var(--space-3);
+  padding-bottom: var(--space-3); margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+  letter-spacing: .06em;
+}
+.pt-verdict {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4); border: 1px solid var(--good);
+  background: var(--good-fill);
+}
+.pt-verdict.warn { border-color: var(--warn); background: var(--warn-fill); }
+.pt-verdict.crit { border-color: var(--crit); background: var(--crit-fill); }
+.pt-verdict-glyph {
+  display: grid; place-items: center; width: 30px; height: 30px;
+  border: 1px solid currentColor; border-radius: 999px;
+  font-size: 14px; flex: none;
+}
+.pt-verdict.good .pt-verdict-glyph, .pt-verdict.good .pt-verdict-word { color: var(--good); }
+.pt-verdict.warn .pt-verdict-glyph, .pt-verdict.warn .pt-verdict-word { color: var(--warn); }
+.pt-verdict.crit .pt-verdict-glyph, .pt-verdict.crit .pt-verdict-word { color: var(--crit); }
+.pt-verdict-word {
+  font: 600 14px var(--font-heading); letter-spacing: .04em; text-transform: uppercase;
+}
+.pt-verdict-detail { font-size: 13px; margin-top: 2px; }
+.pt-verdict-toggle { margin-left: auto; }
+
+/* — node detail table — */
+.pt-nodetable { margin-top: var(--space-4); overflow-x: auto; }
+.pt-nodetable table { min-width: 440px; }
+.pt-nodetable tbody tr.chosen { background: color-mix(in srgb, var(--color-accent) 9%, transparent); }
+.pt-nodetable th[scope="row"] { text-align: left; font-weight: 400; }
+.pt-action-mark {
+  display: inline-block; width: 1.1em; font-family: var(--font-mono);
+}
+.pt-action-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 6px;
+  border: 1px solid var(--color-divider);
+  font: 9px var(--font-mono); letter-spacing: .08em; text-transform: uppercase;
+  vertical-align: 1px;
+}
+.pt-nodetable-note {
+  margin: var(--space-3) 0 0; font-size: 12px; line-height: 1.55;
+  color: color-mix(in srgb, var(--color-text) 62%, transparent);
+}
+
+/* — frequency bar — never colour alone: the number is always beside it — */
+.pt-freq { display: inline-flex; align-items: center; gap: 8px; min-width: 128px; }
+.pt-freq-track {
+  position: relative; flex: 1 1 auto; height: 9px; min-width: 62px;
+  border: 1px solid var(--line); background: var(--surface); overflow: hidden;
+}
+.pt-freq-track > i {
+  position: absolute; inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+.pt-freq-track > i.mixed { background: var(--color-accent); }
+.pt-freq-num {
+  font: 11px var(--font-mono); font-variant-numeric: tabular-nums;
+  min-width: 30px; text-align: right;
+}
+
+.pt-review-actions {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  margin-top: var(--space-4); padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+.pt-review-hint { font-size: 12.5px; opacity: .62; }
+
+@media (max-width: 640px) {
+  .pt-score-value { font-size: 42px; }
+  .pt-score-facts { grid-template-columns: repeat(2, 1fr); width: 100%; }
+  .pt-verdict-toggle { margin-left: 0; width: 100%; justify-content: center; }
+}
+
+/* — play: replay banner (M10D) —
+   A replay is not recorded, and the player has to be able to tell at a
+   glance that what they are doing now is practice rather than the graded
+   attempt they just finished. */
+.pt-replay-banner {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+}
+.pt-replay-banner > div { display: flex; flex-direction: column; gap: 2px; min-width: 220px; flex: 1 1 260px; }
+.pt-replay-banner strong {
+  font: 600 12px var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
+}
+.pt-replay-banner span { font-size: 12.5px; line-height: 1.5; }
+.pt-replay-mark { font-size: 20px; line-height: 1; flex: none; }
