@@ -67,7 +67,7 @@ export function nextLevel(window: boolean[], current: DrillLevel): DrillLevel {
  * several answers — a perfect last-10 would restore as 2, never 3. Replaying it
  * over growing prefixes reproduces the climb the user actually made.
  */
-export function levelFromHistory(window: boolean[]): DrillLevel {
+export function levelFromHistory(window: readonly boolean[]): DrillLevel {
   let level: DrillLevel = 1;
   for (let i = 1; i <= window.length; i++) {
     level = nextLevel(window.slice(0, i), level);
@@ -143,13 +143,31 @@ export function seededLevels(
       levels[kind] = previous[kind] ?? 1;
       continue;
     }
-    const history = seeded[kind];
-    const fromHistory = levelFromHistory(history);
-    // The floor applies only while there is no history to speak of. Once the
-    // rolling window has enough answers to move the level on its own, those
-    // answers are better evidence than one placement question.
-    const floor = history.length >= MIN_SAMPLE ? 1 : (placementFloors[kind] ?? 1);
-    levels[kind] = Math.max(fromHistory, floor) as DrillLevel;
+    levels[kind] = levelWithPlacementFloor(seeded[kind], placementFloors[kind]);
   }
   return levels;
+}
+
+/**
+ * One kind's level: the history-derived level, floored by placement.
+ *
+ * Extracted because it was being derived in TWO places and they disagreed on
+ * production. The drill applied the floor, the dashboard did not — so a
+ * player finished placement, was told "the drills you answered correctly
+ * start one level up", and then saw every drill card reading LVL 1 while the
+ * drills themselves opened at level 2. Both callers now go through here.
+ *
+ * The floor applies only while there is no history to speak of. Once the
+ * rolling window has enough answers to move the level on its own, those
+ * answers are better evidence than one placement question — so an
+ * experienced player is never pulled back down to their placement, and one
+ * demoted by real answers stays demoted.
+ */
+export function levelWithPlacementFloor(
+  history: readonly boolean[] = [],
+  placementFloor?: DrillLevel
+): DrillLevel {
+  const fromHistory = levelFromHistory(history);
+  const floor = history.length >= MIN_SAMPLE ? 1 : (placementFloor ?? 1);
+  return Math.max(fromHistory, floor) as DrillLevel;
 }

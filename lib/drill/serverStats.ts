@@ -6,7 +6,10 @@
 import { createClient, getAuthUserId } from "../supabase/server";
 import { supabaseConfigured } from "../supabase/env";
 import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
-import { levelFromHistory, WINDOW_SIZE } from "./difficulty";
+import { levelWithPlacementFloor, WINDOW_SIZE, type Levels } from "./difficulty";
+import { placementLevelsFromResponse } from "./drillState";
+import { ASSESSMENT_VERSION } from "../placement/blueprint";
+import { GENERATOR_VERSION } from "./version";
 
 /** Display names for the 8 skill tags (the server derives tags from kinds —
  *  see api/skills.py; this map only labels them for the dashboard). */
@@ -86,7 +89,14 @@ const EMPTY: DashboardStats = {
 
 /** Kind-level aggregates from raw attempt rows (newest first). */
 export function aggregateKinds(
-  rows: { drill_kind: string | null; is_correct: boolean }[]
+  rows: { drill_kind: string | null; is_correct: boolean }[],
+  /**
+   * M8.5B placement floors. Without these the dashboard reported the
+   * history-derived level while the drill itself applied the floor, so a
+   * freshly-placed player saw every card at LVL 1 and then opened a drill at
+   * level 2. Same rule, one implementation — see `levelWithPlacementFloor`.
+   */
+  placementFloors: Levels = {}
 ): Record<DrillKind, KindStat> {
   const kinds = emptyKinds();
   const windows: Partial<Record<DrillKind, boolean[]>> = {};
@@ -103,9 +113,41 @@ export function aggregateKinds(
   for (const kind of DRILL_KINDS) {
     const stat = kinds[kind];
     if (stat.attempts > 0) stat.accuracy = Math.round((stat.correct / stat.attempts) * 100);
-    stat.level = levelFromHistory(windows[kind] ?? []);
+    stat.level = levelWithPlacementFloor(windows[kind] ?? [], placementFloors[kind]);
   }
   return kinds;
+}
+
+
+/**
+ * The placement floors for the signed-in user, or `{}`.
+ *
+ * Mirrors the guards in `api/index.py`'s drill-state handler exactly: only a
+ * COMPLETED assessment counts, and both versions must match today's. A
+ * placement scored by different rules or dealt by different generators
+ * measured something else, and silently reinterpreting it is the failure the
+ * stored versions exist to prevent — so an outdated result stops applying
+ * rather than being reinterpreted.
+ *
+ * Fail-soft: any error yields no floors, which is the cold-start behaviour.
+ */
+async function fetchPlacementFloors(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<Levels> {
+  const { data } = await supabase
+    .from("placement_assessments")
+    .select("levels")
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .eq("assessment_version", ASSESSMENT_VERSION)
+    .eq("generator_version", GENERATOR_VERSION)
+    .order("started_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(1);
+  const levels = data?.[0]?.levels;
+  // Reuses the drill client's parser so both paths validate identically.
+  return placementLevelsFromResponse({ placement_levels: levels });
 }
 
 /** Just the per-kind aggregates — what the drill switcher needs. */
@@ -121,7 +163,7 @@ export async function fetchKindStats(): Promise<Record<DrillKind, KindStat>> {
     .not("drill_kind", "is", null)
     .order("created_at", { ascending: false })
     .limit(5000);
-  return aggregateKinds(data ?? []);
+  return aggregateKinds(data ?? [], await fetchPlacementFloors(supabase, userId));
 }
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
@@ -134,7 +176,11 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   since.setDate(since.getDate() - 7 * 12);
   const sinceIso = since.toISOString().slice(0, 10);
 
-  const [profileRes, skillsRes, attemptsRes, activityRes] = await Promise.all([
+  // Added to the existing parallel batch rather than awaited separately: this
+  // page's query fan-out is already an M8.8B concern, and a placement floor is
+  // not worth a serial round trip.
+  const [profileRes, skillsRes, attemptsRes, activityRes, placementFloors] =
+    await Promise.all([
     supabase
       .from("profiles")
       .select("username, display_name, xp, level, streak_count, created_at")
@@ -157,6 +203,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
       .eq("user_id", userId)
       .gte("date", sinceIso)
       .order("date", { ascending: true }),
+    fetchPlacementFloors(supabase, userId),
   ]);
 
   const profile = profileRes.data
@@ -184,7 +231,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     .sort((a, b) => b.accuracy - a.accuracy);
 
   const rows = attemptsRes.data ?? [];
-  const kinds = aggregateKinds(rows);
+  const kinds = aggregateKinds(rows, placementFloors);
   const totalAttempts = rows.length;
   const totalCorrect = rows.filter((r) => r.is_correct).length;
   const first = rows[0]?.drill_kind;

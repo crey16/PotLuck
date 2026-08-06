@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  nextLevel, pushResult, pushOutcome, emptyWindows, levelFromHistory, mergeSeededWindows, seededLevels, WINDOW_SIZE, MIN_SAMPLE,
-} from "./difficulty";
+import { nextLevel, pushResult, pushOutcome, emptyWindows, levelFromHistory, mergeSeededWindows, seededLevels, WINDOW_SIZE, MIN_SAMPLE, levelWithPlacementFloor } from "./difficulty";
 import { DRILL_KINDS } from "./contract";
 import { mulberry32 } from "./rng";
 
@@ -268,4 +266,63 @@ test("seededLevels: the floor still applies while history is below MIN_SAMPLE", 
 test("seededLevels: a kind answered this session keeps its session level", () => {
   const levels = seededLevels(emptyWindows(), { outs: 3 }, ["outs"], { outs: 2 });
   assert.equal(levels.outs, 3);
+});
+
+/* ------------------------------------------------------------------ *
+ * The dashboard and the drill must agree (found on production)
+ * ------------------------------------------------------------------ */
+
+/**
+ * A freshly-placed player finished placement, was told "the drills you
+ * answered correctly start one level up", and then saw every dashboard card
+ * reading LVL 1 while the drills themselves opened at level 2.
+ *
+ * The cause was two derivations of one number: the drill went through
+ * `seededLevels` (floor applied), the dashboard through `levelFromHistory`
+ * alone (floor ignored). Both now go through `levelWithPlacementFloor`, and
+ * these tests pin the rule so a third caller cannot reintroduce the split.
+ */
+test("placement floors a drill with no history", () => {
+  assert.equal(levelWithPlacementFloor([], 2), 2);
+  assert.equal(levelWithPlacementFloor([], 3), 3);
+  assert.equal(levelWithPlacementFloor([], undefined), 1, "no placement means level 1");
+});
+
+test("placement is a floor, never a ceiling", () => {
+  // A player whose short history already says 2 is not held at a floor of 1.
+  const strong = [true, true, true, true];
+  assert.ok(levelWithPlacementFloor(strong, 1) >= levelFromHistory(strong));
+});
+
+/**
+ * The rule that keeps placement from outliving its usefulness: once the
+ * rolling window is a real sample, the answers are better evidence than one
+ * placement question — including when they demoted the player.
+ */
+test("a full history overrides the placement floor in both directions", () => {
+  const wrong = Array.from({ length: WINDOW_SIZE }, () => false);
+  assert.equal(
+    levelWithPlacementFloor(wrong, 3),
+    levelFromHistory(wrong),
+    "a demoted player must not be propped back up by an old placement"
+  );
+  const right = Array.from({ length: WINDOW_SIZE }, () => true);
+  assert.equal(levelWithPlacementFloor(right, 1), levelFromHistory(right));
+});
+
+test("seededLevels and levelWithPlacementFloor cannot disagree", () => {
+  // The invariant the production bug violated: whatever path a caller takes,
+  // one kind with one history and one floor yields one level.
+  const floors = { outs: 2 as DrillLevel, potodds: 3 as DrillLevel };
+  const windows = emptyWindows();
+  windows.outs = [true, false];
+  windows.potodds = [];
+  const viaSeeded = seededLevels(windows, {}, [], floors);
+  for (const kind of DRILL_KINDS) {
+    assert.equal(
+      viaSeeded[kind],
+      levelWithPlacementFloor(windows[kind], floors[kind]),
+      `${kind}: the two paths disagree`
+    );
+  }
 });
