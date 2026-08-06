@@ -728,7 +728,28 @@ img { display: block; max-width: 100%; }
   text-shadow: 0 0 2px var(--grid-halo), 0 0 4px var(--grid-halo), 0 1px 0 var(--grid-halo);
 }
 .gc.pick { outline: 2px solid var(--color-text); outline-offset: 1px; z-index: 2; }
-@media (max-width: 560px) { .gc { font-size: 8px; } }
+/* Cells are buttons now (M8.9A: the mix has to be reachable without hover),
+   so they need the UA reset a div never did. */
+.gc {
+  border: 0; padding: 0; margin: 0; font-family: var(--font-mono);
+  appearance: none; cursor: pointer;
+}
+.gc:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; z-index: 3; }
+/* Selected reads differently from `pick` — `pick` is "the hand you were
+   dealt", selected is "the hand you are inspecting". They can coexist. */
+.gc.sel { outline: 2px solid var(--color-accent-700); outline-offset: 1px; z-index: 2; }
+
+/* 8px was unreadable on any device. The detail row below the grid now carries
+   the exact mix, so the label only has to identify the cell. */
+@media (max-width: 560px) { .gc { font-size: 9px; } }
+
+.grid13-detail {
+  margin-top: var(--space-3); min-height: 34px;
+  display: flex; align-items: center;
+  padding: 7px 10px; border: 1px solid var(--color-divider);
+  font-family: var(--font-mono); font-size: 12.5px;
+  color: var(--color-text);
+}
 
 .legend-line {
   display: flex; align-items: center; gap: var(--space-6); flex-wrap: wrap;

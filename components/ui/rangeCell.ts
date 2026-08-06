@@ -44,3 +44,57 @@ export function rangeCellAppearance(f: CellFrequency): CellAppearance {
     className: "mixed",
   };
 }
+
+/* ------------------------------------------------------------------ *
+ * Reading a cell — the touch path
+ * ------------------------------------------------------------------ */
+
+/**
+ * A cell's action mix in words.
+ *
+ * Lives here rather than inline in `RangeGrid` because it now feeds two
+ * places: the `title` (a mouse affordance) and the selected-cell detail row
+ * (the touch and keyboard one). A tooltip was the ONLY way to read a cell's
+ * frequencies, which meant that on a phone the exact mix of a hand was
+ * unreachable — see M8.9A.
+ *
+ * `hasCall` distinguishes an open scenario (raise/fold) from a defence
+ * (3-bet/call/fold); the label for the raise action differs accordingly.
+ */
+export function rangeCellDescription(
+  hand: string,
+  f: CellFrequency,
+  hasCall: boolean
+): string {
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const parts = [`${pct(f.r)} ${hasCall ? "3-bet" : "raise"}`];
+  if (hasCall) parts.push(`${pct(f.c)} call`);
+  parts.push(`${pct(f.f)} fold`);
+  return `${hand} — ${parts.join(", ")}`;
+}
+
+/**
+ * Arrow-key movement across the 13x13 grid, as a flat index.
+ *
+ * The grid is a composite widget: 169 focusable cells would be 169 tab stops
+ * between the page's real controls, so the cells carry a roving tabindex and
+ * the arrows move within it. Movement CLAMPS at the edges rather than
+ * wrapping — wrapping from the end of the suited row to the start of the next
+ * reads as a jump when the thing on screen is a matrix.
+ *
+ * Returns the same index for keys it does not handle, so a caller can compare
+ * and decide whether to preventDefault.
+ */
+export function moveGridSelection(index: number, key: string): number {
+  const row = Math.floor(index / 13);
+  const col = index % 13;
+  switch (key) {
+    case "ArrowRight": return row * 13 + Math.min(12, col + 1);
+    case "ArrowLeft": return row * 13 + Math.max(0, col - 1);
+    case "ArrowDown": return Math.min(12, row + 1) * 13 + col;
+    case "ArrowUp": return Math.max(0, row - 1) * 13 + col;
+    case "Home": return row * 13;
+    case "End": return row * 13 + 12;
+    default: return index;
+  }
+}
