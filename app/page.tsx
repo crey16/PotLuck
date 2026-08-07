@@ -9,6 +9,7 @@ import {
 } from "@/components/social/ProfileWidgets";
 import { StartHereNudge } from "@/components/learn/StartHereNudge";
 import { KIND_LABELS, TAB_ORDER, drillHref } from "@/lib/drill/registry";
+import { mixedLevelFrom } from "@/lib/drill/difficulty";
 import type { DrillKind } from "@/lib/drill/contract";
 import { supabaseConfigured } from "@/lib/supabase/env";
 import { fetchServerRecommendation } from "@/lib/learn/server";
@@ -139,10 +140,7 @@ export default async function Home() {
   const allSkills = [...stats.skills].sort((a, b) => b.accuracy - a.accuracy);
 
   const drillOrder = TAB_ORDER.filter((t) => t !== "reference");
-  const kindLevels = Object.values(stats.kinds).filter((k) => k.attempts > 0).map((k) => k.level);
-  const mixedLevel = kindLevels.length
-    ? Math.round(kindLevels.reduce((a, b) => a + b, 0) / kindLevels.length)
-    : 1;
+  const mixedLevel = mixedLevelFrom(Object.values(stats.kinds));
 
   const resumeKind = stats.lastKind;
   const firstName = (profile?.displayName?.trim() || profile?.username || "there").split(/\s+/)[0];

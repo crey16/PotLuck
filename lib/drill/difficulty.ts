@@ -171,3 +171,25 @@ export function levelWithPlacementFloor(
   const floor = history.length >= MIN_SAMPLE ? 1 : (placementFloor ?? 1);
   return Math.max(fromHistory, floor) as DrillLevel;
 }
+
+/**
+ * The level to show for the Mixed drill, which deals from every kind.
+ *
+ * A kind counts toward the average when there is evidence about it: real
+ * answers, OR a placement floor that lifted it above 1. The `attempts > 0`
+ * filter alone was the same bug as the per-kind cards — a freshly-placed
+ * player has zero attempts everywhere, so Mixed read level 1 while the mixed
+ * drill was already dealing level 2.
+ *
+ * Kinds with no evidence at all stay excluded on purpose: an experienced
+ * player who only drills three kinds should not have Mixed dragged to 1 by
+ * the six they have never opened.
+ */
+export function mixedLevelFrom(
+  kinds: readonly { attempts: number; level: DrillLevel }[]
+): DrillLevel {
+  const known = kinds.filter((k) => k.attempts > 0 || k.level > 1).map((k) => k.level);
+  if (known.length === 0) return 1;
+  const mean = known.reduce((a, b) => a + b, 0) / known.length;
+  return Math.round(mean) as DrillLevel;
+}

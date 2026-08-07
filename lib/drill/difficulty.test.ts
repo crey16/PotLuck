@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nextLevel, pushResult, pushOutcome, emptyWindows, levelFromHistory, mergeSeededWindows, seededLevels, WINDOW_SIZE, MIN_SAMPLE, levelWithPlacementFloor } from "./difficulty";
-import { DRILL_KINDS } from "./contract";
+import { nextLevel, pushResult, pushOutcome, emptyWindows, levelFromHistory, mergeSeededWindows, seededLevels, WINDOW_SIZE, MIN_SAMPLE, levelWithPlacementFloor, mixedLevelFrom, type Levels } from "./difficulty";
+import { DRILL_KINDS, type DrillLevel } from "./contract";
 import { mulberry32 } from "./rng";
 
 const rep = (n: number, v: boolean) => Array.from({ length: n }, () => v);
@@ -313,7 +313,7 @@ test("a full history overrides the placement floor in both directions", () => {
 test("seededLevels and levelWithPlacementFloor cannot disagree", () => {
   // The invariant the production bug violated: whatever path a caller takes,
   // one kind with one history and one floor yields one level.
-  const floors = { outs: 2 as DrillLevel, potodds: 3 as DrillLevel };
+  const floors: Levels = { outs: 2, potodds: 3 };
   const windows = emptyWindows();
   windows.outs = [true, false];
   windows.potodds = [];
@@ -325,4 +325,36 @@ test("seededLevels and levelWithPlacementFloor cannot disagree", () => {
       `${kind}: the two paths disagree`
     );
   }
+});
+
+/* The Mixed card had the same bug as the per-kind cards. */
+
+test("mixedLevelFrom: a freshly-placed player is not shown level 1", () => {
+  // Zero attempts everywhere, but placement floored eight kinds to 2 — which
+  // is exactly what the mixed drill will deal.
+  const kinds = [
+    ...Array.from({ length: 8 }, () => ({ attempts: 0, level: 2 as DrillLevel })),
+    { attempts: 0, level: 1 as DrillLevel },
+  ];
+  assert.equal(mixedLevelFrom(kinds), 2);
+});
+
+test("mixedLevelFrom: a brand-new player with no evidence is level 1", () => {
+  const kinds = Array.from({ length: 9 }, () => ({ attempts: 0, level: 1 as DrillLevel }));
+  assert.equal(mixedLevelFrom(kinds), 1);
+  assert.equal(mixedLevelFrom([]), 1);
+});
+
+/**
+ * The reason the original `attempts > 0` filter existed, and which the fix
+ * must not break: someone who only ever drills a few kinds should not have
+ * Mixed dragged down by the ones they have never opened.
+ */
+test("mixedLevelFrom: untouched kinds do not drag an experienced player down", () => {
+  const kinds = [
+    { attempts: 40, level: 3 as DrillLevel },
+    { attempts: 30, level: 3 as DrillLevel },
+    ...Array.from({ length: 7 }, () => ({ attempts: 0, level: 1 as DrillLevel })),
+  ];
+  assert.equal(mixedLevelFrom(kinds), 3);
 });
