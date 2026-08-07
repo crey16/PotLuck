@@ -103,3 +103,39 @@ test("a subgame with no traffic still gets its floor", () => {
   assert.equal(allocation.get("s1"), 12);
   assert.ok(allocation.get("s0")! > 12);
 });
+
+test("damping keeps a wrong estimate from starving 59 subgames", () => {
+  // The measured failure mode: the bootstrap valuer puts 50% of postflop
+  // traffic in one subgame, which a proportional allocation turns into a 30x
+  // swing. A structural check says the real ratio is nearer 1.2x, so the
+  // allocation must not be that confident in an estimate we know is loose.
+  const lopsided = fake([0.5, ...Array.from({ length: 59 }, () => 0.5 / 59)]);
+  const damped = allocateFlops(lopsided, 3000, 12);
+  const proportional = allocateFlops(lopsided, 3000, 12, 1);
+
+  const spread = (a: Map<string, number>) =>
+    Math.max(...a.values()) / Math.min(...a.values());
+  assert.ok(
+    spread(damped) < spread(proportional) / 3,
+    `damped spread ${spread(damped).toFixed(1)}x vs proportional ${spread(proportional).toFixed(1)}x`
+  );
+  // It still sends materially more compute where the traffic is.
+  assert.ok(damped.get("s0")! > damped.get("s1")! * 2);
+  // And it still spends the whole budget exactly.
+  assert.equal([...damped.values()].reduce((a, b) => a + b, 0), 3000);
+});
+
+test("the allocation always sums to the budget exactly", () => {
+  // Rounding each share independently drifts by a few solves, which is
+  // harmless until someone sizes a machine rental from the total.
+  for (const budget of [800, 1500, 3000, 5000]) {
+    for (const exponent of [0.5, 1]) {
+      const allocation = allocateFlops(reach, budget, 12, exponent);
+      assert.equal(
+        [...allocation.values()].reduce((a, b) => a + b, 0),
+        budget,
+        `budget ${budget}, exponent ${exponent}`
+      );
+    }
+  }
+});

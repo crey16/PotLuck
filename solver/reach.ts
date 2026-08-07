@@ -181,30 +181,66 @@ export function subgameReach(result: CfrResult): SubgameReach[] {
 }
 
 /**
- * Flops per subgame, proportional to reach.
+ * Flops per subgame — DAMPED, proportional to reach^exponent.
  *
- * Every subgame keeps a floor, for the same reason every flop stratum does:
- * a subgame solved on too few boards has an error nobody can estimate, and
- * one solved on none has no EV at all — which the preflop step cannot price
- * around, it simply fails. The floor is what stops the allocation optimising
- * a subgame out of existence.
+ * Minimising the variance of a weighted total would put flops in proportion
+ * to reach exactly (exponent 1). That is the right answer when the weights
+ * are known. Here they are not: they come from the bootstrap valuer above,
+ * and it is measurably too loose.
+ *
+ * Measured 2026-08-07. The bootstrap puts **50% of all postflop traffic in
+ * one subgame** (SB versus BB, single-raised) and would hand it 1,572 of a
+ * 3,000-solve budget against a flat 50. A structural check says that cannot
+ * be right: SB-BB is reached when four players fold, the SB opens and the BB
+ * calls, which under realistic 6-max frequencies makes it about 1.2x
+ * BTN-versus-BB — and even under deliberately loose assumptions only 2x. The
+ * bootstrap over-rewards calling, so blind battles balloon.
+ *
+ * A square-root exponent turns a 30x reach ratio into a 5.5x allocation
+ * ratio: it still sends materially more compute to the branches that carry
+ * traffic, and it cannot starve 59 subgames on the strength of an estimate
+ * we know is wrong. **Re-run this with real EVs once the batch has produced
+ * them and the damping can be relaxed** — at that point the weights are
+ * measured rather than guessed and exponent 1 is defensible.
+ *
+ * Every subgame also keeps a floor, for the same reason every flop stratum
+ * does: a subgame solved on too few boards has an error nobody can estimate,
+ * and one solved on none has no EV at all — which the preflop step cannot
+ * price around, it simply fails.
  */
 export function allocateFlops(
   reach: readonly SubgameReach[],
   totalBudget: number,
-  floor = 12
+  floor = 12,
+  exponent = 0.5
 ): Map<string, number> {
   const out = new Map<string, number>();
-  const totalReach = reach.reduce((sum, r) => sum + r.probability, 0);
+  const damped = reach.map((r) => Math.pow(Math.max(r.probability, 0), exponent));
+  const totalDamped = damped.reduce((a, b) => a + b, 0);
   const discretionary = totalBudget - floor * reach.length;
   if (discretionary < 0) {
     throw new Error(
       `budget of ${totalBudget} cannot give ${reach.length} subgames a floor of ${floor}`
     );
   }
-  for (const r of reach) {
-    const share = totalReach > 0 ? r.probability / totalReach : 1 / reach.length;
-    out.set(r.subgame, floor + Math.round(discretionary * share));
+  // Largest-remainder, so the allocation sums to the budget EXACTLY. Rounding
+  // each share independently drifts by a few solves, which is harmless until
+  // a caller uses the total to size a machine rental.
+  const exact = reach.map((_, i) =>
+    discretionary * (totalDamped > 0 ? damped[i] / totalDamped : 1 / reach.length)
+  );
+  let assigned = 0;
+  reach.forEach((r, i) => {
+    const n = Math.floor(exact[i]);
+    out.set(r.subgame, floor + n);
+    assigned += n;
+  });
+  const order = reach
+    .map((r, i) => ({ subgame: r.subgame, frac: exact[i] - Math.floor(exact[i]) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let i = 0; assigned < discretionary; i++, assigned++) {
+    const key = order[i % order.length].subgame;
+    out.set(key, out.get(key)! + 1);
   }
   return out;
 }
@@ -252,10 +288,20 @@ function main(): void {
 
   if (budget > 0) {
     const allocation = allocateFlops(reach, budget);
+    const undamped = allocateFlops(reach, budget, 12, 1);
     const flat = Math.floor(budget / reach.length);
-    console.log(`\n  flop allocation for a ${budget}-solve budget (floor 12):`);
+    console.log(
+      `\n  flop allocation for a ${budget}-solve budget (floor 12, sqrt-damped):`
+    );
+    console.log(
+      "  DAMPED because the bootstrap valuer is too loose to trust with a 30x swing —\n" +
+        "  see allocateFlops. Re-run with real EVs to relax it."
+    );
     for (const r of reach.slice(0, 8)) {
-      console.log(`    ${r.subgame.padEnd(28)} ${String(allocation.get(r.subgame)).padStart(4)}  (flat would be ${flat})`);
+      console.log(
+        `    ${r.subgame.padEnd(28)} ${String(allocation.get(r.subgame)).padStart(4)}` +
+          `  (flat ${flat}, undamped ${undamped.get(r.subgame)})`
+      );
     }
     console.log(`    ... ${reach.length - 8} more`);
     const total = [...allocation.values()].reduce((a, b) => a + b, 0);
