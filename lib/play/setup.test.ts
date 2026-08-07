@@ -114,12 +114,13 @@ test("setup: several unsupported choices are all reported, not just the first", 
     heroPosition: "SB",
     actionFamily: "squeeze",
     stoppingPoint: "preflop",
+    stackDepth: 10,
   };
   const result = validateConfig(config);
   assert.equal(result.ok, false);
-  // Three, not four: the stopping point is supported now (M8.7C), so it is
-  // no longer one of the problems.
-  assert.equal(result.problems.length, 3, "a player fixing one at a time learns nothing");
+  // Four: table size, seat, action family and stack depth. The stopping point
+  // is supported now (M8.7C), so it is no longer one of them.
+  assert.equal(result.problems.length, 4, "a player fixing one at a time learns nothing");
 });
 
 /**
@@ -155,6 +156,7 @@ test("setup: a preflop-only configuration validates", () => {
     heroPosition: "BTN",
     actionFamily: "single_raised_pot",
     stoppingPoint: "preflop",
+    stackDepth: 100,
   });
   assert.equal(result.ok, true, result.problems.join(" "));
 });

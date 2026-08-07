@@ -28,14 +28,32 @@ const SEED = readFileSync(
   "utf8",
 );
 
-/** Just the M8.6A block, so module 1–5 copy cannot satisfy an assertion. */
-const MODULE_6 = (() => {
-  const start = SEED.indexOf("-- M8.6A — Module 06");
-  assert.ok(start > 0, "the M8.6A seed block is missing from supabase/seed.sql");
-  const end = SEED.indexOf("select setval(", start);
-  assert.ok(end > start);
-  return SEED.slice(start, end);
-})();
+/**
+ * A module's own seed block, bounded at whatever comes next.
+ *
+ * Bounding it at `select setval(` alone assumed the module was the LAST thing
+ * in the file, which stopped being true the moment another module was
+ * appended — module 06's block then swallowed module 07's lessons and this
+ * suite started asserting things about the wrong copy. Each module's block
+ * begins with its own `insert into public.modules`, so that is the boundary.
+ */
+function moduleBlock(seed: string, marker: string): string {
+  const start = seed.indexOf(marker);
+  assert.ok(start > 0, `${marker} is missing from supabase/seed.sql`);
+  // Skip PAST this module's own insert before looking for the next one, or
+  // the block collapses to its comment header.
+  const ownInsert = seed.indexOf("insert into public.modules", start);
+  assert.ok(ownInsert > start, `${marker} has no module insert after it`);
+  const ends = [
+    seed.indexOf("insert into public.modules", ownInsert + 1),
+    seed.indexOf("select setval(", start),
+  ].filter((index) => index > ownInsert);
+  assert.ok(ends.length > 0, `no end boundary found after ${marker}`);
+  return seed.slice(start, Math.min(...ends));
+}
+
+/** Just the M8.6A block, so no other module's copy can satisfy an assertion. */
+const MODULE_6 = moduleBlock(SEED, "-- M8.6A — Module 06");
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 

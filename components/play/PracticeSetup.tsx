@@ -25,6 +25,8 @@ import { PokerTable } from "./PokerTable";
 import {
   ACTION_FAMILY_LABEL,
   SIX_MAX_POSITIONS,
+  STACK_DEPTH_LABEL,
+  STACK_DEPTHS,
   STOPPING_POINT_LABEL,
   SUPPORT,
   TABLE_SIZE_LABEL,
@@ -33,6 +35,7 @@ import {
   type ActionFamily,
   type Position,
   type PracticeConfig,
+  type StackDepth,
   type StoppingPoint,
   type TableSize,
 } from "@/lib/play/setup";
@@ -43,6 +46,9 @@ const FAMILIES: ActionFamily[] = [
   "single_raised_pot", "three_bet", "four_bet", "squeeze", "limped", "isolate",
 ];
 const STOPS: StoppingPoint[] = ["preflop", "flop", "turn", "river"];
+// Shallowest first, so the axis reads the way a tournament stack actually
+// moves: the short depths are the ones a player is looking for.
+const DEPTHS: StackDepth[] = [...STACK_DEPTHS];
 
 interface ChoiceRowProps<T extends string | number> {
   legend: string;
@@ -192,6 +198,16 @@ export function PracticeSetup({ config, onChange, onStart, loading = false }: Pr
             label={(f) => ACTION_FAMILY_LABEL[f]}
             availability={(f) => SUPPORT.actionFamily[f]}
             onChange={(actionFamily) => onChange({ ...config, actionFamily })}
+          />
+
+          <ChoiceRow
+            legend="Effective stack"
+            hint="Below about 20bb the tree collapses to jam or fold — a different game with its own solved equilibrium."
+            options={DEPTHS}
+            value={config.stackDepth}
+            label={(d) => STACK_DEPTH_LABEL[d]}
+            availability={(d) => SUPPORT.stackDepth[d]}
+            onChange={(stackDepth) => onChange({ ...config, stackDepth })}
           />
 
           <ChoiceRow

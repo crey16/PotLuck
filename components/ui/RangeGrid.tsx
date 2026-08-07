@@ -7,6 +7,7 @@ import {
   getScenario,
   handAt,
   rangePercent,
+  type Action,
 } from "@/lib/poker/ranges";
 import {
   moveGridSelection,
@@ -14,9 +15,50 @@ import {
   rangeCellDescription,
 } from "@/components/ui/rangeCell";
 
+/**
+ * Everything the grid needs to draw a range, without knowing where it came
+ * from — M8.7E.
+ *
+ * The grid used to read `lib/poker/ranges.ts` directly, which meant the only
+ * ranges that could ever be charted were the eight hand-authored reference
+ * scenarios. Push/fold ranges are solved output at a stack depth, and forking
+ * a second 13x13 grid to show them is exactly the duplication this codebase
+ * keeps refusing (two course maps, two seat maps, two copies of the poker
+ * math). So the grid takes a source instead, and the scenario path became one
+ * implementation of it.
+ */
+export interface RangeGridSource {
+  /** Named in the grid's accessible label. */
+  name: string;
+  /** Action key + legend label, in display order. */
+  actions: readonly (readonly [string, string])[];
+  /** Whether a distinct calling action exists, for the cell descriptions. */
+  hasCall: boolean;
+  /** Per-hand mix. Must sum to 1 across r + c + f. */
+  frequencyOf(hand: string): { r: number; c: number; f: number };
+  /** Combo-weighted share of all hands taking an action, 0..100. */
+  percentOf(key: string): number;
+}
+
 export interface RangeGridProps {
-  scenarioId: string;
+  /** A reference scenario from lib/poker/ranges.ts. */
+  scenarioId?: string;
+  /** Any other range — solved push/fold output, for instance. */
+  source?: RangeGridSource;
   highlight?: string;
+}
+
+/** The reference scenarios, as a grid source. */
+function scenarioSource(scenarioId: string): RangeGridSource | null {
+  const scenario = getScenario(scenarioId);
+  if (!scenario) return null;
+  return {
+    name: scenario.name,
+    actions: scenario.actions,
+    hasCall: Boolean(scenario.c),
+    frequencyOf: (hand) => cellFrequency(scenario, hand),
+    percentOf: (key) => rangePercent(scenario, key as Action),
+  };
 }
 
 /** Value steps of one hue, per the v2 redesign: raise/3-bet is the solid
@@ -47,37 +89,39 @@ const CALL = "var(--color-accent-200)";
  * work was the 8px label and the hover-only detail, so the label is now 9px
  * and only has to identify the cell; the exact mix lives in the row below.
  */
-export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
-  const scenario = getScenario(scenarioId);
+export function RangeGrid({ scenarioId, source, highlight }: RangeGridProps) {
+  const resolved = useMemo(
+    () => source ?? (scenarioId ? scenarioSource(scenarioId) : null),
+    [source, scenarioId]
+  );
   const gridRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<number | null>(null);
 
   const cells = useMemo(() => {
-    if (!scenario) return [];
-    const hasCall = Boolean(scenario.c);
+    if (!resolved) return [];
     const out: {
       hand: string; bg: string; mod: string; pick: boolean; title: string;
     }[] = [];
     for (let i = 0; i < 13; i++) {
       for (let j = 0; j < 13; j++) {
         const hand = handAt(i, j);
-        const f = cellFrequency(scenario, hand);
+        const f = resolved.frequencyOf(hand);
         const { background, className } = rangeCellAppearance(f);
         out.push({
           hand,
           bg: background,
           mod: className,
           pick: hand === highlight,
-          title: rangeCellDescription(hand, f, hasCall),
+          title: rangeCellDescription(hand, f, resolved.hasCall),
         });
       }
     }
     return out;
-  }, [scenario, highlight]);
+  }, [resolved, highlight]);
 
-  if (!scenario) return null;
+  if (!resolved) return null;
 
-  const totalPlayed = rangePercent(scenario, "r") + rangePercent(scenario, "c");
+  const totalPlayed = resolved.percentOf("r") + resolved.percentOf("c");
   // The roving tab stop: the selected cell, or the first one before any
   // selection exists, so the grid is always reachable with exactly one Tab.
   const tabStop = selected ?? 0;
@@ -91,7 +135,7 @@ export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
   return (
     <div>
       <div className="legend-line">
-        {scenario.actions.map(([key, label]) => (
+        {resolved.actions.map(([key, label]) => (
           <span key={key} style={{ display: "flex", alignItems: "center", gap: 7 }}>
             <i
               className="sw"
@@ -102,7 +146,7 @@ export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
               }
             />
             {label}
-            {key !== "f" && <b>&nbsp;{rangePercent(scenario, key).toFixed(1)}%</b>}
+            {key !== "f" && <b>&nbsp;{resolved.percentOf(key).toFixed(1)}%</b>}
           </span>
         ))}
         <span style={{ color: "color-mix(in srgb, var(--color-text) 55%, transparent)" }}>
@@ -117,7 +161,7 @@ export function RangeGrid({ scenarioId, highlight }: RangeGridProps) {
         className="grid13"
         ref={gridRef}
         role="grid"
-        aria-label={`${scenario.name} — 169 starting hands`}
+        aria-label={`${resolved.name} — 169 starting hands`}
         onKeyDown={(e) => {
           const next = moveGridSelection(tabStop, e.key);
           if (next === tabStop) return;

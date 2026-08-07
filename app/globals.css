@@ -786,6 +786,46 @@ img { display: block; max-width: 100%; }
   .ranges-aside { grid-template-columns: 1fr; }
 }
 
+/* — push/fold chart (M8.7E) —
+   Controls above the grid rather than in an aside: the depth slider is the
+   primary axis here, and a chart whose main control is off to one side reads
+   as a filter rather than as the thing being explored. */
+.pf-controls {
+  display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-6);
+  align-items: center; margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-divider);
+}
+.pf-group { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
+.pf-group .mono-label { margin-right: var(--space-1); }
+.pf-group input[type="range"] {
+  /* Wide enough that a 1bb step is a distinct target rather than a nudge. */
+  width: 190px; accent-color: var(--color-accent);
+}
+.pf-notes {
+  margin-top: var(--space-6); padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+  font-size: 13px; line-height: 1.6;
+  color: color-mix(in srgb, var(--color-text) 78%, transparent);
+}
+.pf-notes p { margin: 0 0 var(--space-3); max-width: 68ch; }
+.pf-notes ul {
+  margin: 0; padding-left: 1.1em; max-width: 68ch;
+  color: color-mix(in srgb, var(--color-text) 62%, transparent);
+}
+.pf-notes li { margin-bottom: 4px; }
+.pf-warn {
+  border-left: 3px solid var(--warn); background: var(--warn-fill);
+  padding: var(--space-3) var(--space-4);
+}
+@media (max-width: 640px) {
+  /* The M8.9 mobile rules: a 44px target and a slider wide enough to drag.
+     A range input below 16px of thumb is unusable with a thumb. */
+  .pf-controls { gap: var(--space-3); }
+  .pf-group { width: 100%; }
+  .pf-group input[type="range"] { width: 100%; height: 44px; }
+  .pf-controls .scen { min-height: 44px; padding: 8px 12px; }
+}
+
 /* — heatmap — */
 .heat-cell { width: 15px; height: 15px; border: 1px solid transparent; border-radius: 4px; }
 .heat-cell.empty { border-color: var(--color-divider); background: transparent; }

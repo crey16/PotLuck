@@ -23,10 +23,11 @@ def json_blocks(text: str) -> list[object]:
 def test_seed_has_the_full_authored_catalog():
     text = seed_text()
     # M4 authored 20 lessons; M8.6A added module 06 (Bluffing & Aggression),
-    # lessons 21-26. The scenario/table-scenario comment counts stay at the M4
-    # numbers because the M8.6A block does not use those "-- scenario NN:"
-    # comment markers; its inventory is asserted separately below.
-    assert len(re.findall(r"^\s*-- lesson \d{2}:", text, flags=re.MULTILINE)) == 26
+    # lessons 21-26; M8.7E added module 07 (Short Stacks & Push/Fold), lessons
+    # 27-30. The scenario/table-scenario comment counts stay at the M4 numbers
+    # because neither later block uses those "-- scenario NN:" comment
+    # markers; their inventory is asserted separately below.
+    assert len(re.findall(r"^\s*-- lesson \d{2}:", text, flags=re.MULTILINE)) == 30
     assert len(re.findall(r"^\s*-- scenario \d{2}:", text, flags=re.MULTILINE)) == 33
     assert (
         len(re.findall(r"^\s*-- table scenario \d{2}:", text, flags=re.MULTILINE))
@@ -60,14 +61,29 @@ def test_the_bluffing_module_is_seeded_with_practice_of_its_own():
     # Three authored scenarios and two table scenarios carry the module.
     assert text.count("'bluffing',") >= 5
 
+    # M8.7E — module 07. Lessons only: push/fold is drilled and charted
+    # rather than played out, so there is no authored table scenario for it.
+    assert "'Short Stacks & Push/Fold'" in text
+    for title in (
+        "'When the Tree Collapses'",
+        "'How Often Does a Jam Need to Work?'",
+        "'Calling Off Is a Different Question'",
+        "'Antes, and a Rule That Is Not Quite True'",
+    ):
+        assert title in text, f"module 07 lesson {title} is missing"
+    # Every module 07 lesson carries the drill's own tag, or a diagnosed
+    # short-stack weakness has nothing to route to.
+    assert text.count('"short_stack"') >= 4
+
 
 def test_every_dollar_quoted_json_value_parses():
     text = seed_text()
     blocks = json_blocks(text)
     # 97 from M4; +13 from M8.6A (6 lessons, 3 scenarios, 2 table scenarios
-    # x situation_json + choices_json). Empty acceptable_choice_ids are
-    # seeded as SQL null, matching M4, so they add no $json$ block.
-    assert len(blocks) == 110
+    # x situation_json + choices_json); +4 from M8.7E's four lessons. Empty
+    # acceptable_choice_ids are seeded as SQL null, matching M4, so they add
+    # no $json$ block.
+    assert len(blocks) == 114
     assert text.count("$json$") == len(blocks) * 2
 
 
@@ -83,7 +99,7 @@ def test_every_authored_answer_points_to_a_real_choice():
     lessons = [b for b in blocks if isinstance(b, dict) and "screens" in b]
     scenarios = [b for b in blocks if isinstance(b, dict) and "evaluation" in b]
 
-    assert len(lessons) == 26
+    assert len(lessons) == 30
     assert len(scenarios) == 36
 
     for lesson in lessons:
@@ -108,8 +124,9 @@ def test_every_authored_answer_points_to_a_real_choice():
 def test_seed_is_repeatable_and_never_resets_user_data():
     text = seed_text().lower()
     # Four upserts per authored block: modules, lessons, scenarios,
-    # table_scenarios. M4 contributes one set and M8.6A a second.
-    assert text.count("on conflict (id) do update set") == 8
+    # table_scenarios. M4 contributes one set and M8.6A a second. M8.7E adds
+    # two more — module 07 seeds lessons only, with no authored scenarios.
+    assert text.count("on conflict (id) do update set") == 10
     assert "delete from" not in text
     assert "truncate" not in text
     assert "drop table" not in text

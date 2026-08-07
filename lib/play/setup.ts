@@ -47,11 +47,26 @@ export type ActionFamily =
 /** How far a hand runs before the next one is dealt (M8.7C). */
 export type StoppingPoint = "preflop" | "flop" | "turn" | "river";
 
+/**
+ * Effective stack, in big blinds — M8.7E.
+ *
+ * The shallow end is not a smaller version of the deep end: below about 20bb
+ * the tree collapses to jam-or-fold, which is a different game with its own
+ * solved equilibrium (`lib/pushfold`). Both live on one axis here because
+ * they are one axis to a player, and because the roadmap's point is that a
+ * push/fold session should be a CONFIGURATION of practice rather than a
+ * separate product.
+ */
+export type StackDepth = 10 | 15 | 20 | 100;
+
+export const STACK_DEPTHS: StackDepth[] = [10, 15, 20, 100];
+
 export interface PracticeConfig {
   tableSize: TableSize;
   heroPosition: Position;
   actionFamily: ActionFamily;
   stoppingPoint: StoppingPoint;
+  stackDepth: StackDepth;
 }
 
 /** The configuration `/play` has been hard-coded to since M6. */
@@ -60,6 +75,7 @@ export const DEFAULT_CONFIG: PracticeConfig = {
   heroPosition: "BTN",
   actionFamily: "single_raised_pot",
   stoppingPoint: "river",
+  stackDepth: 100,
 };
 
 export interface Availability {
@@ -123,6 +139,26 @@ export const SUPPORT = {
     turn: YES,
     river: YES,
   } as Record<StoppingPoint, Availability>,
+
+  /**
+   * The shallow depths ARE solved — `solver/pack/pushfold/` covers every
+   * position from 5bb to 20bb, and they are trainable today in the Short
+   * stack drill and readable on /ranges. What is not built is playing them
+   * HERE, which needs a second hand source and its own immutable pack row in
+   * the M8 play lifecycle: a jam-or-fold hand has no scripted postflop
+   * instance to reference, and `play_hands.source_hand_id` must name one.
+   *
+   * The reason says where the data actually is, rather than implying it does
+   * not exist. An option disabled with a reason that reads "coming soon" when
+   * the feature is already shipped elsewhere sends the player away from the
+   * thing they were looking for.
+   */
+  stackDepth: {
+    100: YES,
+    10: no("Solved and trainable now — in the Short stack drill and on /ranges. Playing full hands at this depth needs its own hand source here (M8.7E)."),
+    15: no("Solved and trainable now — in the Short stack drill and on /ranges. Playing full hands at this depth needs its own hand source here (M8.7E)."),
+    20: no("Solved and trainable now — in the Short stack drill and on /ranges. Playing full hands at this depth needs its own hand source here (M8.7E)."),
+  } as Record<StackDepth, Availability>,
 } as const;
 
 export const TABLE_SIZE_LABEL: Record<TableSize, string> = {
@@ -155,6 +191,13 @@ export const STOPPING_POINTS: StoppingPoint[] = ["preflop", "flop", "turn", "riv
 export const stoppingStreetIndex = (point: StoppingPoint): number =>
   STOPPING_POINTS.indexOf(point) - 1;
 
+export const STACK_DEPTH_LABEL: Record<StackDepth, string> = {
+  10: "10bb — jam or fold",
+  15: "15bb — jam or fold",
+  20: "20bb — jam or fold",
+  100: "100bb — full tree",
+};
+
 export const STOPPING_POINT_LABEL: Record<StoppingPoint, string> = {
   preflop: "Preflop only",
   flop: "Through the flop",
@@ -186,6 +229,7 @@ export function validateConfig(config: PracticeConfig): ConfigValidation {
   check(config.heroPosition, SUPPORT.heroPosition[config.heroPosition]);
   check(ACTION_FAMILY_LABEL[config.actionFamily], SUPPORT.actionFamily[config.actionFamily]);
   check(STOPPING_POINT_LABEL[config.stoppingPoint], SUPPORT.stoppingPoint[config.stoppingPoint]);
+  check(STACK_DEPTH_LABEL[config.stackDepth], SUPPORT.stackDepth[config.stackDepth]);
 
   return { ok: problems.length === 0, problems };
 }

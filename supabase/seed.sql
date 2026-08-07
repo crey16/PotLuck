@@ -6187,6 +6187,403 @@ on conflict (id) do update set
   rule_of_thumb = excluded.rule_of_thumb,
   is_active = excluded.is_active;
 
+
+-- ---------------------------------------------------------------------
+-- Module 07 — Short Stacks & Push/Fold (M8.7E)
+--
+-- Every number in this prose is derived from lib/poker/math.ts and the solved
+-- pack in lib/pushfold, and pinned by lib/learn/pushfoldModuleNumbers.test.ts.
+-- A lesson is the one place in the product where a wrong number is never
+-- recomputed at runtime, so it is the one place it can rot unnoticed.
+-- ---------------------------------------------------------------------
+
+insert into public.modules (id, title, description, order_index, is_active)
+values
+  (
+    7,
+    'Short Stacks & Push/Fold',
+    'Jam-or-fold play from 5 to 20 big blinds: fold equity, calling prices, antes, and a solved equilibrium instead of a copied chart.',
+    7,
+    true
+  )
+on conflict (id) do update set
+  title = excluded.title,
+  description = excluded.description,
+  order_index = excluded.order_index,
+  is_active = excluded.is_active;
+
+insert into public.lessons
+  (id, module_id, lesson_type, title, order_index, content_json,
+   estimated_time_seconds, difficulty, version, is_active)
+values
+  -- lesson 27: When the Tree Collapses
+  (
+    27,
+    7,
+    'quiz'::public.lesson_type,
+    'When the Tree Collapses',
+    1,
+    $json$
+{
+  "screens": [
+    {
+      "type": "info",
+      "content": "## Under twenty blind, there is no small raise\n\nWith 100 big blinds you can open to 2.5, get raised, and fold. The raise cost you a fraction of your stack, so folding it is cheap.\n\nAt 10 big blinds that plan is gone. Open to 2.5 and you have put a quarter of your stack in \u2014 you are not folding to a raise, and everyone knows it. So the raise-then-fold branch of the tree disappears, and what is left is **jam or fold**."
+    },
+    {
+      "type": "info",
+      "content": "## Why that is good news\n\nA collapsed tree is a solvable tree.\n\nEvery hand ends one of two ways: everyone folds, or two players are all-in and the cards run out. There are no turn decisions, no river bluffs, no bet sizes to choose. The value of an all-in pot is just **equity**, and equity is something we can compute exactly.\n\nSo unlike 100bb play, where the answer is an approximation of a solve, short-stack play has a real answer. PotLuck computes it rather than copying a chart."
+    },
+    {
+      "type": "info",
+      "content": "## The two numbers behind every jam\n\nA jam wins in two different ways, and they are worth separating:\n\n1. **Everyone folds** and you take the blinds. No cards are shown.\n2. **Someone calls** and you win your share of a big pot.\n\nThe first is fold equity. The second is raw equity. A short stack jams wide because the first number stays the same size while your stack shrinks."
+    },
+    {
+      "type": "info",
+      "content": "## The dead money does not shrink with you\n\nThis is the whole idea, so it is worth saying slowly.\n\nThe blinds are 1.5bb whether you have 30 big blinds or 6. But at 6bb, picking up 1.5bb uncontested grows your stack by a quarter. At 30bb it is a rounding error.\n\nSo the shorter you get, the more a fold-out is worth relative to what you are risking \u2014 and the wider you should jam. On the button with no ante the solved range goes 19.2% at 20bb, 31.8% at 10bb, 38.8% at 5bb."
+    },
+    {
+      "type": "question",
+      "content": "Why does jam-or-fold replace raising at short stacks?",
+      "choices": [
+        {
+          "id": "a",
+          "label": "Because a raise commits so much of your stack that you can no longer fold to a re-raise"
+        },
+        {
+          "id": "b",
+          "label": "Because the rules forbid small raises below 20bb"
+        },
+        {
+          "id": "c",
+          "label": "Because short stacks are always dealt stronger hands"
+        },
+        {
+          "id": "d",
+          "label": "Because the blinds go up when your stack goes down"
+        }
+      ],
+      "correct_choice_id": "a"
+    },
+    {
+      "type": "question",
+      "content": "A button jam is 19.2% of hands at 20bb and 38.8% at 5bb. What drives the change?",
+      "choices": [
+        {
+          "id": "a",
+          "label": "The blinds you win uncontested are the same size, but they are worth far more relative to a shorter stack"
+        },
+        {
+          "id": "b",
+          "label": "Short stacks get called less often by everyone"
+        },
+        {
+          "id": "c",
+          "label": "Hand values change when stacks are short"
+        },
+        {
+          "id": "d",
+          "label": "It is a convention, not a calculation"
+        }
+      ],
+      "correct_choice_id": "a"
+    },
+    {
+      "type": "recap",
+      "content": "## Key takeaways\n\n- Below ~20bb the only real actions are **jam** and **fold**.\n- Every hand ends in a fold-out or an all-in, and an all-in is worth its equity \u2014 so this game can be **solved exactly**.\n- A jam earns from fold equity plus raw equity.\n- The dead money is fixed, your stack is not: **shorter stacks jam wider**, always."
+    }
+  ],
+  "skill_tags": [
+    "short_stack",
+    "hand_selection"
+  ],
+  "xp_reward": 10
+}
+    $json$::jsonb,
+    300,
+    1,
+    1,
+    true
+  ),
+  -- lesson 28: How Often Does a Jam Need to Work?
+  (
+    28,
+    7,
+    'quiz'::public.lesson_type,
+    'How Often Does a Jam Need to Work?',
+    2,
+    $json$
+{
+  "screens": [
+    {
+      "type": "info",
+      "content": "## The break-even question\n\nSuppose your hand were worthless \u2014 say you somehow knew you would lose every time you got called. How often would everyone have to fold for the jam still to break even?\n\nThat is the same **break-even bluff frequency** from the bluffing module, with the whole stack as the bet:\n\n`folds needed = risk \u00f7 (risk + reward)`"
+    },
+    {
+      "type": "info",
+      "content": "## Run the number\n\nOn the button at 10bb with no ante, you are risking 10bb to pick up the 1.5bb in the middle.\n\n`10 \u00f7 (10 + 1.5) = 87.0%`\n\nEveryone would have to fold **87.0%** of the time. At 20bb it is worse: `20 \u00f7 21.5 = 93.0%`.\n\nThose look impossible, and they are \u2014 which is exactly the point of the next screen."
+    },
+    {
+      "type": "info",
+      "content": "## You are never actually bluffing\n\nThe 87.0% figure assumes your hand is worth nothing when called. No hand is. Even 72-offsuit wins about a third of the time against a calling range.\n\nSo the real threshold is far lower, and the solved button range at 10bb is **31.8%** of hands rather than the tiny sliver a pure bluff would justify. The break-even number is not the answer \u2014 it is the **floor** you would need if you had no equity at all.\n\nUse it the other way round: if a jam needs 93% folds before its equity is counted, you are probably too deep to be jamming at all."
+    },
+    {
+      "type": "info",
+      "content": "## The other side of the same equation\n\nCalling is the mirror, and it is simpler because a call has **no fold equity whatsoever**. You cannot win by making them go away \u2014 they are already all-in.\n\nSo a call is pure pot odds:\n\n`equity needed = what you still have to put in \u00f7 the pot you would win`"
+    },
+    {
+      "type": "question",
+      "content": "On the button at 10bb, jamming risks 10bb to win 1.5bb. If your hand had zero equity when called, how often would everyone need to fold?",
+      "choices": [
+        {
+          "id": "a",
+          "label": "87.0%"
+        },
+        {
+          "id": "b",
+          "label": "50.0%"
+        },
+        {
+          "id": "c",
+          "label": "31.8%"
+        },
+        {
+          "id": "d",
+          "label": "15.0%"
+        }
+      ],
+      "correct_choice_id": "a"
+    },
+    {
+      "type": "question",
+      "content": "The solved button jamming range at 10bb is 31.8% of hands, far wider than the break-even bluff number suggests. Why?",
+      "choices": [
+        {
+          "id": "a",
+          "label": "Because you still have equity in the pot on the times you get called"
+        },
+        {
+          "id": "b",
+          "label": "Because the break-even formula does not apply to all-ins"
+        },
+        {
+          "id": "c",
+          "label": "Because players call short stacks too rarely"
+        },
+        {
+          "id": "d",
+          "label": "Because the button is the last seat to act"
+        }
+      ],
+      "correct_choice_id": "a"
+    },
+    {
+      "type": "recap",
+      "content": "## Key takeaways\n\n- Break-even folds for a jam: `risk \u00f7 (risk + reward)`. At 10bb on the button that is **87.0%**.\n- That number assumes zero equity when called, so it is a **floor**, not a target.\n- Real equity is why the solved range is **31.8%** and not a sliver.\n- A call has no fold equity, so it is priced purely by pot odds."
+    }
+  ],
+  "skill_tags": [
+    "short_stack",
+    "bluffing"
+  ],
+  "xp_reward": 10
+}
+    $json$::jsonb,
+    330,
+    2,
+    1,
+    true
+  ),
+  -- lesson 29: Calling Off Is a Different Question
+  (
+    29,
+    7,
+    'quiz'::public.lesson_type,
+    'Calling Off Is a Different Question',
+    3,
+    $json$
+{
+  "screens": [
+    {
+      "type": "info",
+      "content": "## Most of the mistakes are on this side\n\nPlayers study shoving ranges and then guess at calling ranges. It is the wrong way round \u2014 calling off your stack is where the expensive errors live, because the instinct is to compare your hand to their range instead of to the **price**."
+    },
+    {
+      "type": "info",
+      "content": "## What you are actually risking\n\nIn the big blind you have already posted. That money is gone whichever way you decide, so it is not part of what the call costs you.\n\nAt 10bb with no ante, facing a button jam:\n\n- You have 1bb in already, so calling costs **9bb** more.\n- The pot you would win is 10 + 10 + the small blind's abandoned 0.5 = **20.5bb**.\n- `9 \u00f7 20.5 = 43.9%` equity needed.\n\nThe solved big-blind calling range is **22.5%** of hands."
+    },
+    {
+      "type": "info",
+      "content": "## Now do it from an empty seat\n\nSuppose instead you are in the cutoff and under the gun jams 10bb. Nothing of yours is in the pot.\n\n- The call costs the full **10bb**.\n- The pot is 10 + 10 + 1.5 = **21.5bb**.\n- `10 \u00f7 21.5 = 46.5%` \u2014 a worse price than the big blind was getting.\n\nAnd the range you face is tighter, because under the gun jams only **13.1%** of hands with four players still to act. Both effects point the same way: the solved cutoff calling range is **7.5%**."
+    },
+    {
+      "type": "info",
+      "content": "## The rule to carry away\n\nA jam can profit with hands that are behind, because it wins the pot outright whenever everyone folds. A call never can.\n\nSo from a seat with nothing invested, your calling range is **much tighter** than the range jamming into you \u2014 7.5% against 13.1% in the example above.\n\nFrom the blinds it can be the other way round, and that is not a contradiction: you are getting a far better price because part of your stack is already in the middle."
+    },
+    {
+      "type": "question",
+      "content": "You are in the big blind at 10bb with no ante. The button jams. What equity does calling need?",
+      "choices": [
+        {
+          "id": "a",
+          "label": "43.9% \u2014 you are risking 9bb to win a 20.5bb pot"
+        },
+        {
+          "id": "b",
+          "label": "50% \u2014 an all-in is a coin flip by definition"
+        },
+        {
+          "id": "c",
+          "label": "22.5% \u2014 the size of the calling range"
+        },
+        {
+          "id": "d",
+          "label": "87.0% \u2014 the same as the jam needs"
+        }
+      ],
+      "correct_choice_id": "a"
+    },
+    {
+      "type": "question",
+      "content": "Under the gun jams 13.1% of hands at 10bb; the cutoff calls with only 7.5%. Why is the caller so much tighter?",
+      "choices": [
+        {
+          "id": "a",
+          "label": "A call has no fold equity, and from the cutoff none of your stack is in the pot yet"
+        },
+        {
+          "id": "b",
+          "label": "The cutoff acts before the blinds"
+        },
+        {
+          "id": "c",
+          "label": "Under the gun is bluffing most of the time"
+        },
+        {
+          "id": "d",
+          "label": "Calling ranges are always half of shoving ranges"
+        }
+      ],
+      "correct_choice_id": "a"
+    },
+    {
+      "type": "recap",
+      "content": "## Key takeaways\n\n- The call costs what you still have to put in, not your whole stack \u2014 subtract the blind you already posted.\n- Big blind vs a 10bb button jam: risk 9 to win 20.5, needing **43.9%**; the solved range is **22.5%**.\n- Cutoff vs a 10bb UTG jam: risk 10 to win 21.5, needing **46.5%**; the solved range is **7.5%**.\n- A jam profits from folds. A call cannot. From an uninvested seat, **call tighter than they jam**."
+    }
+  ],
+  "skill_tags": [
+    "short_stack",
+    "pot_odds"
+  ],
+  "xp_reward": 10
+}
+    $json$::jsonb,
+    330,
+    2,
+    1,
+    true
+  ),
+  -- lesson 30: Antes, and a Rule That Is Not Quite True
+  (
+    30,
+    7,
+    'quiz'::public.lesson_type,
+    'Antes, and a Rule That Is Not Quite True',
+    4,
+    $json$
+{
+  "screens": [
+    {
+      "type": "info",
+      "content": "## Adding dead money\n\nA big-blind ante puts an extra blind in the middle before anyone acts. Nobody has to call it, and it does not change what a jam risks.\n\nSo the reward side of `risk \u00f7 (risk + reward)` grows while the risk side stays put, and every threshold loosens. Under the gun at 10bb goes from **13.1%** to **20.7%** of hands \u2014 a jam that was marginal is now clear."
+    },
+    {
+      "type": "info",
+      "content": "## The rule everyone repeats\n\n\"Antes widen every shoving range.\"\n\nIt is in every training video, and it is **not quite true**. Here is what it misses: somebody has to post that ante, and it is the big blind. Their money is in the pot too \u2014 which improves the price *they* are getting to call."
+    },
+    {
+      "type": "info",
+      "content": "## Where it breaks\n\nBlind versus blind, there is nobody to fold out except the one player whose odds just improved.\n\nAt 5bb with a 1bb ante, the big blind has 2 of their 5 in already and is calling 3 to win 10 \u2014 under 30% equity needed, so they call most hands. The small blind's jam has almost no fold equity left to buy, and the solved range **tightens** from 69.8% to 65.3%.\n\nDeeper, the effect flips back: at 20bb the small blind's jam widens from 38.5% to 45.1%, because now there is real fold equity for the extra dead money to buy."
+    },
+    {
+      "type": "info",
+      "content": "## What to actually remember\n\nAn ante does two things at once:\n\n- It adds dead money, which **widens** jams \u2014 this dominates when there are players behind you to fold out.\n- It improves the big blind's price, which **widens their calls** \u2014 and blind versus blind at very short stacks, that is the larger effect.\n\nSo: with a full table behind you, jam wider with an ante. Blind versus blind and very short, expect to be called far more often, and expect your own big-blind defence to get much wider \u2014 22.5% up to 38.8% at 10bb."
+    },
+    {
+      "type": "question",
+      "content": "Under the gun at 10bb jams 13.1% with no ante and 20.7% with a big-blind ante. What changed?",
+      "choices": [
+        {
+          "id": "a",
+          "label": "There is more dead money to win uncontested, and the jam risks no more than before"
+        },
+        {
+          "id": "b",
+          "label": "The ante makes everyone behind fold more often"
+        },
+        {
+          "id": "c",
+          "label": "The effective stack got deeper"
+        },
+        {
+          "id": "d",
+          "label": "Hand equities improve when there is an ante"
+        }
+      ],
+      "correct_choice_id": "a"
+    },
+    {
+      "type": "question",
+      "content": "At 5bb the small blind's jam gets *tighter* with an ante \u2014 69.8% down to 65.3%. Why does the usual rule fail here?",
+      "choices": [
+        {
+          "id": "a",
+          "label": "The ante is posted by the big blind, so it improves their calling price, and blind versus blind there is nobody else to fold out"
+        },
+        {
+          "id": "b",
+          "label": "The small blind has less money at 5bb with an ante"
+        },
+        {
+          "id": "c",
+          "label": "It is a rounding error in the solve"
+        },
+        {
+          "id": "d",
+          "label": "Antes never widen anything; the rule is simply wrong"
+        }
+      ],
+      "correct_choice_id": "a"
+    },
+    {
+      "type": "recap",
+      "content": "## Key takeaways\n\n- An ante is dead money that a jam risks nothing extra to win, so it widens jams: UTG at 10bb goes **13.1% \u2192 20.7%**.\n- But the big blind posts it, so it also improves *their* price to call: **22.5% \u2192 38.8%** at 10bb.\n- Blind versus blind and very short, the second effect wins and the small blind's jam **tightens** \u2014 69.8% \u2192 65.3% at 5bb.\n- Every one of these numbers is chip EV. On a tournament bubble, ICM tightens calling ranges sharply and none of it holds."
+    }
+  ],
+  "skill_tags": [
+    "short_stack",
+    "hand_selection"
+  ],
+  "xp_reward": 10
+}
+    $json$::jsonb,
+    330,
+    3,
+    1,
+    true
+  )
+
+on conflict (id) do update set
+  module_id = excluded.module_id,
+  lesson_type = excluded.lesson_type,
+  title = excluded.title,
+  order_index = excluded.order_index,
+  content_json = excluded.content_json,
+  estimated_time_seconds = excluded.estimated_time_seconds,
+  difficulty = excluded.difficulty,
+  version = excluded.version,
+  is_active = excluded.is_active;
+
 select setval(pg_get_serial_sequence('public.modules', 'id'),
               greatest((select max(id) from public.modules), 1), true);
 select setval(pg_get_serial_sequence('public.lessons', 'id'),

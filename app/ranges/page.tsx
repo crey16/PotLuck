@@ -2,12 +2,24 @@
 
 import { useState } from "react";
 import { RangeGrid } from "@/components/ui/RangeGrid";
+import { PushfoldChart } from "@/components/ranges/PushfoldChart";
 import { cellFrequency, getScenario, SCENARIOS } from "@/lib/poker/ranges";
 
 const DEALT_HAND = "T9s";
 
+/**
+ * The push/fold charts are a separate family, not a ninth scenario — M8.7E.
+ *
+ * They are solved output rather than reference ranges, they are indexed by
+ * stack depth rather than by a named spot, and their caveat is the opposite
+ * one (these numbers are computed; they are also chip-EV only). Filing them
+ * beside "BB vs BTN open" would inherit the wrong disclaimer for both.
+ */
+const PUSHFOLD_TAB = "__pushfold__";
+
 export default function RangesPage() {
   const [scenarioId, setScenarioId] = useState("bb-btn");
+  const showingPushfold = scenarioId === PUSHFOLD_TAB;
   const scenario = getScenario(scenarioId) ?? SCENARIOS[0];
   const dealt = cellFrequency(scenario, DEALT_HAND);
   const actionLabel = scenario.actions.find(([key]) => key === "r")?.[1] ?? "Raise";
@@ -28,7 +40,9 @@ export default function RangesPage() {
       >
         <div>
           <div className="mono-label accent" style={{ letterSpacing: ".14em", marginBottom: 6 }}>
-            169 combos · 6-max · 100bb · 2.5bb opens
+            {showingPushfold
+              ? "169 combos · 6-max · 5–20bb · jam or fold"
+              : "169 combos · 6-max · 100bb · 2.5bb opens"}
           </div>
           <h1 style={{ fontSize: 44, lineHeight: 1, margin: 0 }}>Preflop ranges</h1>
         </div>
@@ -44,9 +58,20 @@ export default function RangesPage() {
             <path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a1.9 1.9 0 0 0 1.7 2.9h15.8a1.9 1.9 0 0 0 1.7-2.9L13.7 3.9a1.9 1.9 0 0 0-3.4 0z" />
           </svg>
           <span style={{ fontSize: 13 }}>
-            <b className="note-title">Reference ranges, not solver output. </b>
-            Standard ranges in the shape solvers produce. Real solutions move with rake, stack
-            depth, open size and table dynamics.
+            {showingPushfold ? (
+              <>
+                <b className="note-title">Solved, and chip-EV only. </b>
+                These are computed equilibria, not authored charts — but they count chips. Near
+                the money in a tournament, ICM makes calling off far more expensive than this
+                says.
+              </>
+            ) : (
+              <>
+                <b className="note-title">Reference ranges, not solver output. </b>
+                Standard ranges in the shape solvers produce. Real solutions move with rake, stack
+                depth, open size and table dynamics.
+              </>
+            )}
           </span>
         </div>
       </div>
@@ -67,8 +92,17 @@ export default function RangesPage() {
             {s.name.includes(" vs ") ? s.name.replace(/ open$/, "") : s.name}
           </button>
         ))}
+        <button
+          className={`scen${showingPushfold ? " on" : ""}`}
+          onClick={() => setScenarioId(PUSHFOLD_TAB)}
+        >
+          Short stack · 5–20bb
+        </button>
       </div>
 
+      {showingPushfold ? (
+        <PushfoldChart />
+      ) : (
       <div className="ranges-layout">
         <RangeGrid scenarioId={scenarioId} highlight={DEALT_HAND} />
         <aside className="ranges-aside">
@@ -116,6 +150,7 @@ export default function RangesPage() {
           </div>
         </aside>
       </div>
+      )}
     </main>
   );
 }
