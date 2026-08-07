@@ -9,8 +9,11 @@ def test_attempt_kinds_are_the_drills_plus_play():
     assert set(ATTEMPT_KINDS) == set(DRILL_KINDS) | {"play"}
 
 
-def test_nine_kinds():
-    assert len(DRILL_KINDS) == 9
+def test_ten_kinds():
+    # Ten since M8.7E added short-stack jam/fold. The count is asserted rather
+    # than derived so adding a kind is a deliberate act in three files at once
+    # — this list, the TypeScript contract, and the AttemptIn literal.
+    assert len(DRILL_KINDS) == 10
 
 
 def test_existing_stackschool_tags_are_reused_verbatim():
@@ -21,6 +24,14 @@ def test_existing_stackschool_tags_are_reused_verbatim():
     assert SKILL_TAGS["bluff"] == "bluffing"
     assert SKILL_TAGS["concepts"] == "discipline"
     assert SKILL_TAGS["preflop"] == "hand_selection"
+
+
+def test_short_stack_is_its_own_tag_not_hand_selection():
+    # Deliberately separate: a player can have excellent 100bb opening ranges
+    # and no idea what to do at 12bb. Pooling them would hide exactly that gap
+    # from the recommendations, which is the gap worth finding.
+    assert SKILL_TAGS["pushfold"] == "short_stack"
+    assert SKILL_TAGS["pushfold"] != SKILL_TAGS["preflop"]
 
 
 def test_new_tags_for_kinds_with_no_existing_home():

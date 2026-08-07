@@ -31,7 +31,7 @@ router = APIRouter()
 
 # Must equal ASSESSMENT_VERSION / GENERATOR_VERSION / PROBE_LEVEL in
 # lib/placement/blueprint.ts and lib/drill/version.ts.
-ASSESSMENT_VERSION = 1
+ASSESSMENT_VERSION = 2
 GENERATOR_VERSION = 1
 PROBE_LEVEL = 2
 
@@ -41,7 +41,7 @@ PROBE_LEVEL = 2
 # question measures.
 PLACEMENT_KINDS: tuple[str, ...] = (
     "outs", "rule24", "potodds", "decision", "implied",
-    "ev", "bluff", "concepts", "preflop",
+    "ev", "bluff", "concepts", "preflop", "pushfold",
 )
 PLACEMENT_QUESTION_COUNT = len(PLACEMENT_KINDS)
 

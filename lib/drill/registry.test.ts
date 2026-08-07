@@ -124,13 +124,16 @@ test("7. acceptable is used only by preflop; when set, gradeAnswer/isRight treat
           const where = `${kind} L${level} ${oppMode} seed ${seed}`;
           const q = generate({ level, oppMode, rng: mulberry32(seed) });
 
-          // Only two kinds legitimately have more than one right answer:
+          // Only three kinds legitimately have more than one right answer:
           // preflop (mixed strategies — every action the solver takes at
-          // >= 20%) and concepts (one bank item pairs the canonical answer
-          // with a differently-worded option stating the same conclusion).
+          // >= 20%), concepts (one bank item pairs the canonical answer with
+          // a differently-worded option stating the same conclusion), and
+          // pushfold (a hand the solved equilibrium cannot separate from
+          // indifference at the pack's own resolution — grading one side
+          // wrong would be a verdict the data does not carry).
           // Any other kind offering an alternative means two options grade
           // as right when exactly one should.
-          if (kind !== "preflop" && kind !== "concepts") {
+          if (kind !== "preflop" && kind !== "concepts" && kind !== "pushfold") {
             assert.ok(
               q.acceptable === undefined || q.acceptable.length === 0,
               `${where}: ${kind} has non-empty acceptable`

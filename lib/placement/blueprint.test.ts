@@ -39,11 +39,12 @@ test("the blueprint covers every drill kind exactly once", () => {
 });
 
 test("the blueprint covers every canonical skill tag", () => {
-  // The eight tags api/skills.py maps the nine drill kinds onto. Pinned to the
+  // The nine tags api/skills.py maps the ten drill kinds onto. Pinned to the
   // Python map by api/test_placement_matches_typescript.py.
   const expected = [
     "bluffing", "counting_outs", "discipline", "equity_estimation",
     "expected_value", "hand_selection", "implied_odds", "pot_odds",
+    "short_stack",
   ];
   const tags = [...new Set(PLACEMENT_BLUEPRINT.map((item) => item.tag))].sort();
   assert.deepEqual(tags, expected);

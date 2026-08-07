@@ -68,7 +68,7 @@ def health(db: int = 0) -> Any:
 class AttemptIn(BaseModel):
     drill_kind: Literal[
         "outs", "rule24", "potodds", "decision", "implied",
-        "ev", "bluff", "concepts", "preflop", "play",
+        "ev", "bluff", "concepts", "preflop", "pushfold", "play",
     ]
     drill_payload: dict
     answer: str = Field(max_length=256)

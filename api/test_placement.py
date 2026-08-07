@@ -57,6 +57,9 @@ def test_the_blueprint_covers_every_canonical_skill_tag():
         "hand_selection",
         "implied_odds",
         "pot_odds",
+        # M8.7E. Kept apart from hand_selection on purpose: 100bb opening
+        # ranges and 12bb jam/fold are genuinely different skills.
+        "short_stack",
     }
 
 
@@ -65,7 +68,7 @@ def test_the_blueprint_covers_every_canonical_skill_tag():
 
 def test_every_tag_is_present_even_with_no_responses():
     scores = tag_scores([])
-    assert len(scores) == 8
+    assert len(scores) == 9
     assert all(score["asked"] == 0 for score in scores.values())
 
 

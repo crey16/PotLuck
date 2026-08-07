@@ -21,8 +21,12 @@ import { UNSURE, type DrillKind, type DrillLevel, type DrillQuestion } from "../
 /**
  * Bump when the blueprint, its levels, or the score mapping change. Stored on
  * every assessment row so an old result is never reinterpreted by new rules.
+ *
+ * v2 (M8.7E) added the short-stack probe, taking the assessment from nine
+ * questions to ten. A v1 result was scored without it and must keep meaning
+ * what it meant.
  */
-export const ASSESSMENT_VERSION = 1;
+export const ASSESSMENT_VERSION = 2;
 
 /**
  * The level every placement question is dealt at.
@@ -42,14 +46,20 @@ export interface BlueprintItem {
 }
 
 /**
- * One question per drill kind: nine questions, covering all eight canonical
+ * One question per drill kind: ten questions, covering all nine canonical
  * skill tags (`potodds` and `decision` share `pot_odds` — a call/fold spot IS
  * a pot-odds question).
  *
- * Nine sits inside the brief's 8–12 target, and every extra question would
- * have to be a second probe of a tag already covered. That buys a little
- * confidence at the cost of the thing that actually matters here: a brand-new
- * player finishing the assessment instead of abandoning it.
+ * Ten still sits inside the brief's 8–12 target, and every FURTHER question
+ * would have to be a second probe of a tag already covered. That buys a
+ * little confidence at the cost of the thing that actually matters here: a
+ * brand-new player finishing the assessment instead of abandoning it.
+ *
+ * `pushfold` earns its place rather than being added because the invariant
+ * demanded it: short-stack play is a genuinely independent skill — a player
+ * can have sound 100bb opening ranges and no idea what to do at 12bb — so
+ * without a probe, `short_stack` would be the one tag placement could say
+ * nothing about, and the recommendations would never route anyone to it.
  */
 export const PLACEMENT_BLUEPRINT: readonly BlueprintItem[] = [
   { kind: "outs", level: PROBE_LEVEL, tag: "counting_outs" },
@@ -61,6 +71,7 @@ export const PLACEMENT_BLUEPRINT: readonly BlueprintItem[] = [
   { kind: "bluff", level: PROBE_LEVEL, tag: "bluffing" },
   { kind: "concepts", level: PROBE_LEVEL, tag: "discipline" },
   { kind: "preflop", level: PROBE_LEVEL, tag: "hand_selection" },
+  { kind: "pushfold", level: PROBE_LEVEL, tag: "short_stack" },
 ];
 
 export const PLACEMENT_QUESTION_COUNT = PLACEMENT_BLUEPRINT.length;

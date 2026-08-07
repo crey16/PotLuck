@@ -19,7 +19,7 @@ import { fetchNewPlayerRouting } from "@/lib/placement/server";
 
 /** Card blurbs, from the redesign spec. */
 const DRILL_DESCRIPTIONS: Record<DrillKind | "mixed", string> = {
-  mixed: "Deals from all nine kinds; each answer counts toward that kind",
+  mixed: "Deals from all ten kinds; each answer counts toward that kind",
   outs: "Cards that complete your draw, dead outs stripped",
   rule24: "Turn outs into equity in your head",
   potodds: "The equity a call needs to break even",
@@ -29,6 +29,7 @@ const DRILL_DESCRIPTIONS: Record<DrillKind | "mixed", string> = {
   bluff: "Folds a bluff needs, and MDF",
   concepts: "Spot the old-man-coffee leak",
   preflop: "6-max reference ranges, 169 cells",
+  pushfold: "Jam or fold at 5-20bb, against a solved equilibrium",
 };
 
 const LEVEL_LABELS: Record<number, string> = {

@@ -24,16 +24,21 @@ SKILL_TAGS: dict[str, str] = {
     "rule24": "equity_estimation",
     "implied": "implied_odds",
     "ev": "expected_value",
+    # M8.7E short-stack jam/fold. Its own tag rather than hand_selection:
+    # a player can have excellent 100bb opening ranges and no idea what to do
+    # at 12bb, and folding those together would hide exactly that gap from
+    # the recommendations.
+    "pushfold": "short_stack",
     # M6 play mode — one attempt per postflop decision
     "play": "postflop_play",
 }
 
 DRILL_KINDS: tuple[str, ...] = (
     "outs", "rule24", "potodds", "decision", "implied",
-    "ev", "bluff", "concepts", "preflop",
+    "ev", "bluff", "concepts", "preflop", "pushfold",
 )
 
-# The nine drills plus the play mode: everything AttemptIn accepts.
+# The ten drills plus the play mode: everything AttemptIn accepts.
 # Mirrors ATTEMPT_KINDS in lib/drill/contract.ts.
 ATTEMPT_KINDS: tuple[str, ...] = DRILL_KINDS + ("play",)
 

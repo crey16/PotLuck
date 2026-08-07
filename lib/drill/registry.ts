@@ -10,6 +10,7 @@ import { generateImplied } from "./kinds/implied";
 import { generateEv } from "./kinds/ev";
 import { generateBluff } from "./kinds/bluff";
 import { generatePreflop } from "./kinds/preflop";
+import { generatePushfold } from "./kinds/pushfold";
 import { rnd } from "./opts";
 
 export type TabId = "mixed" | DrillKind | "reference";
@@ -17,7 +18,7 @@ export type TabId = "mixed" | DrillKind | "reference";
 /** Tab order, matching the reference trainer's MODULES list (line 1141). */
 export const TAB_ORDER: TabId[] = [
   "mixed", "outs", "rule24", "potodds", "decision", "implied",
-  "ev", "bluff", "concepts", "preflop", "reference",
+  "ev", "bluff", "concepts", "preflop", "pushfold", "reference",
 ];
 
 export const KIND_LABELS: Record<DrillKind, string> = {
@@ -30,6 +31,7 @@ export const KIND_LABELS: Record<DrillKind, string> = {
   bluff: "Bluff math",
   concepts: "OMC mistakes",
   preflop: "Preflop drill",
+  pushfold: "Short stack",
 };
 
 export const TAB_LABELS: Record<TabId, string> = {
@@ -39,9 +41,10 @@ export const TAB_LABELS: Record<TabId, string> = {
 };
 
 /**
- * Every drill kind, all nine implemented. Typed as a total `Record`, so adding
- * a tenth `DrillKind` without a generator is a compile error rather than a tab
- * that deals nothing.
+ * Every drill kind, all ten implemented. Typed as a total `Record`, so adding
+ * an eleventh `DrillKind` without a generator is a compile error rather than a
+ * tab that deals nothing. That forcing function is what M8.7E registered
+ * `pushfold` through.
  */
 export const GENERATORS: Record<DrillKind, Generator> = {
   outs: generateOuts,
@@ -53,6 +56,7 @@ export const GENERATORS: Record<DrillKind, Generator> = {
   bluff: generateBluff,
   concepts: generateConcepts,
   preflop: generatePreflop,
+  pushfold: generatePushfold,
 };
 
 export const REGISTERED_KINDS = (): DrillKind[] => DRILL_KINDS.filter((k) => GENERATORS[k]);

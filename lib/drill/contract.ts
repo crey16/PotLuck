@@ -7,19 +7,19 @@ import type { Card, Rng } from "../poker/engine";
 
 export type DrillKind =
   | "outs" | "rule24" | "potodds" | "decision" | "implied"
-  | "ev" | "bluff" | "concepts" | "preflop";
+  | "ev" | "bluff" | "concepts" | "preflop" | "pushfold";
 
 export const DRILL_KINDS: DrillKind[] = [
   "outs", "rule24", "potodds", "decision", "implied",
-  "ev", "bluff", "concepts", "preflop",
+  "ev", "bluff", "concepts", "preflop", "pushfold",
 ];
 
 /**
- * Everything an attempts row may carry as drill_kind: the nine multiple-
- * choice drills plus the M6 play mode, which records one attempt per
- * decision but is not a Generator-backed drill tab. api/skills.py and the
- * AttemptIn literal mirror this list — test_drill_kinds_match_typescript.py
- * pins all three together.
+ * Everything an attempts row may carry as drill_kind: the ten multiple-choice
+ * drills plus the M6 play mode, which records one attempt per decision but is
+ * not a Generator-backed drill tab. api/skills.py and the AttemptIn literal
+ * mirror this list — test_drill_kinds_match_typescript.py pins all three
+ * together.
  */
 export type AttemptKind = DrillKind | "play";
 export const ATTEMPT_KINDS: AttemptKind[] = [...DRILL_KINDS, "play"];
