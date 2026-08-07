@@ -22,9 +22,15 @@
 # one at a time.
 #
 # ORDER MATTERS. `subgames/*.json` sorts l1 before l2 before l3, so the fifteen
-# level-1 subgames — every position pair in a single-raised pot, which is what
-# unlocks hero position on the setup screen — complete first, at roughly 36 of
-# the 143 hours. A partial batch is therefore useful rather than merely
+# level-1 subgames — every position pair in a single-raised pot — complete
+# first.
+#
+# WHAT THIS BATCH BUYS, precisely: `root-ev` exports per-hand ROOT EVs, which
+# are the terminal payoffs the preflop solve needs. It does NOT export the
+# scripted hand instances `/play` deals from — that is `main.rs`, a different
+# binary. So completing these unlocks PREFLOP coverage at more seats, not
+# full-hand play at more seats. Hero position on the setup screen stays gated
+# on M10E's postflop packs regardless of how far this gets. A partial batch is therefore useful rather than merely
 # incomplete, provided you only read COMPLETE subgames (the partial-batch rule
 # in docs/14 applies per subgame: a subgame averaged over 18 of 25 flops moved
 # BB by 4.8 points against its complete self).
