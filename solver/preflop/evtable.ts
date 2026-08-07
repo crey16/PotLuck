@@ -133,6 +133,19 @@ export interface EvTable {
   classStandardError(player: Player, strata?: Map<string, string>): Map<string, number>;
   /** Max - min across the combos of a class, in chips: pure suit noise. */
   classComboSpread(player: Player): Map<string, number>;
+  /**
+   * ONE flop's class means, in chips — computed directly from that flop's own
+   * accumulator.
+   *
+   * Not recoverable by difference from the pooled means, which is the natural
+   * assumption and is wrong: `comboMean` weights each flop by the hand's
+   * weight IN THE RANGE times the flop's weight, and the first varies per
+   * flop and per hand. `classMean` then takes a mean of ratios, which is not
+   * a ratio of means. Reconstructing it arithmetically produced values
+   * outside the pot entirely (104 chips in a 55-chip pot) while still looking
+   * like plausible poker for most hands.
+   */
+  flopClassMean(player: Player, flopIndex: number): Map<string, number>;
 }
 
 /**
@@ -254,6 +267,13 @@ export function loadEvTable(dir: string, weights: FlopWeights): EvTable {
     },
     comboMean,
     classMean: (player, skipFlop) => toClassMean(comboMean(player, skipFlop)),
+    flopClassMean(player, flopIndex) {
+      const pair = perFlop[flopIndex];
+      if (!pair) throw new Error(`no flop at index ${flopIndex}`);
+      const combos = new Map<string, number>();
+      for (const [combo, v] of pair[player]) if (v.w > 0) combos.set(combo, v.ev / v.w);
+      return toClassMean(combos);
+    },
     /**
      * Standard error of each class mean, in chips — by the estimator that
      * matches how the flops were actually sampled.

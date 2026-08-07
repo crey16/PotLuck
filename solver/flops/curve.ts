@@ -63,31 +63,6 @@ const median = (xs: number[]): number => {
   return s.length ? s[Math.floor(s.length / 2)] : 0;
 };
 
-/**
- * One flop's class means.
- *
- * `comboMean(player, skipFlop)` drops ONE flop; to isolate one we need the
- * complement, so this reads the accumulator the only way the public interface
- * allows: an EvTable over a single-flop directory would be the clean answer,
- * but re-reading files per flop is wasteful. Instead the caller loads the
- * whole directory once and this recovers each flop by difference — which is
- * exact, because the accumulation is a weighted sum.
- */
-function singleFlopMeans(table: EvTable, player: 0 | 1, index: number): Map<string, number> {
-  const withAll = table.classMean(player);
-  const without = table.classMean(player, index);
-  const wTotal = table.flopWeights.reduce((a, b) => a + b, 0);
-  const wi = table.flopWeights[index];
-  const out = new Map<string, number>();
-  for (const [cls, all] of withAll) {
-    const rest = without.get(cls);
-    if (rest === undefined) continue;
-    // all = (wi*x_i + (W - wi)*rest) / W  =>  x_i = (all*W - rest*(W - wi)) / wi
-    out.set(cls, (all * wTotal - rest * (wTotal - wi)) / wi);
-  }
-  return out;
-}
-
 interface CurvePoint {
   n: number;
   stratifiedSe: number;
@@ -142,11 +117,11 @@ function main(): void {
     (byStratum.get(key) ?? byStratum.set(key, []).get(key)!).push(i);
   });
 
-  // Reference: the best estimate available, using every solved board.
-  const reference = [0, 1].map((p) => table.classMean(p as 0 | 1));
   const perFlop = [0, 1].map((p) =>
-    solved.map((_, i) => singleFlopMeans(table, p as 0 | 1, i))
+    solved.map((_, i) => table.flopClassMean(p as 0 | 1, i))
   );
+
+  const allClasses = [...perFlop[0][0].keys()];
 
   /** Weighted class means over a chosen subset of flop indices. */
   const meansOver = (
@@ -156,7 +131,7 @@ function main(): void {
   ): Map<string, number> => {
     const total = indices.reduce((s, i) => s + weightOf(i), 0);
     const out = new Map<string, number>();
-    for (const cls of reference[player].keys()) {
+    for (const cls of allClasses) {
       let sum = 0;
       for (const i of indices) sum += weightOf(i) * (perFlop[player][i].get(cls) ?? 0);
       out.set(cls, sum / total);
@@ -164,11 +139,38 @@ function main(): void {
     return out;
   };
 
+  /**
+   * Reference: every solved board, under the SAME estimator the subsets use.
+   *
+   * NOT `table.classMean`, which is tempting and wrong here. That pools at the
+   * combo level weighted by each hand's weight in the range, and a hand's
+   * weight varies per flop because the board blocks different combos. Measured
+   * on the 25-flop set, the two estimators differ by a median of 3 chips and
+   * up to 13 — so comparing subsets against `classMean` would fold a
+   * systematic 0.3bb offset into every point on the curve and report it as
+   * sampling error.
+   *
+   * The curve measures how much an estimate MOVES as the sample shrinks, so
+   * both sides have to be the same estimate.
+   */
+  const allIndices = solved.map((_, i) => i);
+  const stratumTotals = new Map<string, number>();
+  for (const flop of solved) {
+    const key = stratumOfFlop(flop);
+    stratumTotals.set(key, (stratumTotals.get(key) ?? 0) + 1);
+  }
+  const fullWeight = (i: number) => {
+    const key = stratumOfFlop(solved[i]);
+    return (trueWeight.get(key) ?? 0) / (stratumTotals.get(key) || 1);
+  };
+
   /** RMS deviation of a subset estimate from the full-sample reference. */
+  const reference = [0, 1].map((p) => meansOver(p as 0 | 1, allIndices, fullWeight));
+
   const deviation = (player: 0 | 1, means: Map<string, number>): number => {
     let ss = 0;
     let n = 0;
-    for (const [cls, ref] of reference[player]) {
+    for (const [cls, ref] of reference[player]!) {
       const d = ((means.get(cls) ?? ref) - ref) / 10; // chips -> bb
       ss += d * d;
       n++;
