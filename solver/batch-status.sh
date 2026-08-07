@@ -53,19 +53,36 @@ for dir in ev-all/*/(N); do
 done
 print -r -- "  subgames complete (safe to read): ${COMPLETE} / ${SUBGAMES}"
 
-# Observed rate, not the estimate. The estimate in docs/14 was 343s/flop and
-# the real run has been running at roughly twice that, so the projection is
-# taken from what actually happened.
+# Observed rate — reported as a MEDIAN, and this matters more than it looks.
+#
+# The solve saturates ~10 cores, so anything else heavy on this machine
+# stretches it badly. During M8.7 development the same flops that took ~250s
+# on an idle machine took 1100-2300s while `npm test` and the push/fold solver
+# were running. A MEAN over that window read ~900s and projected 15 days for a
+# pass, which was measuring the interference rather than the batch — and two
+# independent measures (summed solve times, wall clock) agreed with each
+# other because both were contaminated the same way.
+#
+# The median is robust to those spikes. The min is printed beside it as the
+# clean-machine floor: if the median sits far above the min, something else is
+# competing for the CPU and the projection is pessimistic, not real.
 if [[ -f batch-m87a.log ]]; then
   grep -o "in [0-9]*s" batch-m87a.log | grep -o "[0-9]*" | awk -v done="$DONE" -v total="$TOTAL" '
     {t[NR] = $1}
     END {
       if (NR == 0) exit
-      r = 0; c = 0
-      for (i = NR - 19; i <= NR; i++) if (i > 0) { r += t[i]; c++ }
-      mean = r / c
-      left = (total - done) * mean / 3600
-      printf "  recent mean: %.0fs/flop  →  ~%.0fh (%.1f days) left at this rate\n", mean, left, left / 24
+      # Last 12 solves, sorted, median.
+      n = 0
+      for (i = NR - 11; i <= NR; i++) if (i > 0) w[++n] = t[i]
+      for (i = 1; i < n; i++) for (j = i + 1; j <= n; j++) if (w[j] < w[i]) { x = w[i]; w[i] = w[j]; w[j] = x }
+      med = w[int(n / 2) + 1]
+      left = (total - done) * med / 3600
+      printf "  recent median: %ds/flop (fastest seen %ds)\n", med, w[1]
+      printf "  →  ~%.0fh (%.1f days) left at this rate\n", left, left / 24
+      if (med > w[1] * 2) {
+        printf "  NOTE: median is %.1fx the fastest solve — something else is using the CPU,\n", med / w[1]
+        printf "        so this projection is pessimistic. Re-check on an idle machine.\n"
+      }
     }'
 fi
 print -r -- "  log: solver/batch-m87a.log"
