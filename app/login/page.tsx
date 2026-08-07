@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { supabaseConfigured } from "@/lib/supabase/env";
-import { safeNext } from "@/lib/supabase/authRules";
+import { postAuthDestination, safeNext } from "@/lib/supabase/authRules";
 import { PasswordField } from "@/components/ui/PasswordField";
 
 type Mode = "signin" | "signup" | "forgot";
@@ -139,7 +139,7 @@ function LoginForm() {
     // player is dropped straight into drills with no placement and no lessons,
     // which is exactly the flow this is meant to fix. A brand-new account has
     // no deep-link intent worth preserving; sign-IN still honours `next`.
-    const destination = mode === "signup" ? "/" : next;
+    const destination = postAuthDestination(mode, next);
 
     // Full document navigation, not router.push: the session cookie was just
     // written, and a hard request guarantees middleware and every server

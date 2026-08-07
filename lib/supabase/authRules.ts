@@ -49,3 +49,26 @@ export function safeNext(raw: string | null): string {
   if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return DEFAULT_NEXT;
   return raw;
 }
+
+/** The three things the auth form can be doing. */
+export type AuthMode = "signin" | "signup" | "forgot";
+
+/**
+ * Where to send the browser after a successful sign-in or sign-up.
+ *
+ * **Sign-UP always ignores `next`.** Middleware stamps `?next=` onto every
+ * signed-out request, so arriving from a shared /learn/3/12 link or simply
+ * from /drill puts a path there — it is almost never a deliberate choice.
+ * Honouring it on sign-up skips `/`, which is the only route that runs the
+ * placement check, and drops a brand-new player straight into drills with no
+ * placement and no lessons. That is precisely the flow M8.5 exists to fix.
+ *
+ * A brand-new account has no deep-link intent worth preserving. Sign-IN still
+ * honours `next`, because there the intent is real.
+ *
+ * Extracted from `app/login/page.tsx` because it was an inline expression
+ * with no test, and it is the single rule the M8.5 routing depends on.
+ */
+export function postAuthDestination(mode: AuthMode, next: string): string {
+  return mode === "signup" ? "/" : next;
+}
