@@ -76,7 +76,9 @@ import {
   blocks,
   COMBO_COUNT,
   comboToClass,
+  EQUAL_WEIGHTS,
   loadEvTable,
+  loadFlopWeights,
 } from "./preflop/evtable";
 
 const OPEN = 25;
@@ -89,7 +91,9 @@ const mbb = (chips: number): number => Math.round(chips * 100);
 const argv = process.argv.slice(2);
 const dir = argv.find((a) => !a.startsWith("--"));
 if (!dir) {
-  console.error("usage: npx tsx solver/preflop-pack.ts <ev-dir> [--iter N] [--out FILE]");
+  console.error(
+    "usage: npx tsx solver/preflop-pack.ts <ev-dir> [--iter N] [--out FILE] [--flop-set FILE]"
+  );
   process.exit(2);
 }
 const flag = (name: string): string | undefined => {
@@ -99,7 +103,12 @@ const flag = (name: string): string | undefined => {
 const iteration = Number(flag("iter") ?? 4);
 const outPath = resolve(flag("out") ?? "solver/pack/srp-btn-bb/preflop.json");
 
-const table = loadEvTable(dir);
+// The flop set is part of the pack's identity. A pack that does not name the
+// sample its EVs were averaged over cannot be audited, and cannot be compared
+// against a later pack built from a better one.
+const setPath = flag("flop-set");
+const weights = setPath ? loadFlopWeights(setPath) : EQUAL_WEIGHTS;
+const table = loadEvTable(dir, weights);
 
 // ---- coverage is a gate, not a warning ------------------------------------
 // A hand with no postflop EV cannot be priced, and the failure is silent: it
@@ -274,6 +283,8 @@ const pack = {
     iteration,
     flops_averaged: table.flops.length,
     flops: table.flops,
+    flop_set: setPath ?? "legacy-unweighted-25",
+    flop_weighting: setPath ? "texture-weighted" : "equal",
     postflop_pot_chips: table.pot,
     postflop_stack_chips: table.stack,
     coverage_combos: { BB: table.coverage(0), BTN: table.coverage(1) },

@@ -105,8 +105,10 @@ type Player = 0 | 1;
 type Acc = Map<string, { ev: number; w: number }>;
 
 export interface EvTable {
-  /** Flop ids in the order they were read. Compare the count against flops.txt. */
+  /** Flop ids in the order they were read. Compare the count against the set. */
   flops: string[];
+  /** How much each flop counts, aligned with `flops`. All 1 under EQUAL_WEIGHTS. */
+  flopWeights: number[];
   /** Total pot in chips at the start of the postflop subgame. */
   pot: number;
   /** Effective stack behind, in chips. */
@@ -121,10 +123,14 @@ export interface EvTable {
    */
   classMean(player: Player, skipFlop?: number): Map<string, number>;
   /**
-   * Leave-one-flop-out jackknife standard error of each class mean, in chips.
-   * This is the precision the published EVs actually have.
+   * Standard error of each class mean, in chips — the precision the published
+   * EVs actually have.
+   *
+   * Pass `strata` (flop -> stratum key) when the sample was stratified, and
+   * the correct stratified-sampling estimator is used. Omit it for the
+   * delete-one jackknife, which is right for an unstratified sample.
    */
-  classStandardError(player: Player): Map<string, number>;
+  classStandardError(player: Player, strata?: Map<string, string>): Map<string, number>;
   /** Max - min across the combos of a class, in chips: pure suit noise. */
   classComboSpread(player: Player): Map<string, number>;
 }
@@ -137,11 +143,39 @@ export interface EvTable {
  * every hand is present at some weight, which is what keeps coverage at
  * 1326/1326 and lets the loop tell whether a folded hand should come back.
  */
-export function loadEvTable(dir: string): EvTable {
+/**
+ * How much each flop counts in the average.
+ *
+ * `EQUAL_WEIGHTS` is the historic behaviour and is now something a caller has
+ * to ASK for by name. It is not a default, because it was silently wrong: the
+ * shipped 25-flop set is 80% rainbow against a true 39.8%, so averaging it
+ * equally estimates the wrong quantity. Making the choice explicit at every
+ * call site is what stops that recurring.
+ */
+export type FlopWeights = Map<string, number> | typeof EQUAL_WEIGHTS;
+
+export const EQUAL_WEIGHTS = "equal-weights" as const;
+
+/** Read a weighted flop set built by `solver/flops/build.ts`. */
+export function loadFlopWeights(path: string): Map<string, number> {
+  const set = JSON.parse(readFileSync(path, "utf8")) as {
+    kind: string;
+    flops: { flop: string; weight: number }[];
+  };
+  if (set.kind !== "weighted-flop-set") throw new Error(`${path} is not a weighted flop set`);
+  const total = set.flops.reduce((sum, f) => sum + f.weight, 0);
+  if (Math.abs(total - 1) > 1e-6) {
+    throw new Error(`${path} weights sum to ${total}, not 1`);
+  }
+  return new Map(set.flops.map((f) => [f.flop, f.weight]));
+}
+
+export function loadEvTable(dir: string, weights: FlopWeights): EvTable {
   const files = readdirSync(dir).filter((f) => f.endsWith(".ev.json")).sort();
   if (files.length === 0) throw new Error(`no .ev.json files in ${dir}`);
 
   const flops: string[] = [];
+  const flopWeight: number[] = [];
   const perFlop: [Acc, Acc][] = [];
   let pot = 0;
   let stack = 0;
@@ -150,6 +184,18 @@ export function loadEvTable(dir: string): EvTable {
     pot = d.pot;
     stack = d.stack;
     flops.push(d.flop);
+    if (weights === EQUAL_WEIGHTS) {
+      flopWeight.push(1);
+    } else {
+      const w = weights.get(d.flop);
+      // A solved flop with no weight cannot be averaged in — silently
+      // dropping it, or silently giving it weight 1, are both how a sample
+      // stops being the sample it claims to be.
+      if (w === undefined) {
+        throw new Error(`${d.flop} is solved in ${dir} but absent from the flop set`);
+      }
+      flopWeight.push(w);
+    }
     const pair: [Acc, Acc] = [new Map(), new Map()];
     for (let p = 0; p < 2; p++) {
       const { hands, ev, weight } = d.players[p];
@@ -164,10 +210,15 @@ export function loadEvTable(dir: string): EvTable {
     const acc: Acc = new Map();
     perFlop.forEach((pair, i) => {
       if (i === skipFlop) return;
+      // TWO weights multiply here and they mean different things: `v.w` is how
+      // much of the hand is in the RANGE, `flopWeight[i]` is how much of flop
+      // space this BOARD stands for. Dropping the second is the bias this
+      // whole change exists to remove.
+      const fw = flopWeight[i];
       for (const [combo, v] of pair[player]) {
         const cur = acc.get(combo) ?? { ev: 0, w: 0 };
-        cur.ev += v.ev;
-        cur.w += v.w;
+        cur.ev += v.ev * fw;
+        cur.w += v.w * fw;
         acc.set(combo, cur);
       }
     });
@@ -194,6 +245,7 @@ export function loadEvTable(dir: string): EvTable {
 
   return {
     flops,
+    flopWeights: [...flopWeight],
     pot,
     stack,
     coverage: (player) => {
@@ -202,7 +254,27 @@ export function loadEvTable(dir: string): EvTable {
     },
     comboMean,
     classMean: (player, skipFlop) => toClassMean(comboMean(player, skipFlop)),
-    classStandardError(player) {
+    /**
+     * Standard error of each class mean, in chips — by the estimator that
+     * matches how the flops were actually sampled.
+     *
+     * **Stratified** when strata are supplied, which is the correct formula
+     * for a probability-weighted set: `Var = sum_s W_s^2 * s_s^2 / n_s`,
+     * where `W_s` is the stratum's share of flop space, `s_s^2` the variance
+     * of the per-flop EVs within it and `n_s` how many were sampled. That is
+     * also the estimator that SHOWS the benefit of stratifying, because the
+     * between-stratum variance drops out of it entirely.
+     *
+     * **Delete-one jackknife** otherwise, which is what the equal-weighted
+     * legacy path used and is right for an unstratified sample.
+     *
+     * A stratum with one flop has no within-stratum variance to estimate, so
+     * its variance is POOLED from the others rather than counted as zero.
+     * Counting it as zero would report a tiny error for a set that sampled a
+     * whole texture once — the most confident number would come from the
+     * thinnest evidence.
+     */
+    classStandardError(player, strata) {
       const full = toClassMean(comboMean(player));
       const n = perFlop.length;
       if (n < 2) {
@@ -210,8 +282,60 @@ export function loadEvTable(dir: string): EvTable {
         // would claim infinite precision, which is the opposite of the truth.
         return new Map([...full.keys()].map((k) => [k, Number.POSITIVE_INFINITY]));
       }
-      const partials = perFlop.map((_, i) => toClassMean(comboMean(player, i)));
+
+      // Per-flop class means, needed by both estimators.
+      const perFlopClassMean = perFlop.map((_, i) => {
+        const single: Acc = new Map();
+        for (const [combo, v] of perFlop[i][player]) single.set(combo, v);
+        const combos = new Map<string, number>();
+        for (const [combo, v] of single) if (v.w > 0) combos.set(combo, v.ev / v.w);
+        return toClassMean(combos);
+      });
+
       const out = new Map<string, number>();
+
+      if (strata) {
+        const groups = new Map<string, number[]>();
+        perFlop.forEach((_, i) => {
+          const key = strata.get(flops[i]);
+          if (key === undefined) throw new Error(`${flops[i]} has no stratum`);
+          (groups.get(key) ?? groups.set(key, []).get(key)!).push(i);
+        });
+        // Stratum weight = the total flop weight it carries, which for a
+        // properly built set is its true share of flop space.
+        const weightOf = new Map<string, number>();
+        for (const [key, idx] of groups) {
+          weightOf.set(key, idx.reduce((sum, i) => sum + flopWeight[i], 0));
+        }
+        for (const [k, mean] of full) {
+          // Pooled within-stratum variance, for the singleton strata.
+          let pooledSs = 0;
+          let pooledDf = 0;
+          const perStratum = new Map<string, { variance: number | null; n: number }>();
+          for (const [key, idx] of groups) {
+            const xs = idx.map((i) => perFlopClassMean[i].get(k) ?? mean);
+            if (xs.length < 2) {
+              perStratum.set(key, { variance: null, n: xs.length });
+              continue;
+            }
+            const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+            const ss = xs.reduce((a, b) => a + (b - m) * (b - m), 0);
+            perStratum.set(key, { variance: ss / (xs.length - 1), n: xs.length });
+            pooledSs += ss;
+            pooledDf += xs.length - 1;
+          }
+          const pooled = pooledDf > 0 ? pooledSs / pooledDf : 0;
+          let variance = 0;
+          for (const [key, s] of perStratum) {
+            const w = weightOf.get(key)!;
+            variance += w * w * ((s.variance ?? pooled) / Math.max(1, s.n));
+          }
+          out.set(k, Math.sqrt(variance));
+        }
+        return out;
+      }
+
+      const partials = perFlop.map((_, i) => toClassMean(comboMean(player, i)));
       for (const [k, mean] of full) {
         let ss = 0;
         for (const part of partials) {

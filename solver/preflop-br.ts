@@ -32,7 +32,9 @@ import {
   ALL_COMBOS,
   blocks,
   classFrequencyOf,
+  EQUAL_WEIGHTS,
   loadEvTable,
+  loadFlopWeights,
 } from "./preflop/evtable";
 
 const OPEN = 25; // BTN's open, in chips
@@ -50,7 +52,19 @@ if (!dir) {
 // (`preflop-pack.ts`) cannot drift apart. Two derivations of the same
 // arithmetic is exactly how the published pack would come to disagree with the
 // loop that produced it, invisibly.
-const table = loadEvTable(dir);
+// `--flop-set <path>` averages by the true probability of each board's
+// texture. Without it the flops are weighted equally, which is what
+// iterations 1-4 did and is why their numbers are reproducible — but it
+// estimates an average over a sample that is 80% rainbow against a true
+// 39.8%, so new work should always pass a set.
+const setArg = process.argv.indexOf("--flop-set");
+const weights = setArg >= 0 ? loadFlopWeights(process.argv[setArg + 1]) : EQUAL_WEIGHTS;
+const table = loadEvTable(dir, weights);
+if (weights === EQUAL_WEIGHTS) {
+  console.log("weighting: EQUAL (legacy). Pass --flop-set for texture-weighted averaging.");
+} else {
+  console.log(`weighting: ${process.argv[setArg + 1]}`);
+}
 const oopCombos = table.comboMean(0);
 const ipCombos = table.comboMean(1);
 const pot = table.pot;
