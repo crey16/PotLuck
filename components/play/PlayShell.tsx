@@ -22,6 +22,7 @@ import { useHandDirector } from "./useHandDirector";
 import { beatsFor, streetBets } from "@/lib/play/beats";
 import { actionLabelBb } from "@/lib/play/labels";
 import { mulberry32 } from "@/lib/drill/rng";
+import { pushSignature } from "@/lib/drill/antirepeat";
 import { whoIsAhead, type Card } from "@/lib/poker/engine";
 import {
   buildPlayDecisionBody,
@@ -36,10 +37,13 @@ import {
   type PlaySession,
 } from "@/lib/play/api";
 import {
-  fetchManifest, fetchPreflopPack, fetchSolve, handId, pickHand, pickInstance, SPOT,
+  fetchManifest, fetchPreflopPack, fetchSolve, handId, pickHand, pickInstance,
+  preflopSignature, PREFLOP_REPEAT_WINDOW, SPOT,
 } from "@/lib/play/load";
 import { buildHandReview, type ReviewDecision } from "@/lib/play/review";
-import { DEFAULT_CONFIG, type PracticeConfig } from "@/lib/play/setup";
+import {
+  DEFAULT_CONFIG, STOPPING_POINT_LABEL, stoppingStreetIndex, type PracticeConfig,
+} from "@/lib/play/setup";
 import { parseAction } from "@/lib/play/actions";
 import { bb, bbLossExact, signedBb } from "@/lib/play/units";
 import {
@@ -47,7 +51,7 @@ import {
 } from "@/lib/play/preflop";
 import {
   awaitingHero, boardFrom, handOver, holeCards, potAfter, timeline, toCallAt,
-  type HandEvent,
+  truncateAtStop, type HandEvent,
 } from "@/lib/play/timeline";
 import {
   bbToDollars, isRightVerdict, lossDollars, verdictAt, type Verdict,
@@ -136,6 +140,17 @@ export function PlayShell({ seed }: PlayShellProps) {
   const [config, setConfig] = useState<PracticeConfig>(DEFAULT_CONFIG);
   const [started, setStarted] = useState(false);
 
+  /**
+   * M8.7C — how far a hand goes. Derived here, next to the config it comes
+   * from, because the deal itself depends on it: a preflop-only session needs
+   * a different anti-repeat rule.
+   *
+   * `stopIndex` is the solve pack's own street numbering — 0 flop, 1 turn,
+   * 2 river — with preflop at -1, since preflop sits before all of them.
+   */
+  const stopIndex = stoppingStreetIndex(config.stoppingPoint);
+  const preflopOnly = stopIndex < 0;
+
   const [manifest, setManifest] = useState<SolveManifest | null>(null);
   const [preflopPack, setPreflopPack] = useState<PreflopPack | null>(null);
   const [hand, setHand] = useState<LoadedHand | null>(null);
@@ -190,6 +205,11 @@ export function PlayShell({ seed }: PlayShellProps) {
   const [review, setReview] = useState<DecisionRecord[]>([]);
 
   const usedRef = useRef<Set<string>>(new Set());
+  // M8.7C: a rolling window of recently dealt (seat, hand class) pairs. Only
+  // consulted in preflop-only sessions — in a full-hand session the flop and
+  // runout make two AKs hands genuinely different questions, so suppressing
+  // the second would narrow practice for no benefit.
+  const preflopSeenRef = useRef<string[]>([]);
   const rngRef = useRef(mulberry32(seed));
   const solveCache = useRef<Map<string, SolveFile>>(new Map());
   // Guards "Next hand" while an uncached solve file is in flight: a held
@@ -208,8 +228,20 @@ export function PlayShell({ seed }: PlayShellProps) {
       const cached = solveCache.current.get(pick.flop);
       const ready = (solve: SolveFile) => {
         dealingRef.current = false;
-        const index = pickInstance(solve, usedRef.current, wantHero, rngRef.current);
+        const index = pickInstance(
+          solve,
+          usedRef.current,
+          wantHero,
+          rngRef.current,
+          preflopOnly ? new Set(preflopSeenRef.current) : undefined
+        );
         usedRef.current.add(handId(pick.flop, index));
+        const dealt = solve.instances[index];
+        preflopSeenRef.current = pushSignature(
+          preflopSeenRef.current,
+          preflopSignature(dealt.hero, dealt.hand),
+          PREFLOP_REPEAT_WINDOW
+        );
         setHand({
           solve,
           inst: solve.instances[index],
@@ -243,7 +275,7 @@ export function PlayShell({ seed }: PlayShellProps) {
           setLoadError(String(err));
         });
     },
-    []
+    [preflopOnly]
   );
 
   // Initial load — network reads cannot happen during render, so this is the
@@ -271,11 +303,17 @@ export function PlayShell({ seed }: PlayShellProps) {
 
   // Start one normalized practice session. The client UUID is retained across
   // retries, so a timeout after a successful insert cannot create a duplicate.
+  //
+  // Deliberately gated on `started`, not run on mount. The session freezes the
+  // whole configuration — including M8.7C's stopping point — and the player
+  // has not chosen it until they leave the setup screen. Creating the session
+  // early would stamp every session "river" and then quietly play something
+  // else, which is the mismatch the frozen config exists to make impossible.
   useEffect(() => {
-    if (remoteSession) return;
+    if (!started || remoteSession) return;
     let cancelled = false;
     if (!sessionClientIdRef.current) sessionClientIdRef.current = newPlayClientId();
-    void createPlaySession(sessionClientIdRef.current)
+    void createPlaySession(sessionClientIdRef.current, config.stoppingPoint)
       .then((session) => {
         if (cancelled) return;
         setRemoteSession(session);
@@ -296,7 +334,7 @@ export function PlayShell({ seed }: PlayShellProps) {
         }
       });
     return () => { cancelled = true; };
-  }, [remoteSession, sessionAttempt]);
+  }, [started, remoteSession, sessionAttempt, config.stoppingPoint]);
 
   // Link every dealt scripted instance to its durable hand row before the
   // player can act. The same client UUID is reused when the user retries.
@@ -332,9 +370,20 @@ export function PlayShell({ seed }: PlayShellProps) {
     [inst, preflopPack]
   );
 
-  const events: HandEvent[] = useMemo(
+  /**
+   * `fullEvents` is the whole scripted hand; `events` is the part this
+   * session plays. They differ only when the hand is still live — a hand that
+   * ENDS (a fold, or an all-in with a runout to come) is shown in full,
+   * because it finished on its own rather than being stopped.
+   */
+  const fullEvents: HandEvent[] = useMemo(
     () => (inst && preflopDone ? timeline(inst, chosen) : []),
     [inst, preflopDone, chosen]
+  );
+  const naturallyOver = handOver(fullEvents);
+  const events: HandEvent[] = useMemo(
+    () => (naturallyOver ? fullEvents : truncateAtStop(fullEvents, stopIndex)),
+    [fullEvents, naturallyOver, stopIndex]
   );
 
   const heroCards: Card[] = useMemo(() => (inst ? holeCards(inst.hand) : []), [inst]);
@@ -347,6 +396,21 @@ export function PlayShell({ seed }: PlayShellProps) {
   const last = events[events.length - 1];
   const atDecision = awaitingHero(events) && last?.type === "decision" ? last : null;
   const over = handOver(events) && last?.type === "end" ? last : null;
+
+  /**
+   * The hand is finished but has no result: every decision up to the stopping
+   * point was made and nothing further was dealt.
+   *
+   * Preflop-only is the one case with no timeline to truncate — the hand is
+   * done the moment the decision is answered. Everything else is detected by
+   * the truncation having removed something, which is the same test the
+   * server applies when deciding whether the hand may be recorded complete.
+   */
+  const stopped = preflopOnly
+    ? preflopChosen !== null
+    : !naturallyOver && events.length < fullEvents.length;
+  /** Nothing left for the player to do, by either route. */
+  const handFinished = Boolean(over) || stopped;
 
   // — playback —
   // `events` is what has HAPPENED; `revealed` is what the player has SEEN.
@@ -666,16 +730,20 @@ export function PlayShell({ seed }: PlayShellProps) {
   }, [remoteHand]);
 
   // Completion is a separate server validation: a collection of decisions is
-  // not called complete until its stored path reaches this instance's terminal.
+  // not called complete until its stored path reaches this instance's terminal
+  // OR the session's stopping point, which the server decides for itself from
+  // the frozen config. A stopped hand is COMPLETE, never abandoned — an
+  // abandoned hand is excluded from every M11 coaching aggregate, and a
+  // preflop-only rep is a full unit of practice.
   useEffect(() => {
     if (
-      !over || replaying || persistenceMode !== "remote" || !remoteHand ||
+      !handFinished || replaying || persistenceMode !== "remote" || !remoteHand ||
       remoteHand.status !== "incomplete" || persistenceBusy || persistenceError ||
       completionAttemptedRef.current === remoteHand.id
     ) return;
     completionAttemptedRef.current = remoteHand.id;
     void completeRemoteHand();
-  }, [over, replaying, persistenceMode, remoteHand, persistenceBusy, persistenceError, completeRemoteHand]);
+  }, [handFinished, replaying, persistenceMode, remoteHand, persistenceBusy, persistenceError, completeRemoteHand]);
 
   /** The seat the player chose at setup, in the pack's 0=BB / 1=BTN terms. */
   const heroSeatWanted: 0 | 1 = config.heroPosition === "BTN" ? 1 : 0;
@@ -796,13 +864,13 @@ export function PlayShell({ seed }: PlayShellProps) {
 
       if (e.key === "Enter" || e.key.toUpperCase() === "N") {
         e.preventDefault();
-        if (over) handleNextHand();
+        if (handFinished) handleNextHand();
         else handleContinue();
         return;
       }
       // R repeats the completed hand. Only once it is over: mid-hand it would
       // be a way to take a decision back after seeing the verdict.
-      if (over && e.key.toUpperCase() === "R") {
+      if (handFinished && e.key.toUpperCase() === "R") {
         e.preventDefault();
         handleRepeatHand();
         return;
@@ -849,7 +917,7 @@ export function PlayShell({ seed }: PlayShellProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
-    over, preflopDone, preflop, preflopChosen, atDecision, director,
+    over, handFinished, preflopDone, preflop, preflopChosen, atDecision, director,
     handleNextHand, handleContinue, handlePreflop, handleAction, handleRepeatHand,
     started, handleStartTraining,
   ]);
@@ -897,11 +965,28 @@ export function PlayShell({ seed }: PlayShellProps) {
 
   // Money strip for the current state.
   const stripNode = atDecision?.node ?? null;
+  // A stopped hand has no pending decision to read the pot from, so it comes
+  // from the node the hand stopped at instead.
+  const stripBets = stripNode?.tb ?? (() => {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const event = events[i];
+      if (event.type === "decision") return event.node.tb;
+    }
+    return null;
+  })();
   const strip = (() => {
     if (over) {
       return [
         { label: "Final pot", value: bb(potAfter(startPot, over.end.tb)) },
         { label: "Your result", value: signedBb(outcome?.net ?? 0) },
+      ];
+    }
+    if (stopped && !preflopOnly && stripBets) {
+      // A stopped hand has a real pot and no result — it was not played out,
+      // so there is nothing to report as won or lost.
+      return [
+        { label: "Pot", value: bb(potAfter(startPot, stripBets)) },
+        { label: "Result", value: "Not played out" },
       ];
     }
     if (!preflopDone) {
@@ -948,9 +1033,9 @@ export function PlayShell({ seed }: PlayShellProps) {
           <button
             type="button"
             className="btn btn-secondary btn-caps"
-            disabled={!over && review.length > 0}
+            disabled={!handFinished && review.length > 0}
             title={
-              !over && review.length > 0
+              !handFinished && review.length > 0
                 ? "Finish the hand first — leaving now would strand its saved record."
                 : undefined
             }
@@ -971,7 +1056,11 @@ export function PlayShell({ seed }: PlayShellProps) {
               }}
             >
               <span className="mono-label accent" style={{ letterSpacing: ".14em" }}>
-                {over ? "Hand complete" : !preflopDone ? "Preflop" : STREET_NAME[stripNode?.st ?? 0]}
+                {handFinished
+                  ? "Hand complete"
+                  : !preflopDone
+                    ? "Preflop"
+                    : STREET_NAME[stripNode?.st ?? 0]}
               </span>
               <span className="tag tag-neutral tag-mono">Hand {stats.hands + 1}</span>
               <span className="mono-label" style={{ marginLeft: "auto", letterSpacing: ".08em" }}>
@@ -1084,18 +1173,33 @@ export function PlayShell({ seed }: PlayShellProps) {
                           }
                           return `Costs ${bbLossExact(loss)} against the solver&rsquo;s best`;
                         })()}
-                        {preflopChosen !== preflop.continues &&
+                        {!preflopOnly && preflopChosen !== preflop.continues &&
                           ` — the hand continues down the solved line (${inst.hero === 1 ? "you open, BB calls" : "you call"})`}
                       </span>
                     </div>
                     <div className="body">
                       <div className="actions">
+                        {/* Preflop-only deals no flop, so there is nothing to
+                            continue TO — the decision was the hand. Offering
+                            "See the flop" here and then not dealing one is the
+                            failure the setup model exists to prevent. */}
                         <button
                           className="btn btn-primary blueprint btn-caps"
-                          disabled={persistenceMode === "remote" && Boolean(persistenceBusy || persistenceError)}
-                          onClick={handleContinue}
+                          disabled={
+                            preflopOnly
+                              ? !canDealNext
+                              : persistenceMode === "remote" &&
+                                Boolean(persistenceBusy || persistenceError)
+                          }
+                          onClick={preflopOnly ? handleNextHand : handleContinue}
                         >
-                          {persistenceBusy === "Saving decision" ? "Saving…" : "See the flop"}
+                          {persistenceBusy === "Saving decision"
+                            ? "Saving…"
+                            : persistenceBusy === "Finalizing hand"
+                              ? "Finalizing…"
+                              : preflopOnly
+                                ? "Next hand"
+                                : "See the flop"}
                           <span className="keyhint">N</span>
                         </button>
                       </div>
@@ -1163,12 +1267,38 @@ export function PlayShell({ seed }: PlayShellProps) {
               </>
             )}
 
+            {/* — stopped at the configured street, not played out — */}
+            {stopped && !preflopOnly && (
+              <>
+                <div className="note">
+                  <div className="note-title">
+                    Stopped after the {STOPPING_POINT_LABEL[config.stoppingPoint].toLowerCase()}
+                  </div>
+                  {/* No result, and deliberately so. The hand was not played
+                      out, so there is no pot won or lost — the EV of the
+                      decisions IS the outcome. Showing a chip result here
+                      would be inventing one. */}
+                  Every decision through this street was graded. The rest of the hand was
+                  not dealt, so there is no showdown — your EV on the decisions is the
+                  whole of the result.
+                </div>
+                {reviewModel && (
+                  <HandSummary
+                    model={reviewModel}
+                    onRepeatHand={handleRepeatHand}
+                    onPlayFrom={handlePlayFrom}
+                    busy={Boolean(persistenceBusy)}
+                  />
+                )}
+              </>
+            )}
+
             {/* The hand-complete controls live in the same slot as the action
                 bar, as a direct child of the tall page container. Sticking them
                 inside the review panel does not work — the panel ends a few
                 pixels below them, so there is no range to stick within, and the
                 primary action ends up below the fold behind a long review. */}
-            {over && outcome && (
+            {((over && outcome) || (stopped && !preflopOnly)) && (
               <div className="pt-endbar">
                 <button
                   className="btn btn-primary blueprint btn-caps"

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   awaitingHero, boardFrom, handOver, holeCards, pathKey, potAfter, timeline, toCallAt,
+  truncateAtStop, type HandEvent,
 } from "./timeline";
 import { parseAction, actionDisplay } from "./actions";
 import { verdictFor, isRightVerdict, lossBb } from "./verdict";
@@ -133,4 +134,66 @@ test("verdicts follow the EV-loss thresholds", () => {
   assert.ok(isRightVerdict("acceptable"));
   assert.ok(!isRightVerdict("inaccuracy"));
   assert.equal(lossBb(16), 0.8);
+});
+
+/* ------------------------------------------------------------------ *
+ * M8.7C — stopping the hand before its scripted terminal
+ * ------------------------------------------------------------------ */
+
+test("truncateAtStop: stopping through the flop deals no turn card", () => {
+  // Hero checks, bot bets, hero calls — the turn card 3c sits in the next
+  // node's `pre`, together with nothing else here.
+  const full = timeline(INSTANCE, [0, 1]);
+  assert.ok(full.some((e) => e.type === "card" && e.card === "3c"));
+
+  const stopped = truncateAtStop(full, 0);
+  assert.ok(
+    !stopped.some((e) => e.type === "card"),
+    "a hand stopped on the flop must not be dealt a turn"
+  );
+  assert.deepEqual(boardFrom("Ts9s5h", stopped).map(cardStr), ["Ts", "9s", "5h"]);
+  // And nothing is left for the hero to answer.
+  assert.equal(awaitingHero(stopped), false);
+});
+
+test("truncateAtStop: the opponent's reply lands, the next street does not", () => {
+  // The bot's B18 and the hero's decision both live before any card, so a
+  // flop stop keeps them. Cutting earlier would leave the hero's check
+  // visibly unanswered on screen.
+  const full = timeline(INSTANCE, [0, 1]);
+  const stopped = truncateAtStop(full, 0);
+  assert.ok(stopped.some((e) => e.type === "bot" && e.code === "B18"));
+  assert.equal(
+    stopped.filter((e) => e.type === "decision").length,
+    2,
+    "both answered flop decisions must survive the cut"
+  );
+  assert.ok(
+    stopped.every((e) => e.type !== "decision" || e.chosen !== undefined),
+    "no unanswered decision may survive: the hand is finished, not paused"
+  );
+});
+
+test("truncateAtStop: a turn stop keeps the turn and drops the river", () => {
+  const full = timeline(INSTANCE, [0, 1, 0]);
+  const cards = (events: readonly HandEvent[]) =>
+    events.flatMap((e) => (e.type === "card" ? [e.card] : []));
+  assert.deepEqual(cards(full), ["3c", "2d"]);
+  assert.deepEqual(cards(truncateAtStop(full, 1)), ["3c"]);
+  assert.deepEqual(cards(truncateAtStop(full, 2)), ["3c", "2d"]);
+});
+
+test("truncateAtStop: a river stop is the whole hand, unchanged", () => {
+  const full = timeline(INSTANCE, [0, 1, 0]);
+  assert.deepEqual(truncateAtStop(full, 2), full);
+  assert.equal(handOver(truncateAtStop(full, 2)), true);
+});
+
+test("truncateAtStop: a hand with no cards left to deal is returned intact", () => {
+  // Hero bets, bot folds — over on the flop, nothing to truncate at any stop.
+  const full = timeline(INSTANCE, [1]);
+  assert.equal(handOver(full), true);
+  for (const stopIndex of [0, 1, 2]) {
+    assert.deepEqual(truncateAtStop(full, stopIndex), full, `stopIndex ${stopIndex}`);
+  }
 });

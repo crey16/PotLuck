@@ -110,16 +110,18 @@ export const SUPPORT = {
     isolate: no("Isolation raises end multiway, which the pruned heads-up solve does not model at all."),
   } as Record<ActionFamily, Availability>,
 
+  // All four ship as of M8.7C. Two things had to be true first, and both now
+  // are. Preflop had to be graded from real solver EVs (M8.7A), or a
+  // preflop-only session would be "a guess with a confident face on it". And
+  // the server had to be able to record a stopped hand as COMPLETE rather
+  // than abandoned — completion used to mean "the solve branch ended", and an
+  // abandoned hand is excluded from every M11 coaching aggregate, which for a
+  // deliberate preflop-only rep is exactly backwards.
   stoppingPoint: {
+    preflop: YES,
+    flop: YES,
+    turn: YES,
     river: YES,
-    // Stopping early is not merely unimplemented UI. A hand that stops before
-    // its scripted terminal cannot be recorded as complete — the server
-    // validates completion by walking the saved branch to a terminal — and a
-    // hand that reads as abandoned is excluded from every M11 aggregate.
-    // Preflop-only additionally needs real preflop EVs, which do not exist.
-    preflop: no("Preflop is graded against reference ranges, not solver EVs, so a preflop-only session cannot be graded honestly (M8.7A)."),
-    flop: no("A hand that stops early cannot yet be recorded as complete rather than abandoned (M8.7C)."),
-    turn: no("A hand that stops early cannot yet be recorded as complete rather than abandoned (M8.7C)."),
   } as Record<StoppingPoint, Availability>,
 } as const;
 
@@ -137,6 +139,21 @@ export const ACTION_FAMILY_LABEL: Record<ActionFamily, string> = {
   limped: "Limped pot",
   isolate: "Isolation raise",
 };
+
+/** In the order a hand passes them. */
+export const STOPPING_POINTS: StoppingPoint[] = ["preflop", "flop", "turn", "river"];
+
+/**
+ * The stopping point in a solve node's own `st` numbering — 0 flop, 1 turn,
+ * 2 river. Preflop is **-1**, because the pack numbers only the postflop
+ * streets and preflop sits before all of them.
+ *
+ * Keep identical to `stopping_street_index` in api/play_solver.py: the server
+ * decides whether a hand may be recorded as complete with this arithmetic, so
+ * a client that disagreed would offer a hand the server then refuses.
+ */
+export const stoppingStreetIndex = (point: StoppingPoint): number =>
+  STOPPING_POINTS.indexOf(point) - 1;
 
 export const STOPPING_POINT_LABEL: Record<StoppingPoint, string> = {
   preflop: "Preflop only",

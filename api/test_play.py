@@ -33,8 +33,11 @@ from api.play_solver import (
     SolveDataError,
     _content_hash_from_inputs,
     completion_snapshots,
+    STOPPING_POINTS,
     compute_pack_content_hash,
     load_preflop_pack,
+    pending_street_index,
+    stopping_street_index,
     preflop_verdict,
     grade_decision,
     load_catalog,
@@ -307,8 +310,9 @@ def test_completion_snapshot_freezes_runout_and_all_scripted_actions() -> None:
         (f"{hand_id}/0.1.0", "C"),
         (f"{hand_id}/0.1.0.1", "X"),
     ]
-    runout, history, result = completion_snapshots("As5h4h", 0, decisions)
+    runout, history, result, kind = completion_snapshots("As5h4h", 0, decisions)
     assert runout == ["4s", "5d"]
+    assert kind == "terminal"
     assert result == {
         "terminal_path": "0.1.0.1.0",
         "terminal_kind": "sd",
@@ -353,8 +357,102 @@ def test_completion_snapshot_freezes_runout_and_all_scripted_actions() -> None:
     assert sum(event["type"] == "hero_action" for event in history) == len(decisions) - 1
     assert any(event["type"] == "opponent_action" for event in history)
 
-    with pytest.raises(SolveDataError, match="non-terminal"):
+    with pytest.raises(SolveDataError, match="decisions left before its stopping point"):
         completion_snapshots("As5h4h", 0, decisions[:2])
+
+
+def test_a_preflop_only_hand_completes_after_one_decision() -> None:
+    """M8.7C: the fast loop. One graded decision IS the hand.
+
+    Recorded as completed/stopped, never abandoned — an abandoned hand is
+    excluded from every M11 coaching aggregate, and a preflop-only hand is a
+    full unit of practice.
+    """
+    hand_id = source_hand_id("As5h4h", 0)
+    decisions = [(f"{hand_id}/preflop", "c")]
+    runout, history, result, kind = completion_snapshots(
+        "As5h4h", 0, decisions, "preflop"
+    )
+    assert kind == "stopped"
+    assert runout == []
+    assert result["stopped_at"] == "preflop"
+    assert result["final_board_cards"] == []
+    # No pot: the scripted "BTN opens, BB calls" line was never played, so
+    # asserting a 5.5bb pot would claim a call that did not happen — and would
+    # contradict the hero outright if they folded.
+    assert "pot_chips" not in result
+    assert [event["type"] for event in history] == ["hero_decision"]
+
+
+def test_stopping_through_the_flop_resolves_the_street_but_deals_no_turn() -> None:
+    """The opponent's reply lands; the turn card does not.
+
+    A node's `pre` bundles the opponent's response together with the next
+    street's card. Cutting before both would leave the hero's last action
+    unanswered; taking both would deal a street the player chose not to see.
+    """
+    hand_id = source_hand_id("As5h4h", 0)
+    decisions = [
+        (f"{hand_id}/preflop", "c"),
+        (f"{hand_id}/root", "X"),
+        (f"{hand_id}/0", "C"),
+    ]
+    runout, history, result, kind = completion_snapshots("As5h4h", 0, decisions, "flop")
+    assert kind == "stopped"
+    assert runout == [], "no turn card may be dealt"
+    assert result["stopped_at"] == "flop"
+    assert result["final_board_cards"] == ["As", "5h", "4h"]
+    assert result["pot_chips"] > 0
+
+    # The same line cannot complete a full-hand session: it has three streets
+    # left to play.
+    with pytest.raises(SolveDataError):
+        completion_snapshots("As5h4h", 0, decisions, "river")
+
+
+def test_a_hand_that_ends_early_completes_as_terminal_whatever_the_stop() -> None:
+    """Folding on the flop ends the hand for real, not by configuration.
+
+    `terminal` and `stopped` must not be confused: only one of them has a
+    result to report.
+    """
+    hand_id = source_hand_id("As5h4h", 0)
+    # Hero checks, the opponent bets, the hero folds — over on the flop.
+    decisions = [
+        (f"{hand_id}/preflop", "c"),
+        (f"{hand_id}/root", "X"),
+        (f"{hand_id}/0", "F"),
+    ]
+    for stopping_point in ("flop", "turn", "river"):
+        _runout, _history, result, kind = completion_snapshots(
+            "As5h4h", 0, decisions, stopping_point
+        )
+        assert kind == "terminal", stopping_point
+        assert result["terminal_kind"] != "stopped"
+
+
+def test_a_hand_cannot_stop_midway_through_a_betting_round() -> None:
+    """Stopping is judged by the PENDING decision's street, not the last one.
+
+    Reading the last answered decision instead would let a hand stop with the
+    hero's bet still unanswered and call that a completed flop.
+    """
+    hand_id = source_hand_id("As5h4h", 0)
+    # Hero checks; the opponent bets; the hero has not replied yet. That
+    # pending decision is still on the flop.
+    decisions = [(f"{hand_id}/preflop", "c"), (f"{hand_id}/root", "X")]
+    assert pending_street_index("As5h4h", 0, decisions) == 0
+    with pytest.raises(SolveDataError):
+        completion_snapshots("As5h4h", 0, decisions, "flop")
+
+
+def test_stopping_point_vocabulary_is_ordered_with_preflop_before_the_flop() -> None:
+    assert STOPPING_POINTS == ("preflop", "flop", "turn", "river")
+    # Node `st` numbers only the postflop streets, so preflop sits at -1.
+    assert stopping_street_index("preflop") == -1
+    assert stopping_street_index("river") == 2
+    with pytest.raises(SolveDataError):
+        stopping_street_index("showdown")
 
 
 def test_request_models_accept_only_supported_versioned_contract() -> None:
@@ -488,8 +586,8 @@ class _DuplicateDecisionCursor:
             self._one = (0, 0, None)
         elif normalized.startswith("select session_id from play_hands"):
             self._one = (self.hand["session_id"],)
-        elif normalized.startswith("select status from play_sessions"):
-            self._one = (self.session_status,)
+        elif normalized.startswith("select status, stopping_point from play_sessions"):
+            self._one = (self.session_status, getattr(self, "stopping_point", "river"))
         elif "from play_hands h" in normalized and "for update" in normalized:
             self._one = (self.hand,)
         elif "select id, solve_node_id, chosen_action_code" in normalized:
@@ -637,8 +735,8 @@ class _CompletionCursor:
         self._all = []
         if normalized.startswith("select session_id from play_hands"):
             self._one = (self.hand["session_id"],)
-        elif normalized.startswith("select status from play_sessions"):
-            self._one = (self.session_status,)
+        elif normalized.startswith("select status, stopping_point from play_sessions"):
+            self._one = (self.session_status, getattr(self, "stopping_point", "river"))
         elif "from play_hands h" in normalized and "for update" in normalized:
             self._one = (self.hand,)
         elif "select solve_node_id, chosen_action_code" in normalized:
@@ -647,6 +745,9 @@ class _CompletionCursor:
             self.updated = True
             assert "runout_cards = %s" in normalized
             assert "action_history_snapshot = %s" in normalized
+            # M8.7C: a completed hand must record HOW it completed, or a
+            # stopped hand is indistinguishable from one played to showdown.
+            assert "completion_kind = %s" in normalized
             self.hand = {**self.hand, "status": "completed"}
         elif normalized.startswith("update play_sessions"):
             pass
@@ -683,6 +784,7 @@ def test_completed_hand_route_persists_terminal_replay_snapshot(monkeypatch) -> 
             ["4s", "5d"],
             [{"type": "hero_action"}],
             {"terminal_kind": "sd"},
+            "terminal",
         ),
     )
     result = play_api.update_play_hand_status(
@@ -789,7 +891,7 @@ def test_session_idempotency_lock_precedes_lookup_and_route_writes_are_owner_sco
         "_get_owned_hand_for_update"
     )
     hand_lock_source = inspect.getsource(play_api._get_owned_hand_for_update)
-    assert hand_lock_source.index("select status from play_sessions") < hand_lock_source.index(
+    assert hand_lock_source.index("select status, stopping_point from play_sessions") < hand_lock_source.index(
         "select to_jsonb(h) from play_hands"
     )
     for endpoint in (

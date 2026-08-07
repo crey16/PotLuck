@@ -648,23 +648,88 @@ def next_node_or_end(
     raise SolveDataError("saved decisions end outside the solve tree")
 
 
+#: How far a hand runs before the next one is dealt (M8.7C). Ordered, and the
+#: index is compared against a node's own ``st`` — hence preflop at -1, since
+#: the pack numbers only the postflop streets 0/1/2.
+STOPPING_POINTS = ("preflop", "flop", "turn", "river")
+
+
+def stopping_street_index(stopping_point: str) -> int:
+    try:
+        return STOPPING_POINTS.index(stopping_point) - 1
+    except ValueError as exc:
+        raise SolveDataError(f"unknown stopping point {stopping_point!r}") from exc
+
+
+def pending_street_index(
+    flop: str,
+    instance_index: int,
+    decisions: Iterable[tuple[str, str]],
+) -> int:
+    """Street of the decision the hero is facing next, in ``st`` numbering.
+
+    A hand may stop only once this is PAST the configured point — i.e. every
+    decision at or before the stopping point has been answered. Reading the
+    last answered decision's street instead would let a hand stop halfway
+    through a betting round, with the hero's bet still unanswered.
+    """
+    _, instance = get_hand(flop, instance_index)
+    rows = list(decisions)
+    path = ""
+    for _stable_id, action in rows[1:]:
+        node = instance["nodes"][path]
+        action_index = node["a"].index(action)
+        path = str(action_index) if not path else f"{path}.{action_index}"
+    node = instance["nodes"].get(path)
+    if node is None:
+        raise SolveDataError("saved decisions end outside the solve tree")
+    return int(node["st"])
+
+
 def completion_snapshots(
     flop: str,
     instance_index: int,
     decisions: Iterable[tuple[str, str]],
-) -> tuple[list[str], list[dict[str, Any]], dict[str, Any]]:
-    """Freeze a complete branch into runout, ordered history, and result.
+    stopping_point: str = "river",
+) -> tuple[list[str], list[dict[str, Any]], dict[str, Any], str]:
+    """Freeze a finished hand into runout, ordered history, result and kind.
 
     The normalized decision rows remain authoritative for coaching review;
     this denormalized snapshot makes a completed hand independently replayable
     even if the UI's state machine changes later.
+
+    A hand finishes in one of two ways, and M8.7C makes the difference
+    explicit in the returned ``completion_kind``:
+
+    ``terminal``
+        The solve branch ended — someone folded, or the river was showdown.
+
+    ``stopped``
+        Every decision at or before the session's configured stopping point
+        was made, and the hand was deliberately not dealt any further. A
+        preflop-only hand is the extreme case and the fast repetition loop the
+        product was missing.
+
+    Both are COMPLETE. A stopped hand recorded as abandoned would be excluded
+    from every M11 coaching aggregate, which is exactly backwards: it is a
+    full unit of practice, just a short one.
     """
     solve, instance = get_hand(flop, instance_index)
     stable_hand_id = source_hand_id(flop, instance_index)
     rows = list(decisions)
     next_node, terminal = next_node_or_end(flop, instance_index, rows)
-    if next_node is not None or terminal is None:
-        raise SolveDataError("cannot snapshot a non-terminal hand")
+
+    stop_index = stopping_street_index(stopping_point)
+    completion_kind = "terminal"
+    if terminal is None:
+        if next_node is None:
+            raise RuntimeError("next_node_or_end returned neither a node nor a terminal")
+        # The pending node's street is the FIRST street not yet played. The
+        # hand may stop only if that street is past the configured point.
+        pending_street = pending_street_index(flop, instance_index, rows)
+        if pending_street <= stop_index:
+            raise SolveDataError("hand has decisions left before its stopping point")
+        completion_kind = "stopped"
 
     runout_cards: list[str] = []
     history: list[dict[str, Any]] = []
@@ -678,35 +743,40 @@ def completion_snapshots(
             "chosen_action_code": preflop_action,
         }
     )
-    # The M6 instance always starts postflop from BTN open 2.5bb / BB call.
-    # Keep that actual line distinct from the reference-range answer above,
-    # because an off-line preflop choice is graded but the prototype still
+    # The instance's postflop script always starts from BTN open 2.5bb / BB
+    # call.  Keep that actual line distinct from the hero's graded answer
+    # above, because an off-line preflop choice is graded but the hand still
     # continues down this scripted branch.
-    history.extend(
-        [
-            {
-                "type": "player_action",
-                "street": "preflop",
-                "position": "BTN",
-                "actor": "hero" if instance["hero"] == 1 else "opponent",
-                "action_code": "R25",
-                "action_kind": "raise",
-                "amount_to_bb": 2.5,
-                "source": "scripted_line",
-            },
-            {
-                "type": "player_action",
-                "street": "preflop",
-                "position": "BB",
-                "actor": "hero" if instance["hero"] == 0 else "opponent",
-                "action_code": "C",
-                "action_kind": "call",
-                "amount_to_bb": 2.5,
-                "amount_added_bb": 1.5,
-                "source": "scripted_line",
-            },
-        ]
-    )
+    #
+    # A PREFLOP-ONLY hand never reaches it.  Nothing is dealt, so recording
+    # "BTN opens, BB calls" would assert a continuation that did not happen —
+    # and if the hero folded, one that contradicts their own decision.
+    if stop_index >= 0:
+        history.extend(
+            [
+                {
+                    "type": "player_action",
+                    "street": "preflop",
+                    "position": "BTN",
+                    "actor": "hero" if instance["hero"] == 1 else "opponent",
+                    "action_code": "R25",
+                    "action_kind": "raise",
+                    "amount_to_bb": 2.5,
+                    "source": "scripted_line",
+                },
+                {
+                    "type": "player_action",
+                    "street": "preflop",
+                    "position": "BB",
+                    "actor": "hero" if instance["hero"] == 0 else "opponent",
+                    "action_code": "C",
+                    "action_kind": "call",
+                    "amount_to_bb": 2.5,
+                    "amount_added_bb": 1.5,
+                    "source": "scripted_line",
+                },
+            ]
+        )
 
     path = ""
     street_names = ("flop", "turn", "river")
@@ -732,7 +802,6 @@ def completion_snapshots(
                 )
 
     for stable_id, action in rows[1:]:
-        suffix = "root" if path == "" else path
         node = instance["nodes"][path]
         append_steps(node["pre"])
         history.append(
@@ -746,16 +815,52 @@ def completion_snapshots(
         action_index = node["a"].index(action)
         path = str(action_index) if not path else f"{path}.{action_index}"
 
-    end = instance["ends"][path]
-    append_steps(end["pre"])
-    result = {
+    if completion_kind == "terminal":
+        end = instance["ends"][path]
+        append_steps(end["pre"])
+        board_cards = [flop[index : index + 2] for index in range(0, len(flop), 2)]
+        return (
+            runout_cards,
+            history,
+            {
+                "terminal_path": path,
+                "terminal_kind": end["k"],
+                "total_bets_chips": list(end["tb"]),
+                "final_board_cards": board_cards + runout_cards,
+                "pot_chips": solve["pot"] + end["tb"][0] + end["tb"][1],
+            },
+            completion_kind,
+        )
+
+    # Stopped. Resolve the street's remaining ACTION but deal no card: the
+    # pending node's `pre` bundles the opponent's reply together with the next
+    # street's card, so "through the flop" must take the reply and stop at the
+    # card. Cutting before both would leave the hero's last bet unanswered;
+    # taking both would deal a street the player chose not to see.
+    pending = instance["nodes"][path]
+    resolved: list[dict[str, str]] = []
+    for step in pending["pre"]:
+        if step["t"] == "c":
+            break
+        resolved.append(step)
+    append_steps(resolved)
+
+    result: dict[str, Any] = {
         "terminal_path": path,
-        "terminal_kind": end["k"],
-        "total_bets_chips": list(end["tb"]),
-        "final_board_cards": [
-            flop[index : index + 2] for index in range(0, len(flop), 2)
-        ]
-        + runout_cards,
-        "pot_chips": solve["pot"] + end["tb"][0] + end["tb"][1],
+        "terminal_kind": "stopped",
+        "stopped_at": stopping_point,
     }
-    return runout_cards, history, result
+    if stop_index >= 0:
+        # The flop was seen, so there is a real pot and a real board to record.
+        board_cards = [flop[index : index + 2] for index in range(0, len(flop), 2)]
+        result["total_bets_chips"] = list(pending["tb"])
+        result["final_board_cards"] = board_cards + runout_cards
+        result["pot_chips"] = solve["pot"] + pending["tb"][0] + pending["tb"][1]
+    else:
+        # Preflop-only: no board, and deliberately NO pot. The scripted line
+        # was never played, so "the pot was 5.5bb" would assert a call that
+        # did not happen — and would contradict the hero outright if they
+        # folded. For this mode the graded EV is the outcome; there is nothing
+        # else to report, and reporting a plausible number would be fiction.
+        result["final_board_cards"] = []
+    return runout_cards, history, result, completion_kind

@@ -14,6 +14,15 @@ const SESSION_ID = "11111111-1111-4111-8111-111111111111";
 const HAND_ID = "22222222-2222-4222-8222-222222222222";
 const DECISION_ID = "33333333-3333-4333-8333-333333333333";
 
+test("a session freezes the stopping point it was started with (M8.7C)", () => {
+  // The server decides completion from this, so it is session configuration
+  // rather than a per-hand argument: a client that could name it per hand
+  // could complete a hand it had not finished playing.
+  const body = buildPlaySessionBody(SESSION_ID, "preflop");
+  assert.equal(body.config.stopping_point, "preflop");
+  assert.equal(buildPlaySessionBody(SESSION_ID).config.stopping_point, "river");
+});
+
 test("play session request pins the supported configuration and solve version", () => {
   assert.deepEqual(buildPlaySessionBody(SESSION_ID), {
     client_session_id: SESSION_ID,
@@ -25,6 +34,7 @@ test("play session request pins the supported configuration and solve version", 
       hero_positions: ["BTN", "BB"],
       matchup_positions: ["BTN", "BB"],
       starting_spot: "preflop",
+      stopping_point: "river",
       action_family_filters: ["single_raised_pot"],
       stack_depth_bb: 100,
       rake_model: "none",

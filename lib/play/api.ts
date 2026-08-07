@@ -3,6 +3,7 @@
 import { createClient } from "../supabase/client";
 import { supabaseConfigured } from "../supabase/env";
 import { PLAY_SOLVE_PACK_ID } from "./constants";
+import type { StoppingPoint } from "./setup";
 
 export { PLAY_SOLVE_PACK_ID } from "./constants";
 
@@ -49,6 +50,13 @@ export interface CreatePlayConfiguration {
   hero_positions: ["BTN", "BB"];
   matchup_positions: ["BTN", "BB"];
   starting_spot: "preflop";
+  /**
+   * How far each hand runs — M8.7C. Distinct from `starting_spot`: that is
+   * where a hand BEGINS, this is where it ENDS. The server treats it as
+   * frozen session configuration and decides completion from it, so it can
+   * never be supplied per hand.
+   */
+  stopping_point: StoppingPoint;
   action_family_filters: ["single_raised_pot"];
   stack_depth_bb: 100;
   rake_model: "none";
@@ -63,6 +71,7 @@ export const DEFAULT_PLAY_CONFIGURATION: CreatePlayConfiguration = {
   hero_positions: ["BTN", "BB"],
   matchup_positions: ["BTN", "BB"],
   starting_spot: "preflop",
+  stopping_point: "river",
   action_family_filters: ["single_raised_pot"],
   stack_depth_bb: 100,
   rake_model: "none",
@@ -204,11 +213,18 @@ export function sourceHandId(flop: string, index: number): string {
 }
 
 /** Pure request builders keep authoritative grading fields out of the browser request. */
-export function buildPlaySessionBody(clientSessionId: string): CreatePlaySessionBody {
+export function buildPlaySessionBody(
+  clientSessionId: string,
+  stoppingPoint: StoppingPoint = "river"
+): CreatePlaySessionBody {
   return {
     client_session_id: clientSessionId,
     solve_pack_id: PLAY_SOLVE_PACK_ID,
-    config: DEFAULT_PLAY_CONFIGURATION,
+    // The stopping point is the one part of the configuration the player can
+    // currently move, so it is threaded through rather than defaulted away.
+    // It is frozen on the session at creation: changing it mid-session would
+    // silently restate what earlier hands in that session were.
+    config: { ...DEFAULT_PLAY_CONFIGURATION, stopping_point: stoppingPoint },
   };
 }
 
@@ -267,10 +283,13 @@ async function authRequest<T>(path: string, init: RequestInit = {}): Promise<T> 
   return (await response.json()) as T;
 }
 
-export function createPlaySession(clientSessionId: string): Promise<PlaySession> {
+export function createPlaySession(
+  clientSessionId: string,
+  stoppingPoint: StoppingPoint = "river"
+): Promise<PlaySession> {
   return authRequest("/api/play/sessions", {
     method: "POST",
-    body: JSON.stringify(buildPlaySessionBody(clientSessionId)),
+    body: JSON.stringify(buildPlaySessionBody(clientSessionId, stoppingPoint)),
   });
 }
 

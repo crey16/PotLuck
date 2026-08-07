@@ -5,7 +5,7 @@
  * replays the same scripted instance.
  */
 import type { Rng } from "../poker/engine";
-import type { PreflopPack } from "./preflop";
+import { handNotation, type PreflopPack } from "./preflop";
 import type { SolveFile, SolveManifest } from "./types";
 
 export const SPOT = "srp-btn-bb";
@@ -91,18 +91,54 @@ export function pickInstance(
   solve: SolveFile,
   used: ReadonlySet<string>,
   wantHero: 0 | 1 | null,
-  rng: Rng
+  rng: Rng,
+  recentPreflop?: ReadonlySet<string>
 ): number {
   const count = solve.instances.length;
   if (count === 0) throw new Error(`solve ${solve.flop} has no instances`);
   const start = Math.floor(rng() * count);
 
   let seatMatch = -1;
+  let unusedMatch = -1;
   for (let step = 0; step < count; step++) {
     const i = (start + step) % count;
-    if (wantHero !== null && solve.instances[i].hero !== wantHero) continue;
-    if (!used.has(handId(solve.flop, i))) return i;
+    const instance = solve.instances[i];
+    if (wantHero !== null && instance.hero !== wantHero) continue;
     if (seatMatch < 0) seatMatch = i;
+    if (used.has(handId(solve.flop, i))) continue;
+    if (unusedMatch < 0) unusedMatch = i;
+    // M8.7C anti-repeat for preflop-only sessions. `used` alone is not
+    // enough there: it is keyed by (flop, instance), and a preflop-only hand
+    // never sees the flop. Six different flops dealing the hero AKs on the
+    // button are six unused instances and one repeated question.
+    if (recentPreflop && recentPreflop.has(preflopSignature(instance.hero, instance.hand))) {
+      continue;
+    }
+    return i;
   }
+  // Falling through means every fresh instance here repeats a recent hand
+  // class. Prefer an unused one anyway — a repeated class on a new deal beats
+  // replaying a scripted instance, and beats spinning.
+  if (unusedMatch >= 0) return unusedMatch;
   return seatMatch >= 0 ? seatMatch : start;
 }
+
+/**
+ * What a preflop-only session actually repeats: the seat and the hand class.
+ *
+ * Not the flop, and not the specific combo. A player drilling preflop sees
+ * "button, AKs" — that AKs arrived attached to a different scripted runout is
+ * invisible to them, and grading is class-indexed anyway (see preflop.ts).
+ */
+export const preflopSignature = (hero: 0 | 1, hand: string): string =>
+  `${hero === 1 ? "BTN" : "BB"}:${handNotation(hand)}`;
+
+/**
+ * How many recent preflop spots a session remembers.
+ *
+ * Larger than the drills' REPEAT_WINDOW of 24 because a preflop-only session
+ * burns through spots several times faster: one decision per hand with no
+ * runout to play. Well below the 338 available (169 classes x 2 seats), so
+ * the window narrows the sampling without distorting which hands appear.
+ */
+export const PREFLOP_REPEAT_WINDOW = 40;

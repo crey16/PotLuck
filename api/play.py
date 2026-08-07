@@ -60,6 +60,11 @@ class PlayConfigIn(BaseModel):
     hero_positions: list[str] = Field(default_factory=lambda: ["BTN", "BB"])
     matchup_positions: list[str] = Field(default_factory=lambda: ["BTN", "BB"])
     starting_spot: Literal["preflop"] = "preflop"
+    # M8.7C. Distinct from starting_spot: that is where a hand BEGINS, this is
+    # where it ENDS, and they are independent controls. Every value is
+    # supported now that preflop is graded from solver EVs (M8.7A) — before
+    # that, a preflop-only session could not have been graded honestly.
+    stopping_point: Literal["preflop", "flop", "turn", "river"] = "river"
     action_family_filters: list[Literal["single_raised_pot"]] = Field(
         default_factory=lambda: ["single_raised_pot"]
     )
@@ -206,7 +211,7 @@ def _fetch_json_row(cur: Any, table: str, row_id: Any, user_id: str) -> dict[str
 
 def _get_owned_hand_for_update(
     cur: Any, hand_id: UUID, user_id: str
-) -> tuple[dict[str, Any], str]:
+) -> tuple[dict[str, Any], str, str]:
     # Resolve ownership without taking a row lock, then acquire the mutation
     # locks in the one global order: session -> hand.  A joined ``FOR UPDATE``
     # does not promise which relation PostgreSQL locks first and can deadlock
@@ -224,7 +229,7 @@ def _get_owned_hand_for_update(
     session_id = row[0]
     cur.execute(
         """
-        select status from play_sessions
+        select status, stopping_point from play_sessions
         where id = %s and user_id = %s
         for update
         """,
@@ -244,7 +249,10 @@ def _get_owned_hand_for_update(
     hand_row = cur.fetchone()
     if hand_row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "play hand not found")
-    return hand_row[0], session_row[0]
+    # The stopping point comes from the SESSION, never from the request: it is
+    # frozen configuration, and a client that could name it per hand could
+    # complete a hand it had not finished playing.
+    return hand_row[0], session_row[0], session_row[1]
 
 
 def _decision_rows(cur: Any, hand_id: UUID, user_id: str) -> list[tuple[str, str]]:
@@ -425,11 +433,11 @@ def create_play_session(
                         user_id, client_session_id, solve_pack_id, status,
                         config_snapshot, solution_profile_id, solution_version,
                         table_size, hero_positions, matchup_positions,
-                        starting_spot, action_family_filters, stack_depth_bb,
-                        rake_model, ev_model, advanced_settings
+                        starting_spot, stopping_point, action_family_filters,
+                        stack_depth_bb, rake_model, ev_model, advanced_settings
                     ) values (
                         %s, %s, %s, 'incomplete', %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s
                     ) returning id
                     """,
                     (
@@ -443,6 +451,7 @@ def create_play_session(
                         config["hero_positions"],
                         config["matchup_positions"],
                         config["starting_spot"],
+                        config["stopping_point"],
                         config["action_family_filters"],
                         config["stack_depth_bb"],
                         config["rake_model"],
@@ -609,7 +618,9 @@ def create_play_decision(
                 # this tuple for the eventual XP update avoids a reverse
                 # session/hand -> profile edge and its deadlock cycle.
                 profile = _lock_profile(cur, user_id)
-                hand, session_status = _get_owned_hand_for_update(cur, hand_id, user_id)
+                hand, session_status, _stopping_point = _get_owned_hand_for_update(
+                    cur, hand_id, user_id
+                )
                 stable_hand_id = hand["source_hand_id"]
                 node_path = body.resolve_path(stable_hand_id)
 
@@ -779,7 +790,9 @@ def update_play_hand_status(
     with get_connection() as conn:
         try:
             with conn.cursor() as cur:
-                hand, session_status = _get_owned_hand_for_update(cur, hand_id, user_id)
+                hand, session_status, stopping_point = _get_owned_hand_for_update(
+                    cur, hand_id, user_id
+                )
                 if hand["status"] == body.status:
                     conn.commit()
                     return _public_row(hand)
@@ -793,27 +806,35 @@ def update_play_hand_status(
                 result_snapshot: dict[str, Any] | None = None
                 runout_cards: list[str] = []
                 action_history: list[dict[str, Any]] = []
+                completion_kind: str | None = None
                 if body.status == "completed":
                     # Guarded only here: abandoning a hand is the recovery path
                     # and must stay available even if the pack is unreadable.
                     _guard_pack()
                     flop, instance_index = parse_source_hand_id(hand["source_hand_id"])
                     try:
-                        runout_cards, action_history, result_snapshot = completion_snapshots(
+                        (
+                            runout_cards,
+                            action_history,
+                            result_snapshot,
+                            completion_kind,
+                        ) = completion_snapshots(
                             flop,
                             instance_index,
                             _decision_rows(cur, hand_id, user_id),
+                            stopping_point,
                         )
                     except SolveDataError as exc:
                         raise HTTPException(
                             status.HTTP_409_CONFLICT,
-                            "hand cannot complete before its solve branch ends",
+                            "hand cannot complete before its stopping point",
                         ) from exc
                 cur.execute(
                     """
                     update play_hands
                     set status = %s, result_snapshot = %s,
                         runout_cards = %s, action_history_snapshot = %s,
+                        completion_kind = %s,
                         completed_at = case when %s = 'completed' then now() else null end,
                         abandoned_at = case when %s = 'abandoned' then now() else null end,
                         last_activity_at = now()
@@ -824,6 +845,7 @@ def update_play_hand_status(
                         Json(result_snapshot) if result_snapshot is not None else None,
                         runout_cards,
                         Json(action_history),
+                        completion_kind,
                         body.status,
                         body.status,
                         hand_id,

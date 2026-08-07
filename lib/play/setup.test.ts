@@ -12,6 +12,7 @@ import {
   validateConfig,
   type ActionFamily,
   type PracticeConfig,
+  stoppingStreetIndex,
   type StoppingPoint,
   type TableSize,
 } from "./setup";
@@ -116,18 +117,46 @@ test("setup: several unsupported choices are all reported, not just the first", 
   };
   const result = validateConfig(config);
   assert.equal(result.ok, false);
-  assert.equal(result.problems.length, 4, "a player fixing one at a time learns nothing");
+  // Three, not four: the stopping point is supported now (M8.7C), so it is
+  // no longer one of the problems.
+  assert.equal(result.problems.length, 3, "a player fixing one at a time learns nothing");
 });
 
 /**
- * Preflop-only practice is the headline M8.7C feature and it is deliberately
- * NOT available: `/play` grades preflop against reference ranges, so a
- * preflop-only session would be a guess with a confident face on it. If this
- * test ever fails, check that real preflop solver EVs actually shipped.
+ * Preflop-only practice is the headline M8.7C feature, and it shipped once
+ * its two blockers cleared: preflop graded from solver EVs (M8.7A), and the
+ * server able to record a stopped hand as COMPLETE rather than abandoned.
+ *
+ * The second is the one to re-check if this ever regresses. An abandoned hand
+ * is excluded from every M11 coaching aggregate, so a preflop-only session
+ * quietly recorded that way would vanish from the player's own statistics
+ * while still appearing to work on screen.
  */
-test("setup: preflop-only is unavailable until preflop is graded from solver EVs", () => {
-  assert.equal(SUPPORT.stoppingPoint.preflop.available, false);
-  assert.match(SUPPORT.stoppingPoint.preflop.reason!, /reference ranges/);
+test("setup: every stopping point is offered, and none carries a reason", () => {
+  for (const point of ["preflop", "flop", "turn", "river"] as StoppingPoint[]) {
+    assert.equal(SUPPORT.stoppingPoint[point].available, true, point);
+    assert.equal(SUPPORT.stoppingPoint[point].reason, undefined, point);
+  }
+});
+
+test("setup: the stopping point maps onto the solve pack's own street numbers", () => {
+  // Must match `stopping_street_index` in api/play_solver.py. The server
+  // decides whether a hand may complete with this arithmetic, so a client
+  // that disagreed would offer a hand the server then refuses to close.
+  assert.equal(stoppingStreetIndex("preflop"), -1);
+  assert.equal(stoppingStreetIndex("flop"), 0);
+  assert.equal(stoppingStreetIndex("turn"), 1);
+  assert.equal(stoppingStreetIndex("river"), 2);
+});
+
+test("setup: a preflop-only configuration validates", () => {
+  const result = validateConfig({
+    tableSize: 6,
+    heroPosition: "BTN",
+    actionFamily: "single_raised_pot",
+    stoppingPoint: "preflop",
+  });
+  assert.equal(result.ok, true, result.problems.join(" "));
 });
 
 /**

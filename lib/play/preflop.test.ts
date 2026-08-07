@@ -2,10 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { handNotation, preflopDecision, preflopVerdict, type PreflopPack } from "./preflop";
-import { pickHand, handId } from "./load";
+import {
+  handId, pickHand, pickInstance, preflopSignature, PREFLOP_REPEAT_WINDOW,
+} from "./load";
+import { REPEAT_WINDOW } from "../drill/antirepeat";
+import { stoppingStreetIndex } from "./setup";
 import { mulberry32 } from "../drill/rng";
 import { verdictForEvLoss } from "./verdict";
-import type { SolveManifest } from "./types";
+import type { SolveFile, SolveManifest } from "./types";
 
 /**
  * The published pack, read from the canonical committed copy rather than the
@@ -147,4 +151,69 @@ test("pickHand: uniform over instances, respects the used set", () => {
   // Exhausted: must still return something rather than spin.
   const p = pickHand(manifest, used, rng);
   assert.ok(used.has(handId(p.flop, p.index)));
+});
+
+/* ------------------------------------------------------------------ *
+ * M8.7C — anti-repeat over preflop spots specifically
+ * ------------------------------------------------------------------ */
+
+/** A solve file of N instances, alternating seats, with the given hands. */
+const solveOf = (hands: string[]): SolveFile => ({
+  spot: "srp-btn-bb",
+  flop: "Ts9s5h",
+  pot: 55,
+  stack: 975,
+  instances: hands.map((hand) => ({
+    hero: 1 as const,
+    hand,
+    bot: "QdTc",
+    nodes: {},
+    ends: {},
+  })),
+});
+
+test("pickInstance: a preflop-only session avoids repeating a hand class", () => {
+  // Four unused instances, three of which are AKs from different suits. The
+  // `used` set cannot tell them apart — it is keyed by (flop, instance) — and
+  // a preflop-only hand never sees the flop, so all three are one question.
+  const solve = solveOf(["AsKs", "AhKh", "AdKd", "7c7d"]);
+  const recent = new Set([preflopSignature(1, "AcKc")]);
+  const index = pickInstance(solve, new Set(), 1, mulberry32(3), recent);
+  assert.equal(solve.instances[index].hand, "7c7d", "every AKs combo repeats AKs");
+});
+
+test("pickInstance: the signature is the seat and the class, not the combo", () => {
+  assert.equal(preflopSignature(1, "AsKs"), preflopSignature(1, "AhKh"));
+  assert.notEqual(preflopSignature(1, "AsKs"), preflopSignature(0, "AsKs"));
+  assert.notEqual(preflopSignature(1, "AsKs"), preflopSignature(1, "AsKh"));
+});
+
+test("pickInstance: a fully-repeated file still deals rather than spinning", () => {
+  // Late in a preflop-only session every remaining class may be in the
+  // window. A repeated class on a fresh deal beats returning nothing.
+  const solve = solveOf(["AsKs", "AhKh"]);
+  const recent = new Set([preflopSignature(1, "AsKs")]);
+  const index = pickInstance(solve, new Set(), 1, mulberry32(5), recent);
+  assert.ok(index >= 0 && index < 2);
+});
+
+test("pickInstance: a full-hand session ignores the preflop window", () => {
+  // Two AKs hands on different runouts are genuinely different questions when
+  // the hand is played out, so suppressing the second would narrow practice
+  // for no benefit. Passing no window is what expresses that.
+  const solve = solveOf(["AsKs", "AhKh"]);
+  const index = pickInstance(solve, new Set(), 1, mulberry32(5));
+  assert.ok(index >= 0 && index < 2);
+});
+
+test("the stopping-point street numbers match the pack's own", () => {
+  // These must equal `stopping_street_index` in api/play_solver.py: the
+  // server decides whether a hand may be recorded complete with this
+  // arithmetic, so a client that disagreed would finish a hand the server
+  // then refuses to close — leaving it incomplete and invisible to M11.
+  assert.equal(stoppingStreetIndex("preflop"), -1);
+  assert.equal(stoppingStreetIndex("flop"), 0);
+  assert.equal(stoppingStreetIndex("turn"), 1);
+  assert.equal(stoppingStreetIndex("river"), 2);
+  assert.equal(PREFLOP_REPEAT_WINDOW > REPEAT_WINDOW, true, "preflop burns spots faster");
 });
