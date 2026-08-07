@@ -1,0 +1,136 @@
+{
+  "kind": "weighted-flop-set",
+  "format_version": 1,
+  "requested": 25,
+  "count": 25,
+  "total_flops": 22100,
+  "classes": 1755,
+  "method": "stratified by suitedness x pairing, systematic sampling within each stratum by class weight",
+  "flops": [
+    {
+      "flop": "AcQcTd",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Ac9c8d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Ac4c2d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "KcTc4d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Kc5c3d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Qc9c4d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "JcTc7d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Jc6c3d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Tc6c5d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "9c5c3d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "7c5c2d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "AcQd5h",
+      "weight": 0.03882352941176471,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "Ac7d4h",
+      "weight": 0.03882352941176471,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "KcTd5h",
+      "weight": 0.03882352941176471,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "QcJd6h",
+      "weight": 0.03882352941176471,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "Qc5d4h",
+      "weight": 0.03882352941176471,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "Jc5d4h",
+      "weight": 0.03882352941176471,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "9c8d5h",
+      "weight": 0.03882352941176471,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "7c6d3h",
+      "weight": 0.03882352941176471,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "Kc9c9d",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/paired"
+    },
+    {
+      "flop": "8c8d5c",
+      "weight": 0.042352941176470586,
+      "stratum": "two-tone/paired"
+    },
+    {
+      "flop": "Kc9d9h",
+      "weight": 0.042352941176470586,
+      "stratum": "rainbow/paired"
+    },
+    {
+      "flop": "8c8d5h",
+      "weight": 0.042352941176470586,
+      "stratum": "rainbow/paired"
+    },
+    {
+      "flop": "Qc9c4c",
+      "weight": 0.05176470588235294,
+      "stratum": "monotone/unpaired"
+    },
+    {
+      "flop": "8c8d8h",
+      "weight": 0.002352941176470588,
+      "stratum": "rainbow/trips"
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "kind": "weighted-flop-set",
+  "format_version": 1,
+  "requested": 12,
+  "count": 12,
+  "total_flops": 22100,
+  "classes": 1755,
+  "method": "stratified by suitedness x pairing, systematic sampling within each stratum by class weight",
+  "flops": [
+    {
+      "flop": "AcJd3c",
+      "weight": 0.09317647058823529,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "KcTc9d",
+      "weight": 0.09317647058823529,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Qc9c4d",
+      "weight": 0.09317647058823529,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Jc4d2d",
+      "weight": 0.09317647058823529,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "8c6d4c",
+      "weight": 0.09317647058823529,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Ac8d5h",
+      "weight": 0.10352941176470588,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "Qc9d4h",
+      "weight": 0.10352941176470588,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "9c7d4h",
+      "weight": 0.10352941176470588,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "Jc8c8d",
+      "weight": 0.08470588235294117,
+      "stratum": "two-tone/paired"
+    },
+    {
+      "flop": "Jc8d8h",
+      "weight": 0.08470588235294117,
+      "stratum": "rainbow/paired"
+    },
+    {
+      "flop": "Qc9c4c",
+      "weight": 0.05176470588235294,
+      "stratum": "monotone/unpaired"
+    },
+    {
+      "flop": "8c8d8h",
+      "weight": 0.002352941176470588,
+      "stratum": "rainbow/trips"
+    }
+  ]
+}
