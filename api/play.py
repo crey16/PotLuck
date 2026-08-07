@@ -97,7 +97,7 @@ class PlaySessionCreateIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     client_session_id: UUID
-    solve_pack_id: Literal["potluck:m6:srp-btn-bb:v1"] = SOLVE_PACK_ID
+    solve_pack_id: Literal["potluck:m87a:srp-btn-bb:v2"] = SOLVE_PACK_ID
     config: PlayConfigIn = Field(default_factory=PlayConfigIn)
 
 

@@ -195,12 +195,19 @@ export function solveAssumptions(packId: string): SolveAssumptions {
       { label: "Stacks", value: "100bb effective" },
       { label: "Blinds", value: "0.5 / 1bb, no ante" },
       { label: "Rake", value: "None modelled" },
-      { label: "Preflop", value: "BTN opens 2.5bb, BB calls" },
+      { label: "Preflop", value: "BTN opens 2.5bb, BB calls or folds" },
       { label: "Postflop sizes", value: "One bet size per street, one raise size, all-in by threshold" },
       { label: "Accuracy", value: "Solved to <0.3% pot exploitability" },
+      // The precision of the preflop numbers is part of the model, not a
+      // footnote: it is why a marginal preflop choice grades as correct.
+      { label: "Preflop precision", value: "EVs averaged over 25 flops, ±0.3bb typical" },
     ],
     limits: [
-      "Preflop decisions are graded against reference ranges, not solver EVs, so they carry no EV loss.",
+      // M8.7A retired reference-range preflop grading. What remains true, and
+      // is a sharper caveat than the one it replaced: the preflop equilibrium
+      // is an equilibrium of a game in which BB cannot 3-bet.
+      "The preflop solve prices a tree where BB never 3-bets and the small blind is dead, so its opening range is far wider than a real 6-max button range.",
+      "Preflop EVs are averaged over 25 flops. A choice inside that sampling error is graded correct rather than assigned a verdict the data cannot support.",
       "Only one bet size exists per decision, so sizing itself is not trainable here.",
       "Cold-calls, squeezes and limped pots end multiway and are outside the solved game.",
     ],

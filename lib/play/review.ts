@@ -23,14 +23,20 @@
  *    plausible absolute numbers derived by addition would be a fiction with
  *    a decimal point.
  *
- * 3. **Preflop's EV is unknown, not zero.** `lib/play/preflop.ts` grades the
- *    preflop decision against reference ranges. Its `evLossBb` is null all
- *    the way through, and `score.ts` excludes it from the mean. When M8.7A
- *    replaces that with real solver output, the null becomes a number and
- *    nothing else here has to change.
+ * 3. **Preflop is solver-graded too, as of M8.7A.** It used to be graded
+ *    against reference ranges with `evLossBb` null the whole way through, so
+ *    `score.ts` excluded it from the mean. The published preflop pack has
+ *    absolute action EVs, so the null is now a number and preflop counts —
+ *    and, as that note predicted, nothing in `score.ts` had to change.
+ *
+ *    Note preflop is the one place where an ABSOLUTE action EV is honest.
+ *    Rule 2 above still holds postflop: that export has losses only, and
+ *    deriving absolutes from it by addition would be a fiction. The M8
+ *    contract's `ev_basis` records which kind each decision carries.
  */
 import { actionLabelBb } from "./labels";
 import { boardFrom, potAfter, timeline, toCallAt, type HandEvent } from "./timeline";
+import { preflopVerdict, type PreflopDecision } from "./preflop";
 import { chipsToBb } from "./units";
 import { EV_STEP_BB, verdictFor, type Verdict } from "./verdict";
 import type { PlayInstance, PlayNode } from "./types";
@@ -124,9 +130,10 @@ function buildActions(
 }
 
 export interface PreflopReviewInput {
-  /** Button label of what the hero picked. */
-  chosenLabel: string;
-  verdict: Verdict;
+  /** The solved preflop node, from the published pack. */
+  decision: PreflopDecision;
+  /** The action code the hero picked. */
+  chosenKey: string;
 }
 
 export interface BuildReviewInput {
@@ -155,19 +162,37 @@ export function buildHandReview(input: BuildReviewInput): HandReviewModel {
   const decisions: ReviewDecision[] = [];
 
   if (preflop) {
+    const { decision, chosenKey } = preflop;
+    const chosenOption = decision.options.find((o) => o.key === chosenKey);
+    if (!chosenOption) throw new Error(`${chosenKey} is not a preflop action here`);
+    // Since M8.7A this is a solver-graded node like any other: the pack
+    // publishes an absolute EV per action, so the node table shows real
+    // numbers and the loss enters the GTO score. `isMixed` is always false
+    // because a best response against fixed EVs is a pure strategy — see
+    // preflop.ts. The near-ties are expressed as small losses instead, which
+    // is the honest form.
+    const preflopActions: ReviewAction[] = decision.options.map((option) => ({
+      code: option.key,
+      label: option.label,
+      frequency: option.lossBb === 0 ? 1 : 0,
+      evLossBb: option.lossBb,
+      isChosen: option.key === chosenKey,
+      isBest: option.lossBb === 0,
+      isMixed: false,
+    }));
     decisions.push({
       index: 0,
       street: "preflop",
       key: "preflop",
-      gradingSource: "reference",
+      gradingSource: "solver",
       board: [],
       potBb: chipsToBb(startPot),
       toCallBb: null,
       behindBb: chipsToBb(stack),
-      actions: [],
-      chosenLabel: preflop.chosenLabel,
-      verdict: preflop.verdict,
-      evLossBb: null,
+      actions: preflopActions,
+      chosenLabel: chosenOption.label,
+      verdict: preflopVerdict(decision, chosenKey),
+      evLossBb: chosenOption.lossBb,
       replayPrefix: null,
     });
   }

@@ -12,6 +12,7 @@ import {
 } from "./review";
 import { gtoScore } from "./score";
 import { EV_STEP_BB } from "./verdict";
+import type { PreflopDecision } from "./preflop";
 import type { PlayInstance, PlayNode } from "./types";
 import type { PlayDecisionReview, PlayHandReview } from "./api";
 
@@ -57,7 +58,26 @@ const INSTANCE: PlayInstance = {
 
 const FLOP = "Ts9s5h";
 const base = { inst: INSTANCE, flop: FLOP, startPot: 55, stack: 975 };
-const PREFLOP = { chosenLabel: "Call", verdict: "correct" as const };
+/**
+ * A solved preflop node in the pack's shape — BB facing the open, calling is
+ * best by 1.3bb. Written out here rather than read from the published pack so
+ * this suite keeps describing ONE hand end to end and stays independent of a
+ * pack regeneration.
+ */
+const PREFLOP_DECISION: PreflopDecision = {
+  position: "BB",
+  notation: "77",
+  facing: "btn_open_2.5bb",
+  options: [
+    { key: "c", label: "Call", evBb: 0.312, lossBb: 0, indistinguishable: true },
+    { key: "f", label: "Fold", evBb: -1, lossBb: 1.312, indistinguishable: false },
+  ],
+  answer: "c",
+  seBb: 0.436,
+  tooCloseToCall: false,
+  continues: "c",
+};
+const PREFLOP = { decision: PREFLOP_DECISION, chosenKey: "c" };
 
 test("review: a fresh hand has no answered decisions", () => {
   const model = buildHandReview({ ...base, chosen: [] });
@@ -71,14 +91,39 @@ test("review: the decision the hero is currently facing is not yet reviewable", 
   assert.equal(model.decisions[0].key, "root");
 });
 
-test("review: preflop is included when answered, and carries no EV", () => {
+test("review: preflop is solver-graded and carries a real EV loss (M8.7A)", () => {
   const model = buildHandReview({ ...base, chosen: [0], preflop: PREFLOP });
   const preflop = model.decisions[0];
   assert.equal(preflop.street, "preflop");
-  assert.equal(preflop.gradingSource, "reference");
-  assert.equal(preflop.evLossBb, null, "preflop must not claim an EV loss");
+  assert.equal(preflop.gradingSource, "solver");
+  assert.equal(preflop.evLossBb, 0, "the best action costs nothing");
   assert.equal(preflop.chosenLabel, "Call");
   assert.deepEqual(preflop.board, []);
+  // The node table needs every alternative, not just the pick.
+  assert.deepEqual(preflop.actions.map((a) => a.code), ["c", "f"]);
+  assert.equal(preflop.actions.find((a) => a.code === "f")!.evLossBb, 1.312);
+});
+
+test("review: a preflop mistake enters the GTO score rather than being excluded", () => {
+  // Before M8.7A a folded 77 scored nothing at all, because reference-range
+  // grading produced a verdict with no EV behind it.
+  const model = buildHandReview({
+    ...base,
+    chosen: [],
+    preflop: { decision: PREFLOP_DECISION, chosenKey: "f" },
+  });
+  const preflop = model.decisions[0];
+  assert.equal(preflop.evLossBb, 1.312);
+  const score = gtoScore([{ evLossBb: preflop.evLossBb, verdict: preflop.verdict }]);
+  assert.equal(score.scored, 1, "preflop must count toward the score now");
+  assert.equal(score.unscored, 0);
+});
+
+test("review: preflop actions are never marked mixed", () => {
+  // A best response against fixed EVs is a PURE strategy. Showing a preflop
+  // action as "mixed" would imply a randomisation this solve does not contain.
+  const model = buildHandReview({ ...base, chosen: [], preflop: PREFLOP });
+  assert.ok(model.decisions[0].actions.every((a) => !a.isMixed));
 });
 
 test("review: postflop decisions are graded from the solve", () => {
@@ -322,18 +367,41 @@ test("review: preflop has no replay prefix — it restarts the hand instead", ()
  * The review model and the score agree
  * ------------------------------------------------------------------ */
 
-test("review: the model feeds the score directly, with preflop excluded", () => {
+test("review: the model feeds the score directly, preflop included (M8.7A)", () => {
   const model = buildHandReview({ ...base, chosen: [0, 1, 0], preflop: PREFLOP });
   const score = gtoScore(model.decisions);
-  assert.equal(score.unscored, 1, "the reference-graded preflop decision must be excluded");
-  assert.equal(score.scored, 3);
-  // Every postflop decision here is the solver's own best action.
+  // Every decision now carries an EV loss, so nothing is excluded. This
+  // assertion was the reverse before the preflop pack existed.
+  assert.equal(score.unscored, 0, "no decision in a live hand lacks an EV now");
+  assert.equal(score.scored, 4);
+  // Preflop and every postflop decision here are the solver's own best action.
   assert.equal(score.score, 100);
 });
 
-test("review: a hand with only a preflop decision has no score", () => {
+test("review: a hand with only a preflop decision now HAS a score", () => {
   const model = buildHandReview({ ...base, chosen: [], preflop: PREFLOP });
-  assert.equal(gtoScore(model.decisions).score, null);
+  assert.equal(gtoScore(model.decisions).score, 100);
+  // And a preflop-only hand where the hero got it wrong scores below 100 —
+  // which is what makes M8.7C's preflop-only loop a real unit of practice
+  // rather than an unscoreable one.
+  const wrong = buildHandReview({
+    ...base,
+    chosen: [],
+    preflop: { decision: PREFLOP_DECISION, chosenKey: "f" },
+  });
+  const score = gtoScore(wrong.decisions).score;
+  assert.ok(score !== null && score < 100, `expected a real score, got ${score}`);
+});
+
+test("review: an ungraded decision is still excluded — unknown is not zero", () => {
+  // The rule preflop no longer triggers must remain in force for M8's legacy
+  // archive, which really does contain rows with no EV behind them.
+  const score = gtoScore([
+    { evLossBb: null, verdict: "ungraded" },
+    { evLossBb: 0, verdict: "correct" },
+  ]);
+  assert.equal(score.unscored, 1);
+  assert.equal(score.scored, 1);
 });
 
 /* ------------------------------------------------------------------ *

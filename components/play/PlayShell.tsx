@@ -35,18 +35,22 @@ import {
   type PlayHandSummary,
   type PlaySession,
 } from "@/lib/play/api";
-import { fetchManifest, fetchSolve, handId, pickHand, pickInstance, SPOT } from "@/lib/play/load";
+import {
+  fetchManifest, fetchPreflopPack, fetchSolve, handId, pickHand, pickInstance, SPOT,
+} from "@/lib/play/load";
 import { buildHandReview, type ReviewDecision } from "@/lib/play/review";
 import { DEFAULT_CONFIG, type PracticeConfig } from "@/lib/play/setup";
 import { parseAction } from "@/lib/play/actions";
-import { bb, signedBb } from "@/lib/play/units";
-import { preflopDecision, type PreflopDecision } from "@/lib/play/preflop";
+import { bb, bbLossExact, signedBb } from "@/lib/play/units";
+import {
+  preflopDecision, preflopVerdict, type PreflopDecision, type PreflopPack,
+} from "@/lib/play/preflop";
 import {
   awaitingHero, boardFrom, handOver, holeCards, potAfter, timeline, toCallAt,
   type HandEvent,
 } from "@/lib/play/timeline";
 import {
-  isRightVerdict, lossDollars, verdictAt, type Verdict,
+  bbToDollars, isRightVerdict, lossDollars, verdictAt, type Verdict,
 } from "@/lib/play/verdict";
 import type { PlayInstance, SolveFile, SolveManifest } from "@/lib/play/types";
 
@@ -75,7 +79,11 @@ interface DecisionRecord {
   street: string;
   label: string;
   verdict: Verdict;
-  /** Null for reference-graded preflop: its EV is unknown, never zero. */
+  /**
+   * Null only where no EV exists. Since M8.7A that is nowhere in a live hand:
+   * preflop is graded from solver EVs too. Kept nullable because M8's legacy
+   * archive can still surface ungraded rows on reload.
+   */
   lossDollars: number | null;
 }
 
@@ -129,6 +137,7 @@ export function PlayShell({ seed }: PlayShellProps) {
   const [started, setStarted] = useState(false);
 
   const [manifest, setManifest] = useState<SolveManifest | null>(null);
+  const [preflopPack, setPreflopPack] = useState<PreflopPack | null>(null);
   const [hand, setHand] = useState<LoadedHand | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -239,11 +248,17 @@ export function PlayShell({ seed }: PlayShellProps) {
 
   // Initial load — network reads cannot happen during render, so this is the
   // same legitimate-effect exception DrillShell's seeding uses.
+  //
+  // The preflop EV pack is fetched alongside the manifest because preflop is
+  // the FIRST decision of every hand: loading it lazily would mean the first
+  // hand of a session is dealt before it can be graded. It is one small file
+  // for the whole spot, not one per flop.
   useEffect(() => {
     let cancelled = false;
-    fetchManifest()
-      .then((m) => {
+    Promise.all([fetchManifest(), fetchPreflopPack()])
+      .then(([m, pack]) => {
         if (cancelled) return;
+        setPreflopPack(pack);
         setManifest(m);
       })
       .catch((err) => {
@@ -313,8 +328,8 @@ export function PlayShell({ seed }: PlayShellProps) {
   const stack = hand?.solve.stack ?? 975;
 
   const preflop: PreflopDecision | null = useMemo(
-    () => (inst ? preflopDecision(inst.hero, inst.hand) : null),
-    [inst]
+    () => (inst && preflopPack ? preflopDecision(preflopPack, inst.hero, inst.hand) : null),
+    [inst, preflopPack]
   );
 
   const events: HandEvent[] = useMemo(
@@ -448,28 +463,23 @@ export function PlayShell({ seed }: PlayShellProps) {
    * instance and the hero's path, so the panel cannot drift from the hand
    * that was actually played.
    *
-   * Preflop's verdict is carried in from the reference-range grading; its EV
-   * stays null all the way through, which is what keeps it out of the score.
+   * Preflop is passed as its solved node plus the hero's pick, so the review
+   * derives the same verdict and EV loss the shell showed rather than being
+   * handed a second, independently-computed copy of them.
    */
   const reviewModel = useMemo(() => {
     if (!inst || !hand) return null;
-    const preflopRecord = review.find((r) => r.phase === "preflop");
     return buildHandReview({
       inst,
       flop: hand.solve.flop,
       startPot,
       stack,
       chosen,
-      ...(preflopDone && preflopRecord
-        ? {
-            preflop: {
-              chosenLabel: preflopRecord.label,
-              verdict: preflopRecord.verdict,
-            },
-          }
+      ...(preflopDone && preflop && preflopChosen !== null
+        ? { preflop: { decision: preflop, chosenKey: preflopChosen } }
         : {}),
     });
-  }, [inst, hand, startPot, stack, chosen, preflopDone, review]);
+  }, [inst, hand, startPot, stack, chosen, preflopDone, preflop, preflopChosen]);
 
   const currentRemoteReady = Boolean(
     hand && remoteHand && remoteHand.client_hand_id === hand.clientHandId
@@ -558,22 +568,28 @@ export function PlayShell({ seed }: PlayShellProps) {
       decisionLockRef.current = true;
       setPreflopChosen(key);
       const clientDecisionId = newPlayClientId();
-      const verdict: Verdict =
-        key === preflop.answer
-          ? "correct"
-          : preflop.acceptable.includes(key)
-            ? "acceptable"
-            : "blunder";
+      // M8.7A: graded from solver EVs, so preflop now carries a real EV loss
+      // and counts toward the session's EV and the GTO score like any postflop
+      // decision. The verdict applies the pack's measured standard error, so a
+      // choice inside the sampling noise is not recorded as a mistake.
+      const option = preflop.options.find((o) => o.key === key);
+      const verdict: Verdict = preflopVerdict(preflop, key);
       const local: DecisionRecord = {
         clientDecisionId,
         phase: "preflop",
         street: "Preflop",
-        label: preflop.options.find((o) => o.key === key)?.label ?? key,
+        label: option?.label ?? key,
         verdict,
-        lossDollars: null,
+        lossDollars: bbToDollars(option?.lossBb ?? 0),
       };
       recordDecision(local);
       persistDecision(local, "preflop", key);
+      flashSeqRef.current += 1;
+      setFlash({
+        verdict,
+        lossSteps: Math.round((option?.lossBb ?? 0) / 0.05),
+        nonce: flashSeqRef.current,
+      });
     },
     [inst, preflop, hand, preflopChosen, canAct, recordDecision, persistDecision]
   );
@@ -1036,7 +1052,11 @@ export function PlayShell({ seed }: PlayShellProps) {
                   {preflop.options.map((o, i) => {
                     let state: OptionButtonState = canAct ? "idle" : "disabled";
                     if (preflopChosen !== null) {
-                      if (o.key === preflop.answer || preflop.acceptable.includes(o.key)) state = "correct";
+                      // An action inside the measured noise is shown as fine,
+                      // because at this sample size it genuinely is: the pack
+                      // cannot separate it from best. Marking it wrong would
+                      // be a verdict the data does not support.
+                      if (o.key === preflop.answer || o.indistinguishable) state = "correct";
                       else if (o.key === preflopChosen) state = "wrong";
                       else state = "disabled";
                     }
@@ -1052,7 +1072,18 @@ export function PlayShell({ seed }: PlayShellProps) {
                     <div className="bar">
                       <span className="word">{VERDICT_WORD[review[0]?.verdict ?? "blunder"]}</span>
                       <span className="xp">
-                        Reference range: {preflop.scenario.name}
+                        {(() => {
+                          const chosenOption = preflop.options.find((o) => o.key === preflopChosen);
+                          const loss = chosenOption?.lossBb ?? 0;
+                          if (preflop.tooCloseToCall) {
+                            return `Too close to call at this solve&rsquo;s precision (±${bbLossExact(preflop.seBb)})`;
+                          }
+                          if (loss === 0) return "Highest EV";
+                          if (chosenOption?.indistinguishable) {
+                            return `Costs ${bbLossExact(loss)}, inside this hand's ±${bbLossExact(preflop.seBb)} margin`;
+                          }
+                          return `Costs ${bbLossExact(loss)} against the solver&rsquo;s best`;
+                        })()}
                         {preflopChosen !== preflop.continues &&
                           ` — the hand continues down the solved line (${inst.hero === 1 ? "you open, BB calls" : "you call"})`}
                       </span>
@@ -1235,9 +1266,12 @@ export function PlayShell({ seed }: PlayShellProps) {
             </div>
             <p style={{ fontSize: 12.5, margin: 0, color: "color-mix(in srgb, var(--color-text) 70%, transparent)" }}>
               BTN opens 2.5bb, BB calls — solved to &lt;0.3% pot exploitability on a
-              simplified tree (one bet size per street, one raise size). Preflop is
-              graded against the reference ranges; postflop against the solve.
-              Amounts and EV losses are shown in big blinds.
+              simplified tree (one bet size per street, one raise size). Both preflop
+              and postflop are graded against solver EVs; amounts and EV losses are
+              shown in big blinds. The preflop solve prices a tree in which BB never
+              3-bets and the small blind is dead, so its opening range is far wider
+              than a real 6-max button range — read it as this game&rsquo;s equilibrium,
+              not as advice for a live table.
             </p>
           </div>
 

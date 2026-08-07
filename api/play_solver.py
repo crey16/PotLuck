@@ -15,19 +15,30 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
-SOLVE_PACK_ID = "potluck:m6:srp-btn-bb:v1"
+SOLVE_PACK_ID = "potluck:m87a:srp-btn-bb:v2"
 SOLUTION_PROFILE_ID = "cash-6max-chip-ev"
-SOLUTION_VERSION = "m6-v1"
-PACK_GRADING_VERSION = "play-grade:v1"
-PREFLOP_GRADING_VERSION = "reference-ranges:v1"
+SOLUTION_VERSION = "m87a-v1"
+PACK_GRADING_VERSION = "play-grade:v2"
+PREFLOP_GRADING_VERSION = "solver-preflop-ev:v1"
 SPOT = "srp-btn-bb"
+
+# Pack ids that have ever been minted into ``play_hands.source_hand_id``.
+#
+# The postflop solve files are byte-identical across these versions — v2 adds
+# preflop EVs and changes nothing else — so a hand dealt under v1 still
+# resolves to the same instance.  Parsing must accept them or reloading an
+# incomplete pre-M8.7A hand fails; MINTING always uses the current id, so a new
+# hand is never labelled with an old pack.
+_HISTORICAL_PACK_IDS = ("potluck:m6:srp-btn-bb:v1",)
 
 _ROOT = Path(__file__).resolve().parents[1]
 _SOLVE_DIR = _ROOT / "solver" / "pack" / SPOT
 _FLOP_RE = re.compile(r"^(?:[2-9TJQKA][shdc]){3}$")
 _PATH_RE = re.compile(r"^(?:root|preflop|\d+(?:\.\d+)*)$")
 _SOURCE_HAND_RE = re.compile(
-    rf"^{re.escape(SOLVE_PACK_ID)}/((?:[2-9TJQKA][shdc]){{3}})#(\d+)$"
+    "^(?:"
+    + "|".join(re.escape(pack) for pack in (SOLVE_PACK_ID, *_HISTORICAL_PACK_IDS))
+    + r")/((?:[2-9TJQKA][shdc]){3})#(\d+)$"
 )
 
 # Keep these integer thresholds identical to lib/play/verdict.ts.  Losses are
@@ -78,6 +89,12 @@ def compute_pack_content_hash(catalog: dict[str, Any]) -> str:
         (_SOLVE_DIR / f"{entry['flop']}.json").read_bytes()
         for entry in manifest["flops"]
     ]
+    # The preflop pack is hashed as BYTES rather than folded into the catalog
+    # metadata, because it holds thousands of numbers and the metadata digest
+    # is computed in both JS and Python.  Any cross-language disagreement about
+    # float formatting would break the hash for no reason anyone would find
+    # quickly.  Its EVs are integers for the same reason.
+    solve_bytes.append((_SOLVE_DIR / "preflop.json").read_bytes())
     return _content_hash_from_inputs(catalog, manifest_bytes, solve_bytes)
 
 
@@ -93,6 +110,7 @@ def pack_availability() -> dict[str, Any]:
     """
     manifest_path = _SOLVE_DIR / "index.json"
     catalog_path = _SOLVE_DIR / "catalog.json"
+    preflop_path = _SOLVE_DIR / "preflop.json"
     listed = 0
     if manifest_path.is_file():
         try:
@@ -107,6 +125,11 @@ def pack_availability() -> dict[str, Any]:
         "solve_dir_present": _SOLVE_DIR.is_dir(),
         "manifest_present": manifest_path.is_file(),
         "catalog_present": catalog_path.is_file(),
+        # Preflop grading reads this and nothing else.  A pack that shipped
+        # without it would grade every postflop decision correctly and fail on
+        # the first preflop one, which is the hardest kind of fault to read
+        # from a production log.
+        "preflop_pack_present": preflop_path.is_file(),
         "solve_files_present": listed,
         "verified": False,
     }
@@ -123,9 +146,16 @@ def pack_availability() -> dict[str, Any]:
     except Exception as exc:  # surfaced to an authenticated caller only
         status["error"] = f"{type(exc).__name__}: {exc}"
         return status
+    try:
+        preflop = load_preflop_pack()
+    except Exception as exc:  # surfaced to an authenticated caller only
+        status["error"] = f"{type(exc).__name__}: {exc}"
+        return status
     status["verified"] = True
     status["solve_pack_id"] = catalog["id"]
     status["content_hash"] = catalog["content_hash"]
+    status["preflop_iteration"] = preflop["provenance"]["iteration"]
+    status["preflop_median_se_mbb"] = preflop["precision"]["median_se_mbb"]
     return status
 
 
@@ -146,6 +176,31 @@ def load_catalog() -> dict[str, Any]:
     if compute_pack_content_hash(catalog) != catalog.get("content_hash"):
         raise RuntimeError("solve pack content hash mismatch")
     return catalog
+
+
+@lru_cache(maxsize=1)
+def load_preflop_pack() -> dict[str, Any]:
+    """The M8.7A preflop EV pack: strategies keyed by 169-class notation.
+
+    Kept in its own file rather than inside catalog.json so its bytes can be
+    hashed directly (see ``compute_pack_content_hash``) and so the browser can
+    fetch it without pulling the whole catalog.  ``load_catalog`` has already
+    verified the content hash that covers these bytes by the time any caller
+    grades with them.
+    """
+    load_catalog()
+    pack = json.loads((_SOLVE_DIR / "preflop.json").read_text("utf8"))
+    if pack.get("spot") != SPOT or pack.get("kind") != "preflop-ev":
+        raise RuntimeError("preflop pack metadata mismatch")
+    if pack.get("hand_index") != "class169":
+        # Grading looks hands up by 169-class.  A combo-indexed pack would miss
+        # every lookup rather than erroring, so refuse it explicitly.
+        raise RuntimeError("preflop pack is not indexed by 169-class notation")
+    for position in ("BTN", "BB"):
+        role = pack.get("roles", {}).get(position)
+        if not role or len(role.get("hands", {})) != 169:
+            raise RuntimeError(f"preflop pack role {position} is incomplete")
+    return pack
 
 
 @lru_cache(maxsize=1)
@@ -343,45 +398,83 @@ def board_at_node(flop: str, instance: dict[str, Any], path: str) -> list[str]:
     return board
 
 
+def preflop_verdict(loss_bb: float, tolerance_bb: float) -> str:
+    """Grade only the part of an EV loss the solve can actually resolve.
+
+    Keep identical to ``verdictForEvLoss`` in lib/play/verdict.ts.
+
+    The preflop pack's EVs are averages over a 25-flop sample and ship with a
+    measured per-hand standard error whose median is ~0.4bb — four times the
+    whole ``_CORRECT_MAX`` band.  Applying the raw bands would manufacture
+    blunders out of sampling noise, which is the failure reference-range
+    grading was retired for.  ``max(0, loss - tolerance)`` is the conservative
+    one-SE lower bound on the true loss.
+
+    There is no frequency argument because a best response against fixed EVs is
+    a PURE strategy: no preflop action is one the solver also takes sometimes.
+    "acceptable" is therefore unreachable here, correctly rather than by
+    omission.
+    """
+    resolved = max(0.0, loss_bb - max(0.0, tolerance_bb))
+    steps = resolved / _EV_STEP_BB
+    if steps <= _CORRECT_MAX:
+        return "correct"
+    if steps <= _INACCURACY_MAX:
+        return "inaccuracy"
+    return "blunder"
+
+
 def _preflop_grade(
     stable_hand_id: str,
     instance: dict[str, Any],
     chosen_action: str,
 ) -> dict[str, Any]:
     position = "BTN" if instance["hero"] == 1 else "BB"
-    scenario = load_catalog()["preflop"][position]
+    role = load_preflop_pack()["roles"][position]
     notation = hand_notation(instance["hand"])
-    frequencies = scenario["hands"].get(notation)
-    if not frequencies or chosen_action not in frequencies:
+    entry = role["hands"].get(notation)
+    if entry is None:
+        # The pack is published only at full combo coverage, so every one of
+        # the 169 classes exists.  A miss means a corrupt pack, not bad input.
+        raise RuntimeError(f"preflop pack has no {position} entry for {notation}")
+
+    action_codes = [item["code"] for item in role["actions"]]
+    if chosen_action not in action_codes:
         raise SolveDataError("chosen action is not available at this preflop node")
-    action_codes = [entry["code"] for entry in scenario["actions"]]
-    best = max(action_codes, key=lambda code: frequencies[code])
-    chosen_frequency = float(frequencies[chosen_action])
-    if chosen_action == best:
-        verdict = "correct"
-    elif chosen_frequency >= _PREFLOP_MIX_MIN:
-        verdict = "acceptable"
-    else:
-        verdict = "blunder"
-    labels = {entry["code"]: entry["label"] for entry in scenario["actions"]}
+
+    # The pack stores integer milli-big-blinds: net stack change over the whole
+    # hand, blinds already inside it.  These are genuine absolutes, unlike the
+    # postflop pack's relative losses — see solver/preflop-pack.ts.
+    ev_bb = [value / 1000 for value in entry["ev"]]
+    se_bb = entry["se"] / 1000
+    best_ev_bb = max(ev_bb)
+    chosen_index = action_codes.index(chosen_action)
+    chosen_ev_bb = ev_bb[chosen_index]
+    loss_bb = round(best_ev_bb - chosen_ev_bb, 4)
+
     actions = []
     for ordinal, code in enumerate(action_codes):
-        kind, amount_bb, fallback_label = _action_parts(code)
+        kind, fallback_amount, fallback_label = _action_parts(code)
+        amount_bb = role["actions"][ordinal].get("amount_bb", fallback_amount)
+        action_loss_bb = round(best_ev_bb - ev_bb[ordinal], 4)
         actions.append(
             {
                 "action_code": code,
                 "ordinal": ordinal,
-                "action_label": labels.get(code, fallback_label),
+                "action_label": role["actions"][ordinal].get("label", fallback_label),
                 "action_kind": kind,
                 "amount_bb": amount_bb,
-                "frequency": float(frequencies[code]),
-                # Reference ranges contain frequencies, not action EVs.
-                "ev_bb": None,
-                "ev_delta_bb": None,
-                "ev_loss_bb": None,
+                # A pure strategy: the best action is taken always, the rest
+                # never.  Publishing a fractional frequency here would imply a
+                # mix this solve does not contain.
+                "frequency": 1.0 if ev_bb[ordinal] == best_ev_bb else 0.0,
+                "ev_bb": round(ev_bb[ordinal], 4),
+                "ev_delta_bb": -action_loss_bb,
+                "ev_loss_bb": action_loss_bb,
                 "is_chosen": code == chosen_action,
             }
         )
+
     return {
         "solve_node_id": stable_node_id(stable_hand_id, "preflop"),
         "node_path": "preflop",
@@ -391,21 +484,28 @@ def _preflop_grade(
         "board_texture": "preflop",
         "hand_class": notation,
         "action_context": {
-            "scenario_id": scenario["scenario_id"],
+            "scenario_id": f"solved:{SPOT}:{position}",
             "notation": notation,
-            "facing_action": "unopened" if position == "BTN" else "btn_open_2.5bb",
+            "facing_action": role["facing"],
             "available_action_codes": action_codes,
+            # The precision of this hand's EVs, stored with the decision so a
+            # historical grade stays re-derivable after a denser solve lowers
+            # it.  Without this, re-grading an old row against a new pack would
+            # silently change verdicts.
+            "ev_standard_error_bb": round(se_bb, 4),
         },
         "chosen_action_code": chosen_action,
-        "grading_source": "reference",
-        "grading_status": "reference_graded",
+        "grading_source": "solver",
+        "grading_status": "validated",
         "grading_version": PREFLOP_GRADING_VERSION,
-        "ev_basis": "unknown",
-        "chosen_frequency": chosen_frequency,
-        "chosen_ev_bb": None,
-        "best_ev_bb": None,
-        "ev_loss_bb": None,
-        "verdict": verdict,
+        # Absolute, unlike postflop's "relative_to_best": these EVs are the net
+        # stack change the solve actually produces.
+        "ev_basis": "absolute_bb",
+        "chosen_frequency": 1.0 if chosen_ev_bb == best_ev_bb else 0.0,
+        "chosen_ev_bb": round(chosen_ev_bb, 4),
+        "best_ev_bb": round(best_ev_bb, 4),
+        "ev_loss_bb": loss_bb,
+        "verdict": preflop_verdict(loss_bb, se_bb),
         "alternatives_complete": True,
         "actions": actions,
     }

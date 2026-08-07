@@ -45,3 +45,14 @@ export const signedBb = (chips: number): string => {
  */
 export const bbLoss = (evStepLoss: number): string =>
   `${format(evStepLoss * EV_STEP_BB, 2)}bb`;
+
+/**
+ * An EV loss that is already in big blinds — the preflop pack's form (M8.7A),
+ * which publishes real numbers rather than the postflop export's quantized
+ * 0.05bb steps.
+ *
+ * Two decimals for the same reason as `bbLoss`: 0.75bb is exactly the blunder
+ * threshold, and one decimal would round a 0.75 loss to "0.8bb" and contradict
+ * the verdict printed beside it.
+ */
+export const bbLossExact = (lossBb: number): string => `${format(lossBb, 2)}bb`;

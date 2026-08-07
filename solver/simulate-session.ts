@@ -12,11 +12,13 @@ import { join } from "node:path";
 import { mulberry32 } from "../lib/drill/rng";
 import { whoIsAhead } from "../lib/poker/engine";
 import { pickHand, handId } from "../lib/play/load";
-import { preflopDecision } from "../lib/play/preflop";
+import {
+  preflopDecision, preflopVerdict, type PreflopPack,
+} from "../lib/play/preflop";
 import {
   awaitingHero, boardFrom, handOver, holeCards, timeline,
 } from "../lib/play/timeline";
-import { verdictAt } from "../lib/play/verdict";
+import { isRightVerdict, verdictAt } from "../lib/play/verdict";
 import type { SolveFile, SolveManifest } from "../lib/play/types";
 
 const DIR = join(process.cwd(), "public", "solves", "srp-btn-bb");
@@ -26,6 +28,10 @@ const rng = mulberry32(Number(process.argv[3] ?? 7));
 const manifest = JSON.parse(readFileSync(join(DIR, "index.json"), "utf8")) as SolveManifest;
 const cache = new Map<string, SolveFile>();
 const used = new Set<string>();
+
+const preflopPack = JSON.parse(
+  readFileSync(join(DIR, "preflop.json"), "utf8")
+) as PreflopPack;
 
 let decisions = 0, right = 0, lossSteps = 0;
 const outcomes = { f: 0, bf: 0, sd: 0 };
@@ -42,11 +48,12 @@ for (let h = 0; h < HANDS; h++) {
   const solve = cache.get(pick.flop)!;
   const inst = solve.instances[pick.index];
 
-  // Preflop, graded like the UI does.
-  const pf = preflopDecision(inst.hero, inst.hand);
+  // Preflop, graded like the UI does — from solver EVs since M8.7A, with the
+  // pack's measured standard error widening the correct band per hand.
+  const pf = preflopDecision(preflopPack, inst.hero, inst.hand);
   const pfChoice = pf.options[Math.floor(rng() * pf.options.length)].key;
   decisions++;
-  if (pfChoice === pf.answer || pf.acceptable.includes(pfChoice)) right++;
+  if (isRightVerdict(preflopVerdict(pf, pfChoice))) right++;
 
   // Postflop: random walk to the end.
   const chosen: number[] = [];

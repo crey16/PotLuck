@@ -34,6 +34,8 @@ from api.play_solver import (
     _content_hash_from_inputs,
     completion_snapshots,
     compute_pack_content_hash,
+    load_preflop_pack,
+    preflop_verdict,
     grade_decision,
     load_catalog,
     load_manifest,
@@ -56,14 +58,17 @@ def test_catalog_identity_and_digest_cover_every_grading_input() -> None:
     assert catalog["grading_version"] == PACK_GRADING_VERSION
 
     # Reproduce solver/gen-play-catalog.ts exactly.  Importantly this hashes
-    # the generated preflop payload and version metadata in addition to the
-    # postflop files; changing a reference frequency invalidates the pack.
+    # the preflop EV pack and the version metadata in addition to the postflop
+    # files; changing any solved number invalidates the pack id.  The preflop
+    # file is appended AFTER the solve files — hash order is part of the format
+    # and the two languages must agree on it.
     digest = hashlib.sha256()
     manifest_bytes = (SOLVE_DIR / "index.json").read_bytes()
     digest.update(manifest_bytes)
     manifest = json.loads(manifest_bytes)
     for entry in manifest["flops"]:
         digest.update((SOLVE_DIR / f"{entry['flop']}.json").read_bytes())
+    digest.update((SOLVE_DIR / "preflop.json").read_bytes())
     canonical_metadata = {key: value for key, value in catalog.items() if key != "content_hash"}
     digest.update(
         json.dumps(canonical_metadata, separators=(",", ":"), ensure_ascii=False).encode()
@@ -72,14 +77,20 @@ def test_catalog_identity_and_digest_cover_every_grading_input() -> None:
     assert compute_pack_content_hash(catalog) == catalog["content_hash"]
 
 
-def test_pack_digest_detects_a_one_byte_solve_tamper() -> None:
-    catalog = load_catalog()
+def _hashed_inputs() -> tuple[bytes, list[bytes]]:
     manifest_bytes = (SOLVE_DIR / "index.json").read_bytes()
     manifest = json.loads(manifest_bytes)
     solve_bytes = [
         (SOLVE_DIR / f"{entry['flop']}.json").read_bytes()
         for entry in manifest["flops"]
     ]
+    solve_bytes.append((SOLVE_DIR / "preflop.json").read_bytes())
+    return manifest_bytes, solve_bytes
+
+
+def test_pack_digest_detects_a_one_byte_solve_tamper() -> None:
+    catalog = load_catalog()
+    manifest_bytes, solve_bytes = _hashed_inputs()
     assert _content_hash_from_inputs(catalog, manifest_bytes, solve_bytes) == catalog[
         "content_hash"
     ]
@@ -87,6 +98,24 @@ def test_pack_digest_detects_a_one_byte_solve_tamper() -> None:
     first = bytearray(tampered[0])
     first[len(first) // 2] ^= 1
     tampered[0] = bytes(first)
+    assert _content_hash_from_inputs(catalog, manifest_bytes, tampered) != catalog[
+        "content_hash"
+    ]
+
+
+def test_pack_digest_detects_a_one_byte_preflop_tamper() -> None:
+    """A changed preflop EV must invalidate the pack, exactly like a solve file.
+
+    Preflop EVs are grading inputs now, not decorative metadata.  Before
+    M8.7A this file did not exist and preflop verdicts came from bundled
+    reference ranges, so nothing in the pack covered them.
+    """
+    catalog = load_catalog()
+    manifest_bytes, solve_bytes = _hashed_inputs()
+    tampered = list(solve_bytes)
+    last = bytearray(tampered[-1])
+    last[len(last) // 2] ^= 1
+    tampered[-1] = bytes(last)
     assert _content_hash_from_inputs(catalog, manifest_bytes, tampered) != catalog[
         "content_hash"
     ]
@@ -115,22 +144,92 @@ def test_source_hand_and_node_ids_embed_the_full_pack_version() -> None:
         stable_node_id(hand_id, "bad/path")
 
 
-def test_preflop_grade_is_server_derived_reference_data_with_unknown_ev() -> None:
-    # Instance 0 is BB with KTs.  The catalog, generated from ranges.ts, says
-    # call is its best reference action; no EV was exported for preflop.
+def test_preflop_grade_comes_from_solver_evs_not_reference_ranges() -> None:
+    """M8.7A: preflop carries a real EV loss in big blinds.
+
+    Instance 0 is BB with KTs.  Before this, the grade came from the frequency
+    ordering in lib/poker/ranges.ts and every EV field was None, which is why
+    preflop was excluded from the GTO score.
+    """
     grade = grade_decision("As5h4h", 0, "preflop", "c")
-    assert grade["grading_source"] == "reference"
-    assert grade["grading_status"] == "reference_graded"
+    assert grade["grading_source"] == "solver"
+    assert grade["grading_status"] == "validated"
     assert grade["grading_version"] == PREFLOP_GRADING_VERSION
-    assert grade["ev_basis"] == "unknown"
+    # Absolute, unlike postflop's "relative_to_best": the preflop solve really
+    # does produce a net stack change, so it is published as one.
+    assert grade["ev_basis"] == "absolute_bb"
     assert grade["verdict"] == "correct"
-    assert grade["ev_loss_bb"] is None
-    assert grade["chosen_ev_bb"] is None
-    assert grade["best_ev_bb"] is None
-    assert {action["action_code"] for action in grade["actions"]} == {"r", "c", "f"}
-    assert all(action["ev_bb"] is None for action in grade["actions"])
-    assert all(action["ev_delta_bb"] is None for action in grade["actions"])
+    assert grade["ev_loss_bb"] == 0
+    assert grade["chosen_ev_bb"] == grade["best_ev_bb"]
+
+    # BB's actions are call and fold.  The reference scenario also offered a
+    # 3-bet; the solved tree has none, so offering the button would mean
+    # grading a line the pack does not contain.
+    assert {action["action_code"] for action in grade["actions"]} == {"c", "f"}
+    assert all(action["ev_bb"] is not None for action in grade["actions"])
+    assert all(action["ev_loss_bb"] is not None for action in grade["actions"])
+    # Pure strategy: exactly one action is taken, always.
     assert sum(action["frequency"] for action in grade["actions"]) == pytest.approx(1)
+    assert sorted(action["frequency"] for action in grade["actions"]) == [0.0, 1.0]
+
+    folding = grade_decision("As5h4h", 0, "preflop", "f")
+    assert folding["ev_loss_bb"] > 0
+    assert folding["chosen_ev_bb"] == -1.0  # the posted big blind, given up
+    assert folding["verdict"] in {"inaccuracy", "blunder"}
+
+
+def test_preflop_ev_loss_inside_the_measured_noise_is_not_a_mistake() -> None:
+    """The published SE widens the correct band; it is not decoration.
+
+    The EVs are averages over 25 flops with a median standard error near
+    0.4bb — four times the whole `correct` band.  Grading the raw loss would
+    manufacture blunders out of sampling noise, which is the failure
+    reference-range grading was retired for.
+    """
+    # A loss of exactly the tolerance is fully absorbed.
+    assert preflop_verdict(0.40, 0.40) == "correct"
+    assert preflop_verdict(0.45, 0.40) == "correct"
+    # Beyond it, only the resolvable part is graded: 1.00 - 0.40 = 0.60bb.
+    assert preflop_verdict(1.00, 0.40) == "inaccuracy"
+    assert preflop_verdict(2.00, 0.40) == "blunder"
+    # With no uncertainty it collapses to the ordinary bands.
+    assert preflop_verdict(0.05, 0.0) == "correct"
+    assert preflop_verdict(0.80, 0.0) == "blunder"
+    # Monotone in the loss, so a worse choice can never grade better.
+    grades = ["correct", "inaccuracy", "blunder"]
+    ranks = [grades.index(preflop_verdict(loss / 100, 0.30)) for loss in range(0, 400, 7)]
+    assert ranks == sorted(ranks)
+
+
+def test_preflop_pack_is_class_indexed_and_suit_agnostic() -> None:
+    """Suit-isomorphic hands must grade identically.
+
+    The six combos of 22 differ by up to 1.8bb in the raw per-combo EVs purely
+    from the 25-flop sample.  Publishing that would teach a suit superstition,
+    so the pack aggregates to 169 classes and grading looks up by class.
+    """
+    pack = load_preflop_pack()
+    assert pack["hand_index"] == "class169"
+    for position in ("BTN", "BB"):
+        assert len(pack["roles"][position]["hands"]) == 169
+        # Every hand must carry a precision, or grading has nothing to widen
+        # its band with and silently falls back to false certainty.
+        assert all(
+            entry["se"] > 0 for entry in pack["roles"][position]["hands"].values()
+        )
+
+
+def test_historical_pack_ids_still_parse_but_are_never_minted() -> None:
+    """A hand dealt under the v1 pack must still resolve after the v2 upgrade.
+
+    The postflop solve files are byte-identical between the two packs, so the
+    instance is the same one; only preflop grading changed.  Refusing to parse
+    the old id would strand any hand left incomplete across the deploy.
+    """
+    assert source_hand_id("As5h4h", 0).startswith("potluck:m87a:srp-btn-bb:v2/")
+    assert parse_source_hand_id("potluck:m6:srp-btn-bb:v1/As5h4h#0") == ("As5h4h", 0)
+    with pytest.raises(SolveDataError):
+        parse_source_hand_id("potluck:m6:srp-btn-bb:v0/As5h4h#0")
 
 
 def test_postflop_grade_rederives_all_alternatives_and_relative_ev_loss() -> None:

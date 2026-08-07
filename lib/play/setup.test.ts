@@ -158,10 +158,24 @@ test("setup: the solve assumptions name the pack and state its limits", () => {
   for (const line of assumptions.lines) {
     assert.ok(line.label.length > 0 && line.value.length > 0);
   }
-  // The three things that must never be left implicit wherever the product
+  // The four things that must never be left implicit wherever the product
   // says "GTO".
   const limits = assumptions.limits.join(" ");
-  assert.match(limits, /reference ranges/, "preflop grading must be disclosed");
+  // M8.7A replaced "graded against reference ranges" with a sharper caveat:
+  // preflop IS solved now, but it is the equilibrium of a tree where BB
+  // cannot 3-bet, so the ranges are much wider than a real button range.
+  // Presenting them as "how to open the button" is the failure to avoid.
+  assert.match(limits, /never 3-bets|no 3-bet/i, "the pruned preflop tree must be disclosed");
+  assert.doesNotMatch(
+    limits,
+    /reference ranges/,
+    "preflop is graded from solver EVs now; the old disclosure would be untrue"
+  );
+  assert.match(
+    limits,
+    /sampling error|averaged over/i,
+    "the precision of the preflop EVs must be disclosed"
+  );
   assert.match(limits, /one bet size|One bet size/, "sizing limitation must be disclosed");
   assert.match(limits, /multiway/, "the multiway exclusion must be disclosed");
 });

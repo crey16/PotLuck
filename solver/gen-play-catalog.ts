@@ -1,29 +1,38 @@
 /**
  * Publish the small, versioned metadata catalog consumed by the M8 play API.
  *
- * Preflop action frequencies are generated from lib/poker/ranges.ts rather
- * than copied into Python. The content hash covers the manifest, every solve
- * file, version metadata, and generated preflop frequencies, so changing any
- * grading input requires a new immutable pack id.
+ * The content hash covers the manifest, every solve file, the preflop EV pack
+ * and the version metadata, so changing any grading input requires a new
+ * immutable pack id. `api/play.py` refuses to open a session whose catalog row
+ * disagrees with the server artifact, which is what makes that a real
+ * constraint rather than a convention.
  *
  *   npx tsx solver/gen-play-catalog.ts
+ *
+ * ## What changed at M8.7A
+ *
+ * This used to inline every reference-range frequency from
+ * `lib/poker/ranges.ts` under a `preflop` key, because preflop was graded
+ * against those ranges. It is now graded from solved EVs in `preflop.json`,
+ * so the catalog carries a DESCRIPTOR of that file rather than a copy of its
+ * contents, and the file's bytes are hashed directly.
+ *
+ * Hashing bytes rather than re-serialising numbers is deliberate. The metadata
+ * digest is computed in JavaScript here and again in Python by
+ * `api/play_solver.py`; thousands of floats round-tripped through two
+ * languages' JSON writers is an invitation to a hash mismatch that looks like
+ * a corrupt pack. The preflop EVs are integers for the same reason.
  */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import {
-  cellFrequency,
-  getScenario,
-  handAt,
-  type Action,
-} from "../lib/poker/ranges";
-
-const PACK_ID = "potluck:m6:srp-btn-bb:v1";
+const PACK_ID = "potluck:m87a:srp-btn-bb:v2";
 const SOLUTION_PROFILE_ID = "cash-6max-chip-ev";
-const SOLUTION_VERSION = "m6-v1";
-const GRADING_VERSION = "play-grade:v1";
+const SOLUTION_VERSION = "m87a-v1";
+const GRADING_VERSION = "play-grade:v2";
 const spotDir = resolve("solver/pack/srp-btn-bb");
+
 const manifestPath = resolve(spotDir, "index.json");
 const manifestBytes = readFileSync(manifestPath);
 const manifest = JSON.parse(manifestBytes.toString("utf8")) as {
@@ -31,26 +40,26 @@ const manifest = JSON.parse(manifestBytes.toString("utf8")) as {
   flops: Array<{ flop: string; instances: number }>;
 };
 
-function preflopScenario(scenarioId: "btn" | "bb-btn") {
-  const scenario = getScenario(scenarioId);
-  if (!scenario) throw new Error(`missing range scenario ${scenarioId}`);
+const preflopBytes = readFileSync(resolve(spotDir, "preflop.json"));
+const preflop = JSON.parse(preflopBytes.toString("utf8")) as {
+  kind: string;
+  hand_index: string;
+  ev_unit: string;
+  provenance: { iteration: number; flops_averaged: number };
+  precision: { median_se_mbb: number; p90_se_mbb: number; max_se_mbb: number };
+  model: { excludes: string[] };
+  roles: Record<string, { actions: { code: string }[]; hands: Record<string, unknown> }>;
+};
 
-  const hands: Record<string, Record<Action, number>> = {};
-  for (let row = 0; row < 13; row++) {
-    for (let col = 0; col < 13; col++) {
-      const hand = handAt(row, col);
-      const frequencies = cellFrequency(scenario, hand);
-      hands[hand] = Object.fromEntries(
-        scenario.actions.map(([code]) => [code, frequencies[code]])
-      ) as Record<Action, number>;
-    }
+if (preflop.kind !== "preflop-ev" || preflop.hand_index !== "class169") {
+  throw new Error("preflop.json is not a class-indexed preflop EV pack");
+}
+for (const position of ["BTN", "BB"]) {
+  const role = preflop.roles[position];
+  if (!role) throw new Error(`preflop.json has no role ${position}`);
+  if (Object.keys(role.hands).length !== 169) {
+    throw new Error(`preflop.json role ${position} does not cover all 169 classes`);
   }
-
-  return {
-    scenario_id: scenario.id,
-    actions: scenario.actions.map(([code, label]) => ({ code, label })),
-    hands,
-  };
 }
 
 const canonicalMetadata = {
@@ -61,8 +70,22 @@ const canonicalMetadata = {
   format_version: 1,
   grading_version: GRADING_VERSION,
   preflop: {
-    BTN: preflopScenario("btn"),
-    BB: preflopScenario("bb-btn"),
+    // A descriptor, not the data. The data lives in preflop.json and is
+    // hashed below as bytes.
+    source: "solver",
+    file: "preflop.json",
+    ev_unit: preflop.ev_unit,
+    hand_index: preflop.hand_index,
+    iteration: preflop.provenance.iteration,
+    flops_averaged: preflop.provenance.flops_averaged,
+    median_se_mbb: preflop.precision.median_se_mbb,
+    positions: Object.fromEntries(
+      Object.entries(preflop.roles).map(([position, role]) => [
+        position,
+        role.actions.map((a) => a.code),
+      ])
+    ),
+    excludes: preflop.model.excludes,
   },
 };
 
@@ -71,8 +94,9 @@ contentHash.update(manifestBytes);
 for (const entry of manifest.flops) {
   contentHash.update(readFileSync(resolve(spotDir, `${entry.flop}.json`)));
 }
-// This metadata contains every reference-range frequency used for preflop
-// grades as well as the grading/profile versions that interpret all rows.
+// Appended AFTER the solve files, matching the order `compute_pack_content_hash`
+// feeds them in Python. Hash order is part of the format.
+contentHash.update(preflopBytes);
 contentHash.update(JSON.stringify(canonicalMetadata));
 
 const catalog = {
@@ -85,3 +109,6 @@ writeFileSync(
   `${JSON.stringify(catalog, null, 2)}\n`,
   "utf8"
 );
+
+console.log(`catalog -> ${PACK_ID}`);
+console.log(`  ${catalog.content_hash}`);

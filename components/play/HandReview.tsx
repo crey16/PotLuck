@@ -1,7 +1,9 @@
 import { HandSummary } from "./HandSummary";
 import { buildReviewFromHistory } from "@/lib/play/review";
 import type { PlayHandReview } from "@/lib/play/api";
-import { PLAY_SOLVE_PACK_ID } from "@/lib/play/constants";
+import {
+  HISTORICAL_PLAY_SOLVE_PACK_IDS, PLAY_SOLVE_PACK_ID,
+} from "@/lib/play/constants";
 import {
   displayCards,
   formatEvBb,
@@ -41,7 +43,14 @@ export function HandReview({
   onComplete,
 }: HandReviewProps) {
   const terminal = review.status === "completed";
-  const canValidateCompletion = review.solve_pack_id === PLAY_SOLVE_PACK_ID;
+  // A hand left incomplete across a pack upgrade must still be completable.
+  // The postflop solve files are byte-identical across published packs, so the
+  // server can walk its branch to a terminal exactly as before; only preflop
+  // grading changed. Excluding it here would strand the hand with no way to
+  // finish it but "abandon", which is the status M8 keeps distinct on purpose.
+  const canValidateCompletion =
+    review.solve_pack_id === PLAY_SOLVE_PACK_ID ||
+    (HISTORICAL_PLAY_SOLVE_PACK_IDS as readonly string[]).includes(review.solve_pack_id);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>

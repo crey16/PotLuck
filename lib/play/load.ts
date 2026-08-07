@@ -5,6 +5,7 @@
  * replays the same scripted instance.
  */
 import type { Rng } from "../poker/engine";
+import type { PreflopPack } from "./preflop";
 import type { SolveFile, SolveManifest } from "./types";
 
 export const SPOT = "srp-btn-bb";
@@ -14,6 +15,26 @@ export async function fetchManifest(): Promise<SolveManifest> {
   const res = await fetch(`${BASE}/index.json`);
   if (!res.ok) throw new Error(`manifest: ${res.status}`);
   return (await res.json()) as SolveManifest;
+}
+
+/**
+ * The preflop EV pack (M8.7A) — one small file for the whole spot, not one per
+ * flop, because a preflop node is a strategy over 169 hands rather than
+ * something that varies by board.
+ *
+ * Fetched rather than bundled so that grading reads the same published bytes
+ * the server re-derives from. Importing the JSON into the client bundle would
+ * create a second copy that a pack update could silently leave stale, which is
+ * the same class of bug as two course maps.
+ */
+export async function fetchPreflopPack(): Promise<PreflopPack> {
+  const res = await fetch(`${BASE}/preflop.json`);
+  if (!res.ok) throw new Error(`preflop pack: ${res.status}`);
+  const pack = (await res.json()) as PreflopPack;
+  if (pack.kind !== "preflop-ev" || pack.hand_index !== "class169") {
+    throw new Error("preflop pack format is not recognised");
+  }
+  return pack;
 }
 
 export async function fetchSolve(flop: string): Promise<SolveFile> {
