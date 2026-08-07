@@ -278,27 +278,64 @@ export interface WeightedFlop {
   stratum: string;
 }
 
+/**
+ * Order the picks so that EVERY PREFIX is representative.
+ *
+ * Emitting stratum by stratum is the obvious thing and it is a trap. A solve
+ * run works down the list in order, so a batch stopped at 60% would hold
+ * every two-tone board and no monotone ones — the sample would be more skewed
+ * than the hand-picked set this whole module replaces, right up until the
+ * last board landed. Measured on the first real run: 46 boards solved, all
+ * 46 two-tone/unpaired.
+ *
+ * That matters because these batches take days and get interrupted. It also
+ * matters for reading progress: an interim result from a representative
+ * prefix means something, and one from a single stratum does not.
+ *
+ * Sainte-Lague sequential apportionment gives a well-spread interleave: at
+ * each step take from the stratum with the highest `quota / (2*taken + 1)`,
+ * so a stratum entitled to half the picks gets roughly every other one.
+ */
+function interleave(groups: { key: string; picks: WeightedFlop[] }[]): WeightedFlop[] {
+  const taken = new Map(groups.map((g) => [g.key, 0]));
+  const out: WeightedFlop[] = [];
+  const total = groups.reduce((sum, g) => sum + g.picks.length, 0);
+  for (let step = 0; step < total; step++) {
+    let best: { key: string; quotient: number } | null = null;
+    for (const g of groups) {
+      const t = taken.get(g.key)!;
+      if (t >= g.picks.length) continue;
+      const quotient = g.picks.length / (2 * t + 1);
+      if (!best || quotient > best.quotient) best = { key: g.key, quotient };
+    }
+    if (!best) break;
+    const group = groups.find((g) => g.key === best!.key)!;
+    out.push(group.picks[taken.get(best.key)!]);
+    taken.set(best.key, taken.get(best.key)! + 1);
+  }
+  return out;
+}
+
 export function buildSet(n: number): { flops: WeightedFlop[]; strata: Stratum[] } {
   const { classes, totalFlops } = enumerateClasses();
   const strata = stratify(classes, totalFlops);
   const counts = allocate(strata, n);
 
-  const flops: WeightedFlop[] = [];
-  for (const stratum of strata) {
-    const k = counts.get(stratum.key)!;
-    const picked = systematicSample(stratum, k);
+  const groups = strata.map((stratum) => {
+    const picked = systematicSample(stratum, counts.get(stratum.key)!);
     // Each representative carries an equal share of its stratum's total
     // probability. Summed over every stratum this is exactly 1, which is what
     // makes the weighted average an unbiased estimate over real flops.
-    for (const c of picked) {
-      flops.push({
+    return {
+      key: stratum.key,
+      picks: picked.map((c) => ({
         flop: c.flop,
         weight: stratum.probability / picked.length,
         stratum: stratum.key,
-      });
-    }
-  }
-  return { flops, strata };
+      })),
+    };
+  });
+  return { flops: interleave(groups), strata };
 }
 
 function main(): void {

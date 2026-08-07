@@ -13,9 +13,19 @@
       "stratum": "two-tone/unpaired"
     },
     {
+      "flop": "AcKd3h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
+    },
+    {
       "flop": "AcQd4c",
       "weight": 0.020255754475703325,
       "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "AcJd3h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
     },
     {
       "flop": "AcTd8d",
@@ -23,9 +33,24 @@
       "stratum": "two-tone/unpaired"
     },
     {
+      "flop": "Ac6c6d",
+      "weight": 0.021176470588235293,
+      "stratum": "two-tone/paired"
+    },
+    {
+      "flop": "Ac6d6h",
+      "weight": 0.021176470588235293,
+      "stratum": "rainbow/paired"
+    },
+    {
       "flop": "Ac9d3c",
       "weight": 0.020255754475703325,
       "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Ac8d5h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
     },
     {
       "flop": "Ac7c2d",
@@ -33,9 +58,19 @@
       "stratum": "two-tone/unpaired"
     },
     {
+      "flop": "KcQdJh",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
+    },
+    {
       "flop": "KcQd9c",
       "weight": 0.020255754475703325,
       "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "KcQc6c",
+      "weight": 0.02588235294117647,
+      "stratum": "monotone/unpaired"
     },
     {
       "flop": "KcJc6d",
@@ -43,9 +78,19 @@
       "stratum": "two-tone/unpaired"
     },
     {
+      "flop": "KcTd9h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
+    },
+    {
       "flop": "Kc9d8d",
       "weight": 0.020255754475703325,
       "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Kc8d3h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
     },
     {
       "flop": "Kc8c2d",
@@ -53,9 +98,24 @@
       "stratum": "two-tone/unpaired"
     },
     {
+      "flop": "Qc9c9d",
+      "weight": 0.021176470588235293,
+      "stratum": "two-tone/paired"
+    },
+    {
+      "flop": "Qc9d9h",
+      "weight": 0.021176470588235293,
+      "stratum": "rainbow/paired"
+    },
+    {
       "flop": "Kc4d3d",
       "weight": 0.020255754475703325,
       "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "QcJd8h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
     },
     {
       "flop": "QcTd9c",
@@ -68,99 +128,19 @@
       "stratum": "two-tone/unpaired"
     },
     {
-      "flop": "Qc7d2c",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "JcTc8d",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "Jc9d2d",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "Jc6c5d",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "Tc9d5d",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "Tc7d4c",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "9c8d7d",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "9c6d4c",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "8c7c3d",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "7c6d4c",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "6c4c3d",
-      "weight": 0.020255754475703325,
-      "stratum": "two-tone/unpaired"
-    },
-    {
-      "flop": "AcKd3h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "AcJd3h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "Ac8d5h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "KcQdJh",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "KcTd9h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "Kc8d3h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "QcJd8h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
       "flop": "Qc9d4h",
       "weight": 0.020705882352941178,
       "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "8c8d8h",
+      "weight": 0.002352941176470588,
+      "stratum": "rainbow/trips"
+    },
+    {
+      "flop": "Qc7d2c",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
     },
     {
       "flop": "Qc5d2h",
@@ -168,44 +148,9 @@
       "stratum": "rainbow/unpaired"
     },
     {
-      "flop": "Jc8d7h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "Jc4d2h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "Tc7d2h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "9c7d4h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "8c6d4h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "6c5d4h",
-      "weight": 0.020705882352941178,
-      "stratum": "rainbow/unpaired"
-    },
-    {
-      "flop": "Ac6c6d",
-      "weight": 0.021176470588235293,
-      "stratum": "two-tone/paired"
-    },
-    {
-      "flop": "Qc9c9d",
-      "weight": 0.021176470588235293,
-      "stratum": "two-tone/paired"
+      "flop": "JcTc8d",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
     },
     {
       "flop": "Tc4c4d",
@@ -213,34 +158,34 @@
       "stratum": "two-tone/paired"
     },
     {
-      "flop": "6c6d5c",
-      "weight": 0.021176470588235293,
-      "stratum": "two-tone/paired"
-    },
-    {
-      "flop": "Ac6d6h",
-      "weight": 0.021176470588235293,
-      "stratum": "rainbow/paired"
-    },
-    {
-      "flop": "Qc9d9h",
-      "weight": 0.021176470588235293,
-      "stratum": "rainbow/paired"
-    },
-    {
       "flop": "Tc4d4h",
       "weight": 0.021176470588235293,
       "stratum": "rainbow/paired"
     },
     {
-      "flop": "6c6d5h",
-      "weight": 0.021176470588235293,
-      "stratum": "rainbow/paired"
+      "flop": "Jc9d2d",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
     },
     {
-      "flop": "KcQc6c",
-      "weight": 0.02588235294117647,
-      "stratum": "monotone/unpaired"
+      "flop": "Jc8d7h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "Jc6c5d",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Jc4d2h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "Tc9d5d",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
     },
     {
       "flop": "Tc8c2c",
@@ -248,9 +193,64 @@
       "stratum": "monotone/unpaired"
     },
     {
-      "flop": "8c8d8h",
-      "weight": 0.002352941176470588,
-      "stratum": "rainbow/trips"
+      "flop": "Tc7d4c",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "Tc7d2h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "9c8d7d",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "9c7d4h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "9c6d4c",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "6c6d5c",
+      "weight": 0.021176470588235293,
+      "stratum": "two-tone/paired"
+    },
+    {
+      "flop": "6c6d5h",
+      "weight": 0.021176470588235293,
+      "stratum": "rainbow/paired"
+    },
+    {
+      "flop": "8c7c3d",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "8c6d4h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "7c6d4c",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
+    },
+    {
+      "flop": "6c5d4h",
+      "weight": 0.020705882352941178,
+      "stratum": "rainbow/unpaired"
+    },
+    {
+      "flop": "6c4c3d",
+      "weight": 0.020255754475703325,
+      "stratum": "two-tone/unpaired"
     }
   ]
 }

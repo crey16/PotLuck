@@ -163,3 +163,43 @@ test("classification agrees with the stratum key", () => {
     assert.ok(c.ranks[0] >= c.ranks[1] && c.ranks[1] >= c.ranks[2], "ranks must be sorted high to low");
   }
 });
+
+test("every PREFIX of the emitted order is representative, not just the whole set", () => {
+  // Emitting stratum by stratum is the obvious thing and it is a trap: a solve
+  // run works down the list in order, so an interrupted batch would hold every
+  // two-tone board and no monotone ones. Measured on the first real run — 46
+  // boards solved, all 46 two-tone/unpaired — which made the sample MORE
+  // skewed than the hand-picked set this module replaces.
+  const { classes, totalFlops } = enumerateClasses();
+  const truth = new Map(stratify(classes, totalFlops).map((s) => [s.key, s.probability]));
+  const { flops } = buildSet(100);
+
+  // From a fifth of the way in, no stratum may be off by more than 8 points.
+  for (const prefix of [20, 30, 50, 75, 100]) {
+    const seen = new Map<string, number>();
+    for (const f of flops.slice(0, prefix)) {
+      seen.set(f.stratum, (seen.get(f.stratum) ?? 0) + 1);
+    }
+    for (const [key, want] of truth) {
+      const got = (seen.get(key) ?? 0) / prefix;
+      // rainbow/trips is 0.24% and gets a single representative, so it cannot
+      // be proportional at any prefix — it is exempt by construction.
+      if (key === "rainbow/trips") continue;
+      assert.ok(
+        Math.abs(got - want) < 0.08,
+        `prefix ${prefix}: ${key} is ${(100 * got).toFixed(0)}%, truth ${(100 * want).toFixed(0)}%`
+      );
+    }
+  }
+});
+
+test("the interleave still emits every board exactly once", () => {
+  // A reordering that dropped or duplicated a board would break the weights
+  // silently — they would no longer sum to 1 over distinct boards.
+  for (const n of [12, 25, 49, 100]) {
+    const { flops } = buildSet(n);
+    assert.equal(flops.length, n);
+    assert.equal(new Set(flops.map((f) => f.flop)).size, n);
+    assert.ok(Math.abs(flops.reduce((s, f) => s + f.weight, 0) - 1) < 1e-9);
+  }
+});
