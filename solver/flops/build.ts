@@ -101,6 +101,16 @@ export function canonical(cards: readonly number[]): string {
   return best!;
 }
 
+/** Parse "Ts9s5h" into card ids. */
+export const parseFlop = (s: string): number[] =>
+  [0, 2, 4].map((i) => (RANKS.indexOf(s[i]) << 2) | SUITS.indexOf(s[i + 1]));
+
+/** The stratum a concrete board belongs to, e.g. "two-tone/unpaired". */
+export function stratumOfFlop(board: string): string {
+  const { suitedness, pairing } = classify(parseFlop(board));
+  return `${suitedness}/${pairing}`;
+}
+
 function classify(cards: readonly number[]): { suitedness: Suitedness; pairing: Pairing } {
   const suits = new Set(cards.map((c) => c & 3)).size;
   const ranks = new Set(cards.map((c) => c >> 2)).size;
