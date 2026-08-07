@@ -50,15 +50,17 @@ update public.play_hands
    set completion_kind = 'terminal'
  where status = 'completed';
 
--- A completed hand must say how it completed; an unfinished one must not
--- claim to have. Added after the backfill so it can be enforced rather than
--- merely documented.
-alter table public.play_hands
-  add constraint play_hands_completion_kind_matches_status
-  check (
-    (status = 'completed' and completion_kind is not null)
-    or (status <> 'completed' and completion_kind is null)
-  );
+-- THE CONSTRAINT IS NOT HERE. It lives in 0009, and the split is deliberate.
+--
+-- "A completed hand must carry a completion_kind" is the invariant worth
+-- having, but the code that WRITES completion_kind ships with this milestone.
+-- Enforcing it while the previous release is still serving traffic would
+-- reject every hand a player finished in the gap between migrating and
+-- deploying — a live 500 on the one action that closes a hand.
+--
+-- So this migration is additive only and is safe to apply against the old
+-- code: both columns are nullable or defaulted, and nothing reads them yet.
+-- 0009 adds the constraint and must run AFTER the deploy.
 
 -- Coaching aggregates read "completed hands of this shape" constantly, and
 -- M11 will need to split terminal from stopped in the same query.
