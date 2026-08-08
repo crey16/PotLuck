@@ -13,6 +13,7 @@
 # a batch has already been silently truncated twice in this project, and both
 # times it looked exactly like a batch that had not started.
 cd "$(dirname "$0")"
+source ./proc.sh  # proc_running — NOT pgrep -f; see that file for why
 
 FLOPS=$(wc -l < flops.txt | tr -d ' ')
 SUBGAMES=$(ls subgames/*.json | wc -l | tr -d ' ')
@@ -21,11 +22,10 @@ DONE=$(ls ev-all/*/*.ev.json 2>/dev/null | wc -l | tr -d ' ')
 
 print -r -- "── subgame batch ─────────────────────────────────"
 
-if pgrep -f "run-subgames.sh" > /dev/null; then
-  ELAPSED=$(ps -eo etime,command | grep "[r]un-subgames.sh" | head -1 | awk '{print $1}')
-  print -r -- "  RUNNING, up ${ELAPSED}"
-  CURRENT=$(ps -eo command | grep "[r]oot-ev" | head -1 | awk '{print $2, $3}')
-  [[ -n "$CURRENT" ]] && print -r -- "  solving: ${CURRENT}"
+if proc_running run-subgames.sh; then
+  print -r -- "  RUNNING, up $(proc_elapsed run-subgames.sh)"
+  CURRENT="$(proc_argv root-ev 1) $(proc_argv root-ev 2)"
+  [[ -n "${CURRENT// }" ]] && print -r -- "  solving: ${CURRENT}"
 else
   # Not running is not the same as finished, and the difference matters:
   # re-running is cheap and skips whatever is already on disk.
