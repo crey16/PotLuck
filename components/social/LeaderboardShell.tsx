@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { loadSupabaseClient } from "@/lib/supabase/lazyClient";
 import { supabaseConfigured } from "@/lib/supabase/env";
 import {
   applyProfileUpdate,
@@ -56,9 +56,11 @@ export function LeaderboardShell({
   useEffect(() => {
     if (scope !== "friends" || friendRows !== null || !supabaseConfigured() || !self) return;
     let cancelled = false;
-    fetchFriendsLeaderboard(createClient(), self.id).then((rows) => {
-      if (!cancelled) setFriendRows(sortRows(rows, metric));
-    });
+    loadSupabaseClient()
+      .then((supabase) => fetchFriendsLeaderboard(supabase, self.id))
+      .then((rows) => {
+        if (!cancelled) setFriendRows(sortRows(rows, metric));
+      });
     return () => {
       cancelled = true;
     };
@@ -68,42 +70,61 @@ export function LeaderboardShell({
 
   // The Realtime channel. Resubscribing when metric/scope inputs change is
   // cheap and keeps the handler's closure current without render-time refs.
+  //
+  // The SDK is fetched here rather than imported at module scope (M8.8C). The
+  // board's rows are server-rendered, so nothing on screen is waiting on
+  // Realtime, and keeping @supabase/supabase-js out of the initial JS lets the
+  // ranks paint and hydrate without it. Only the liveness arrives late.
   useEffect(() => {
     if (!supabaseConfigured()) return;
-    const supabase = createClient();
-    const channel = supabase
-      .channel("leaderboard")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles" },
-        (payload) => {
-          const next = payload.new as Record<string, unknown>;
-          if (typeof next.id !== "string") return;
-          const update: ProfileUpdate = {
-            id: next.id,
-            xp: (next.xp as number) ?? 0,
-            streak_count: (next.streak_count as number) ?? 0,
-            level: (next.level as number) ?? 1,
-            is_public: (next.is_public as boolean) ?? true,
-            username: next.username as string | undefined,
-            display_name: (next.display_name as string | null) ?? null,
-          };
-          setGlobalRows((rows) => {
-            const result = applyProfileUpdate(rows, update, metric);
-            if (result.movedId) flashMover(result.movedId);
-            return result.rows;
-          });
-          setFriendRows((rows) => {
-            if (rows === null) return rows;
-            const result = applyProfileUpdate(rows, update, metric, scopeIds);
-            if (result.movedId) flashMover(result.movedId);
-            return result.rows;
-          });
-        }
-      )
-      .subscribe();
+    let cancelled = false;
+    // Set once the subscription exists. The effect can be torn down while the
+    // chunk is still in flight, so cleanup has to handle both orders.
+    let unsubscribe: (() => void) | null = null;
+
+    function onProfileUpdate(payload: { new: unknown }) {
+      const next = payload.new as Record<string, unknown>;
+      if (typeof next.id !== "string") return;
+      const update: ProfileUpdate = {
+        id: next.id,
+        xp: (next.xp as number) ?? 0,
+        streak_count: (next.streak_count as number) ?? 0,
+        level: (next.level as number) ?? 1,
+        is_public: (next.is_public as boolean) ?? true,
+        username: next.username as string | undefined,
+        display_name: (next.display_name as string | null) ?? null,
+      };
+      setGlobalRows((rows) => {
+        const result = applyProfileUpdate(rows, update, metric);
+        if (result.movedId) flashMover(result.movedId);
+        return result.rows;
+      });
+      setFriendRows((rows) => {
+        if (rows === null) return rows;
+        const result = applyProfileUpdate(rows, update, metric, scopeIds);
+        if (result.movedId) flashMover(result.movedId);
+        return result.rows;
+      });
+    }
+
+    void loadSupabaseClient().then((supabase) => {
+      if (cancelled) return;
+      const channel = supabase
+        .channel("leaderboard")
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "profiles" },
+          onProfileUpdate
+        )
+        .subscribe();
+      unsubscribe = () => {
+        supabase.removeChannel(channel);
+      };
+    });
+
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      unsubscribe?.();
     };
   }, [metric, scopeIds]);
 

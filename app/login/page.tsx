@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { loadSupabaseClient } from "@/lib/supabase/lazyClient";
 import { supabaseConfigured } from "@/lib/supabase/env";
 import { postAuthDestination, safeNext } from "@/lib/supabase/authRules";
 import { PasswordField } from "@/components/ui/PasswordField";
@@ -45,15 +45,23 @@ function LoginForm() {
 
   // If a session already exists (e.g. established in another tab, or this
   // page was reached before middleware caught up), bounce to the app.
+  //
+  // This also warms the SDK chunk for the handlers below (M8.8C). The form is
+  // markup and state; only submitting it needs @supabase/supabase-js, so it is
+  // fetched here in parallel with paint rather than bundled into the page. The
+  // already-signed-in check has always run on mount, so this adds no request —
+  // it moves 64 kB gzipped off the critical path and finishes long before
+  // anyone has typed a password.
   useEffect(() => {
     if (!configured) return;
     let cancelled = false;
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled && data.user) {
-        router.replace(next);
-      }
-    });
+    loadSupabaseClient()
+      .then((supabase) => supabase.auth.getUser())
+      .then(({ data }) => {
+        if (!cancelled && data.user) {
+          router.replace(next);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -70,7 +78,7 @@ function LoginForm() {
   async function handleGoogle() {
     if (!configured) return;
     setError(null);
-    const supabase = createClient();
+    const supabase = await loadSupabaseClient();
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -84,7 +92,7 @@ function LoginForm() {
     if (!configured) return;
     setError(null);
     setPending(true);
-    const supabase = createClient();
+    const supabase = await loadSupabaseClient();
 
     if (mode === "forgot") {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {

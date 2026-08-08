@@ -1,6 +1,6 @@
 "use client";
 
-import { createClient } from "../supabase/client";
+import { loadSupabaseClient } from "../supabase/lazyClient";
 import { supabaseConfigured } from "../supabase/env";
 import { PLAY_SOLVE_PACK_ID } from "./constants";
 import type { StoppingPoint } from "./setup";
@@ -256,7 +256,12 @@ async function authRequest<T>(path: string, init: RequestInit = {}): Promise<T> 
   if (!supabaseConfigured()) {
     throw new PlayApiError("Supabase is not configured.");
   }
-  const supabase = createClient();
+  // The SDK chunk is fetched on first authenticated call, not at import
+  // time (M8.8C). This function was already async and is only ever reached
+  // from an effect or an event handler, so nothing above it changes shape —
+  // but a static import here put 64 kB gzipped in front of hydration on
+  // every route that renders a client component from this feature.
+  const supabase = await loadSupabaseClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();

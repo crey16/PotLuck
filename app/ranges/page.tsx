@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import dynamic from "next/dynamic";
 import { RangeGrid } from "@/components/ui/RangeGrid";
-import { PushfoldChart } from "@/components/ranges/PushfoldChart";
 import { cellFrequency, getScenario, SCENARIOS } from "@/lib/poker/ranges";
 
 const DEALT_HAND = "T9s";
@@ -17,9 +17,60 @@ const DEALT_HAND = "T9s";
  */
 const PUSHFOLD_TAB = "__pushfold__";
 
+/**
+ * The push/fold chart is fetched when its tab is opened, not with the page —
+ * M8.8C.
+ *
+ * It carries `lib/pushfold/table.json`, the solved 5–20bb equilibrium: 157 kB
+ * raw, 85 kB gzipped, and by a wide margin the largest single thing this app
+ * ships as JavaScript. The page opens on a 100bb reference scenario, so a
+ * static import spent that on every visitor to `/ranges` — including the
+ * majority who never touch the short-stack tab — before anything painted.
+ *
+ * Deferring it does not make the data smaller; it makes it conditional. The
+ * bytes still arrive for a player who opens the tab, which is why the tab
+ * warms the import on hover and focus: by the time the click lands the chunk
+ * is usually already there, and the fallback below is what a cold or slow
+ * connection sees rather than the common case.
+ *
+ * `/drill` deliberately keeps its static import — see the note on the mixed
+ * drill in `lib/drill/registry.ts`. There the first question is built during
+ * the server render and can be a push/fold question, so the data is genuinely
+ * needed for first paint and deferring it would trade bytes for a spinner on
+ * the thing the player came for.
+ */
+const PushfoldChart = dynamic(
+  () => import("@/components/ranges/PushfoldChart").then((m) => m.PushfoldChart),
+  {
+    // Never server-rendered in practice: the page opens on a reference
+    // scenario, so this only ever mounts from a client-side tab change.
+    ssr: false,
+    // Roughly the height of the grid it replaces, so opening the tab does not
+    // jump the page and then jump it back.
+    loading: () => (
+      <div
+        className="blueprint"
+        style={{ minHeight: 520, display: "grid", placeItems: "center" }}
+      >
+        <span className="mono-label">Loading the solved 5–20bb ranges…</span>
+      </div>
+    ),
+  }
+);
+
+const preloadPushfoldChart = () => {
+  void import("@/components/ranges/PushfoldChart");
+};
+
 export default function RangesPage() {
   const [scenarioId, setScenarioId] = useState("bb-btn");
   const showingPushfold = scenarioId === PUSHFOLD_TAB;
+  // Start the fetch on the click too, not only on hover: a keyboard or touch
+  // user may never produce a hover, and `import()` de-duplicates anyway.
+  const showPushfold = useCallback(() => {
+    preloadPushfoldChart();
+    setScenarioId(PUSHFOLD_TAB);
+  }, []);
   const scenario = getScenario(scenarioId) ?? SCENARIOS[0];
   const dealt = cellFrequency(scenario, DEALT_HAND);
   const actionLabel = scenario.actions.find(([key]) => key === "r")?.[1] ?? "Raise";
@@ -94,7 +145,9 @@ export default function RangesPage() {
         ))}
         <button
           className={`scen${showingPushfold ? " on" : ""}`}
-          onClick={() => setScenarioId(PUSHFOLD_TAB)}
+          onClick={showPushfold}
+          onPointerEnter={preloadPushfoldChart}
+          onFocus={preloadPushfoldChart}
         >
           Short stack · 5–20bb
         </button>

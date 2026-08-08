@@ -1,4 +1,4 @@
-import { createClient } from "../supabase/client";
+import { loadSupabaseClient } from "../supabase/lazyClient";
 import { supabaseConfigured } from "../supabase/env";
 import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
 import { emptyWindows, WINDOW_SIZE, type DrillWindows, type Levels } from "./difficulty";
@@ -60,7 +60,11 @@ export function drillStateFromResponse(json: unknown): DrillState {
 export async function fetchDrillState(): Promise<DrillState | null> {
   if (!supabaseConfigured()) return null;
   try {
-    const supabase = createClient();
+    // Fetched here rather than imported at module scope (M8.8C). This is
+    // explicitly off the critical path already — it seeds difficulty from
+    // history and returns null on any failure — so it has no business putting
+    // the Supabase SDK in front of the drill's first paint.
+    const supabase = await loadSupabaseClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;
     const res = await fetch("/api/progress/drill-state", {

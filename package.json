@@ -14,7 +14,8 @@
     "dev:all:bare": "concurrently \"npm:dev\" \"npm:api:bare\"",
     "sync:solves": "node scripts/sync-solve-pack.mjs",
     "prebuild": "node scripts/sync-solve-pack.mjs",
-    "predev": "node scripts/sync-solve-pack.mjs"
+    "predev": "node scripts/sync-solve-pack.mjs",
+    "measure:bundle": "node scripts/measure-bundle.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

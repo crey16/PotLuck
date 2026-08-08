@@ -1,5 +1,5 @@
 import { responseTypeFor, type AttemptKind, type OptionValue, type ResponseType } from "@/lib/drill/contract";
-import { createClient } from "@/lib/supabase/client";
+import { loadSupabaseClient } from "@/lib/supabase/lazyClient";
 import { supabaseConfigured } from "@/lib/supabase/env";
 
 /** One answered question, from DrillShell. */
@@ -72,7 +72,11 @@ export async function recordAttempt(result: DrillResult): Promise<ProfileUpdate 
   if (!supabaseConfigured()) return null;
 
   try {
-    const supabase = createClient();
+    // Fetched here rather than imported at module scope: this runs after an
+    // answer, so the SDK does not belong in /drill's initial JS. The function
+    // was already async and already swallows failure, so nothing above it
+    // changes shape.
+    const supabase = await loadSupabaseClient();
     const {
       data: { session },
     } = await supabase.auth.getSession();

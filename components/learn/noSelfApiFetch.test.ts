@@ -60,10 +60,18 @@ function sourceFiles(dir: string): string[] {
  * This keeps the rule sharp rather than weakening it. The helper that was
  * removed imported `lib/supabase/server` — the SERVER client — so it would
  * still be caught by every check below.
+ *
+ * **`lazyClient` is the same signal, and omitting it broke this test.** M8.8C
+ * moved every browser call site from `supabase/client` to
+ * `supabase/lazyClient`, which reaches the identical client through a runtime
+ * `import()` so the 64 kB SDK stays out of first paint.
+ * `lib/drill/recordAttempt.ts` did not become a server module when its import
+ * changed — but this heuristic said it had, and the rule below then failed on
+ * a relative `/api/progress/attempts` fetch that has always been correct.
  */
 const isClientModule = (source: string): boolean =>
   /^\s*(["'])use client\1/.test(source) ||
-  /from\s+["'](?:@\/lib|\.{1,2}[\w./-]*)\/supabase\/client["']/.test(source);
+  /from\s+["'](?:@\/lib|\.{1,2}[\w./-]*)\/supabase\/(?:lazyC|c)lient["']/.test(source);
 
 /**
  * Every `fetch` URL in a module, as written.

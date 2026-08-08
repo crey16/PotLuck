@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { loadSupabaseClient, warmSupabaseClient } from "@/lib/supabase/lazyClient";
 import { supabaseConfigured } from "@/lib/supabase/env";
 import { THEME_COOKIE, type Theme } from "@/lib/theme";
 
@@ -78,14 +78,28 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, [acctOpen]);
 
+  // The Supabase SDK is fetched on demand rather than bundled into the root
+  // layout — see lib/supabase/lazyClient.ts. This header is on every route and
+  // sign-out is the only thing on it that needs the SDK, so a static import
+  // here put 64 kB gzipped in front of hydration product-wide.
   const handleSignOut = useCallback(async () => {
     setAcctOpen(false);
     if (supabaseConfigured()) {
-      await createClient().auth.signOut();
+      await (await loadSupabaseClient()).auth.signOut();
     }
     router.push("/login");
     router.refresh();
   }, [router]);
+
+  // Opening the account menu is the only route to the sign-out button, so it
+  // is the moment the fetch can start without guessing. By the time the
+  // pointer travels to the item the chunk is usually already there.
+  // Read from state rather than from a `setAcctOpen` updater: an updater must
+  // be pure, and React may run it twice.
+  const toggleAccountMenu = useCallback(() => {
+    if (!acctOpen) warmSupabaseClient();
+    setAcctOpen(!acctOpen);
+  }, [acctOpen]);
 
   const isCurrent = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -173,7 +187,7 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
             <div style={{ position: "relative" }} ref={menuRef}>
               <button
                 className="site-account-trigger"
-                onClick={() => setAcctOpen((o) => !o)}
+                onClick={toggleAccountMenu}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
                   border: "1px solid var(--line)", borderRadius: 999, background: "var(--surface)",
