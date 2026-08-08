@@ -1,42 +1,21 @@
-import { LeaderboardShell } from "@/components/social/LeaderboardShell";
+import { Suspense } from "react";
 import {
-  fetchFriendIds,
-  fetchGlobalLeaderboard,
-  fetchProfileById,
-} from "@/lib/social/queries";
-import { createClient, getAuthUserId } from "@/lib/supabase/server";
+  LeaderboardPanel,
+  LeaderboardPanelFallback,
+} from "@/components/social/LeaderboardPanel";
 import { supabaseConfigured } from "@/lib/supabase/env";
 
 export const metadata = { title: "Ranks — PotLuck" };
 
-export default async function LeaderboardPage() {
-  if (!supabaseConfigured()) {
-    return (
-      <main className="page" style={{ paddingTop: "var(--space-8)" }}>
-        <p className="text-dim">Supabase is not configured — no leaderboard without accounts.</p>
-      </main>
-    );
-  }
-
-  const supabase = await createClient();
-  const myId = await getAuthUserId();
-  const [initialGlobal, friendIds, self] = await Promise.all([
-    fetchGlobalLeaderboard(supabase),
-    myId ? fetchFriendIds(supabase, myId) : Promise.resolve([]),
-    myId ? fetchProfileById(supabase, myId) : Promise.resolve(null),
-  ]);
-  const selfIsPublic = self?.is_public ?? true;
-  const selfRow = self
-    ? {
-        id: self.id,
-        username: self.username,
-        display_name: self.display_name,
-        level: self.level,
-        streak_count: self.streak_count,
-        xp: self.xp,
-      }
-    : null;
-
+/**
+ * The heading renders immediately; the board streams in behind it.
+ *
+ * `supabaseConfigured()` is a synchronous env check, so it stays in the page —
+ * it decides whether there is a board to wait for at all, and putting it
+ * behind the boundary would show a loading state that resolves into "no
+ * accounts configured".
+ */
+export default function LeaderboardPage() {
   return (
     <main className="page" style={{ paddingTop: "var(--space-8)" }}>
       <div className="section-head">
@@ -46,12 +25,13 @@ export default async function LeaderboardPage() {
           boards include private friends.
         </span>
       </div>
-      <LeaderboardShell
-        initialGlobal={initialGlobal}
-        friendIds={friendIds}
-        self={selfRow}
-        selfIsPublic={selfIsPublic}
-      />
+      {supabaseConfigured() ? (
+        <Suspense fallback={<LeaderboardPanelFallback />}>
+          <LeaderboardPanel />
+        </Suspense>
+      ) : (
+        <p className="text-dim">Supabase is not configured — no leaderboard without accounts.</p>
+      )}
     </main>
   );
 }

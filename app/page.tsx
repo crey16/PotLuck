@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { fetchDashboardStats } from "@/lib/drill/serverStats";
@@ -12,8 +13,8 @@ import { KIND_LABELS, TAB_ORDER, drillHref } from "@/lib/drill/registry";
 import { mixedLevelFrom } from "@/lib/drill/difficulty";
 import type { DrillKind } from "@/lib/drill/contract";
 import { supabaseConfigured } from "@/lib/supabase/env";
+import { RecommendedNext, RecommendedNextFallback } from "@/components/learn/RecommendedNext";
 import { fetchServerRecommendation } from "@/lib/learn/server";
-import { recommendationHref } from "@/lib/learn/path";
 import { NUDGE_DISMISSED_COOKIE, parseNudgeDismissed } from "@/lib/learn/nudge";
 import { fetchNewPlayerRouting } from "@/lib/placement/server";
 
@@ -116,10 +117,16 @@ export default async function Home() {
   const routing = await fetchNewPlayerRouting();
   if (routing.needsPlacement) redirect("/placement");
 
-  const [stats, learningRecommendation] = await Promise.all([
-    fetchDashboardStats(),
-    fetchServerRecommendation(),
-  ]);
+  // Started here and NOT awaited: the five queries behind the recommendation
+  // run alongside the dashboard's own read, exactly as the old `Promise.all`
+  // ran them, but the page no longer waits for them. `RecommendedNext` awaits
+  // this promise behind a Suspense boundary, so the hero, the skill bars, the
+  // drill grid and the heatmap render without it.
+  //
+  // The placement routing above stays awaited: it can redirect, and a redirect
+  // has to be decided before any of the response is flushed.
+  const recommendation = fetchServerRecommendation();
+  const stats = await fetchDashboardStats();
   const nudgeDismissed = parseNudgeDismissed(
     (await cookies()).get(NUDGE_DISMISSED_COOKIE)?.value
   );
@@ -365,19 +372,9 @@ export default async function Home() {
           <span className="lede">Build the concept first; then use the drills to make it automatic.</span>
         </div>
         <div className="home-learning">
-          <div className="blueprint home-learn-next">
-            <div>
-              <div className="mono-label accent">Recommended next</div>
-              <h3>
-                {learningRecommendation.lesson?.title ??
-                  (learningRecommendation.type === "scenario" ? "Authored practice hand" : "Open the course map")}
-              </h3>
-              <p>{learningRecommendation.reason}</p>
-            </div>
-            <Link href={recommendationHref(learningRecommendation)} className="btn btn-primary blueprint btn-caps">
-              Learn now
-            </Link>
-          </div>
+          <Suspense fallback={<RecommendedNextFallback />}>
+            <RecommendedNext recommendation={recommendation} />
+          </Suspense>
           <Link href="/daily" className="blueprint home-daily">
             <div className="mono-label">Daily lesson</div>
             <strong>One focused decision</strong>
