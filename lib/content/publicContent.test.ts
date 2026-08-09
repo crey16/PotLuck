@@ -106,9 +106,33 @@ test("the personalized read path no longer queries a content table", () => {
     ["modules", "lessons", "scenarios", "table_scenarios", "daily_content"].includes(t)
   );
   assert.deepEqual(contentTables, [], "read shipped content through loadPublicContent(), not directly");
-  // …and what remains really is the per-user half.
-  assert.deepEqual([...new Set(tables)].sort(), ["progress", "skill_stats"]);
   assert.match(server, /loadPublicContent\(\)/);
+
+  // …and what remains really is the per-user half.
+  //
+  // M8.8B moved those queries one file along: `lib/learn/server.ts` used to
+  // issue `progress` and `skill_stats` itself, four and two times over, and
+  // now composes them from the shared request context. So the assertion
+  // follows the code rather than being relaxed — the per-user reads still have
+  // to exist, still have to be exactly these tables, and still have to be
+  // somewhere that has a user in scope.
+  assert.deepEqual(tables, [], "learn/server.ts should compose reads, not issue them");
+  const context = readFileSync(
+    path.join(ROOT, "lib", "supabase", "requestContext.ts"),
+    "utf8"
+  );
+  const contextTables = [...context.matchAll(/\.from\(\s*["']([a-z_]+)["']/g)].map((m) => m[1]);
+  assert.deepEqual(
+    [...new Set(contextTables)].sort(),
+    ["profiles", "progress", "skill_stats"],
+    "the shared context must hold the per-user half and nothing else"
+  );
+  for (const table of contextTables) {
+    assert.ok(
+      !["modules", "lessons", "scenarios", "table_scenarios", "daily_content"].includes(table),
+      `${table} is shipped content and must not be read per-request`
+    );
+  }
 });
 
 /* ------------------------------------------------------------------ */
@@ -256,9 +280,17 @@ test("every reader in lib/learn/server.ts handles that rejection", () => {
   // carry its own `.catch` or sit inside a try/catch.
   const server = readFileSync(path.join(ROOT, "lib", "learn", "server.ts"), "utf8");
   const lines = server.split("\n");
+  //
+  // Matched anywhere on the line, not just at its start: M8.8B collapsed the
+  // three-line `Promise.all([...])` arguments onto one line each, and a guard
+  // that only saw a call in leading position would have silently stopped
+  // checking three of the four readers while still passing.
   const callLines = lines
     .map((line, index) => ({ line, index }))
-    .filter(({ line }) => /^\s*loadPublicContent\(\)/.test(line));
+    // Comment lines are excluded, or this file's own doc comment counts as a
+    // fifth reader and the count assertion below becomes noise.
+    .filter(({ line }) => !/^\s*(\*|\/\/)/.test(line))
+    .filter(({ line }) => /\bloadPublicContent\(\)/.test(line));
   assert.equal(callLines.length, 4, "expected all four learn readers to load shared content");
 
   for (const { line, index } of callLines) {

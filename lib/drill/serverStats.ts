@@ -3,8 +3,13 @@
  * Everything here is read via the user's own Supabase session (RLS scopes the
  * rows), fails soft to empty data, and is never imported from the client.
  */
-import { createClient, getAuthUserId } from "../supabase/server";
+import { getAuthUserId } from "../supabase/server";
 import { supabaseConfigured } from "../supabase/env";
+import {
+  getRequestClient,
+  getSessionProfile,
+  getUserSkillStats,
+} from "../supabase/requestContext";
 import { timeServerRead } from "../observability/serverTiming";
 import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
 import { levelWithPlacementFloor, WINDOW_SIZE, type Levels } from "./difficulty";
@@ -24,6 +29,19 @@ export const SKILL_TAG_LABELS: Record<string, string> = {
   expected_value: "Expected value",
   implied_odds: "Implied odds",
 };
+
+/**
+ * A skill tag needs this many answers before it can be called anyone's weakest.
+ *
+ * One constant, three consumers — the dashboard's "weakest skill" tile, the
+ * server recommendation in `lib/learn/server.ts`, and the scenario difficulty
+ * rule. They used to spell it three times, once as a `.gte()` inside a query,
+ * which is exactly the drift M8.8B's "one recommendation implementation"
+ * bullet is about: Home and Learn disagreeing about what to work on next.
+ * `api/learning.py` holds the same number for its own recommendation route and
+ * `serverStats.test.ts` pins the two together.
+ */
+export const MIN_SKILL_ATTEMPTS = 5;
 
 export interface SkillStat {
   tag: string;
@@ -133,7 +151,7 @@ export function aggregateKinds(
  * Fail-soft: any error yields no floors, which is the cold-start behaviour.
  */
 async function fetchPlacementFloors(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof getRequestClient>>,
   userId: string
 ): Promise<Levels> {
   const { data } = await supabase
@@ -156,7 +174,7 @@ export async function fetchKindStats(): Promise<Record<DrillKind, KindStat>> {
   if (!supabaseConfigured()) return emptyKinds();
   const userId = await getAuthUserId();
   if (!userId) return emptyKinds();
-  const supabase = await createClient();
+  const supabase = await getRequestClient();
   // Timed as one group (M8.8A): the 5,000-row transfer M8.8B exists to remove
   // is inside this boundary, so the number here is the baseline that work will
   // be measured against.
@@ -176,31 +194,34 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   if (!supabaseConfigured()) return EMPTY;
   const userId = await getAuthUserId();
   if (!userId) return EMPTY;
-  const supabase = await createClient();
+  const supabase = await getRequestClient();
 
   const since = new Date();
   since.setDate(since.getDate() - 7 * 12);
   const sinceIso = since.toISOString().slice(0, 10);
 
-  // Added to the existing parallel batch rather than awaited separately: this
-  // page's query fan-out is already an M8.8B concern, and a placement floor is
-  // not worth a serial round trip.
-  // The dashboard's whole read fan-out, timed as one group (M8.8A). This is
-  // the number M8.8B's consolidated read model has to beat, and it is measured
-  // around the `Promise.all` rather than per query on purpose: five parallel
-  // round trips cost the slowest one, and summing them would report a total
-  // this page never waits for.
-  const [profileRes, skillsRes, attemptsRes, activityRes, placementFloors] =
+  // Timed as one group (M8.8A), measured around the `Promise.all` on purpose:
+  // parallel round trips cost the slowest one, and summing them would report a
+  // total this page never waits for.
+  //
+  // **Five reads became three (M8.8B).** `profiles` and `skill_stats` moved to
+  // the shared request context, which is where the duplication was: the root
+  // layout read the SAME profile row on this render, and the streamed
+  // recommendation read the SAME skill_stats rows. Sharing adds no dependency
+  // edge — `cache()` hands every caller the one in-flight promise — so these
+  // still run alongside the three below rather than after them.
+  //
+  // `placement_assessments` is deliberately NOT shared, even though
+  // `fetchNewPlayerRouting` also reads it on this page. The two want different
+  // rows: routing wants the latest assessment of any status, and the floors
+  // want the latest COMPLETED one whose stored versions match today's. Folding
+  // them together to save a round trip would mean deriving one answer from the
+  // other's rows, and the version guard exists precisely so an outdated
+  // placement stops applying rather than being reinterpreted.
+  const [sessionProfile, skillsRes, attemptsRes, activityRes, placementFloors] =
     await timeServerRead("dashboard.stats", () => Promise.all([
-    supabase
-      .from("profiles")
-      .select("username, display_name, xp, level, streak_count, created_at")
-      .eq("id", userId)
-      .single(),
-    supabase
-      .from("skill_stats")
-      .select("skill_tag, total_attempts, correct_attempts")
-      .eq("user_id", userId),
+    getSessionProfile(),
+    getUserSkillStats(),
     supabase
       .from("attempts")
       .select("drill_kind, is_correct")
@@ -217,14 +238,14 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     fetchPlacementFloors(supabase, userId),
   ]));
 
-  const profile = profileRes.data
+  const profile = sessionProfile
     ? {
-        username: profileRes.data.username,
-        displayName: profileRes.data.display_name ?? null,
-        xp: profileRes.data.xp,
-        level: profileRes.data.level,
-        streak: profileRes.data.streak_count,
-        createdAt: profileRes.data.created_at ?? null,
+        username: sessionProfile.username,
+        displayName: sessionProfile.display_name ?? null,
+        xp: sessionProfile.xp,
+        level: sessionProfile.level,
+        streak: sessionProfile.streak_count,
+        createdAt: sessionProfile.created_at ?? null,
       }
     : null;
 

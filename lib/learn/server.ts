@@ -1,5 +1,12 @@
-import { createClient, getAuthUserId } from "../supabase/server";
+import { getAuthUserId } from "../supabase/server";
 import { supabaseConfigured } from "../supabase/env";
+import {
+  completedLessonIds,
+  getUserProgress,
+  getUserSkillStats,
+  progressForLesson,
+} from "../supabase/requestContext";
+import { MIN_SKILL_ATTEMPTS } from "../drill/serverStats";
 import { timeServerRead } from "../observability/serverTiming";
 import {
   lessonById,
@@ -59,7 +66,6 @@ export async function fetchLearningPath(): Promise<LearningPathData> {
   }
   const userId = await getAuthUserId();
   if (!userId) return { ...EMPTY, error: "Sign in to open the learning path." };
-  const supabase = await createClient();
   // Started together: the shared content read and this reader's progress do
   // not depend on each other, so a cache miss costs no more wall clock than
   // the old combined query did.
@@ -71,13 +77,7 @@ export async function fetchLearningPath(): Promise<LearningPathData> {
   let progressResult;
   try {
     [content, progressResult] = await timeServerRead("learn.path", () =>
-      Promise.all([
-        loadPublicContent(),
-        supabase
-          .from("progress")
-          .select("lesson_id, status, completed_at, attempts_count, best_score")
-          .eq("user_id", userId),
-      ])
+      Promise.all([loadPublicContent(), getUserProgress()])
     );
   } catch {
     return { ...EMPTY, error: "The learning path could not be loaded." };
@@ -85,7 +85,7 @@ export async function fetchLearningPath(): Promise<LearningPathData> {
   if (progressResult.error) return { ...EMPTY, error: "The learning path could not be loaded." };
 
   const progress = (progressResult.data ?? []).flatMap((row) => {
-    const parsed = progressFromRow(row);
+    const parsed = progressFromRow({ ...row });
     return parsed ? [parsed] : [];
   });
   return composeLearningPath(content, progress);
@@ -97,31 +97,25 @@ export async function fetchModule(
   if (!supabaseConfigured()) return null;
   const userId = await getAuthUserId();
   if (!userId) return null;
-  const supabase = await createClient();
   // The whole course is already the cached unit, so selecting one module from
   // it costs nothing and avoids a second cache dimension. A per-module entry
   // would multiply the keys by the module count for no gain: the course is
   // read in full by `/learn` and the recommendation on the same visit anyway.
   const [content, progressResult] = await timeServerRead("learn.module", () =>
-    Promise.all([
-      loadPublicContent().catch(() => null),
-      supabase
-        .from("progress")
-        .select("lesson_id, status")
-        .eq("user_id", userId)
-        .eq("status", "completed"),
-    ])
+    Promise.all([loadPublicContent().catch(() => null), getUserProgress()])
   );
   if (!content) return null;
   const learningModule = moduleById(content, moduleId);
   if (!learningModule || progressResult.error) return null;
   const lessons = lessonsForModule(content, moduleId);
-  const completedLessonIds = new Set(
-    (progressResult.data ?? [])
-      .map((row) => row.lesson_id)
-      .filter((id): id is number => typeof id === "number")
-  );
-  return { module: learningModule, lessons, completedLessonIds };
+  // The shared read is unfiltered, so the `status = completed` filter that used
+  // to be in the query is taken here. One row per lesson means the whole set is
+  // a couple of dozen small integers — cheaper than a second round trip.
+  return {
+    module: learningModule,
+    lessons,
+    completedLessonIds: completedLessonIds(progressResult.data),
+  };
 }
 
 export async function fetchLesson(
@@ -131,17 +125,8 @@ export async function fetchLesson(
   if (!supabaseConfigured()) return null;
   const userId = await getAuthUserId();
   if (!userId) return null;
-  const supabase = await createClient();
   const [content, progressResult] = await timeServerRead("learn.lesson", () =>
-    Promise.all([
-      loadPublicContent().catch(() => null),
-      supabase
-        .from("progress")
-        .select("status")
-        .eq("user_id", userId)
-        .eq("lesson_id", lessonId)
-        .maybeSingle(),
-    ])
+    Promise.all([loadPublicContent().catch(() => null), getUserProgress()])
   );
   if (!content) return null;
   const learningModule = moduleById(content, moduleId);
@@ -151,7 +136,11 @@ export async function fetchLesson(
   // wrong heading.
   const lesson = lessonById(content, moduleId, lessonId);
   if (!learningModule || !lesson) return null;
-  return { module: learningModule, lesson, completed: progressResult.data?.status === "completed" };
+  return {
+    module: learningModule,
+    lesson,
+    completed: progressForLesson(progressResult.data, lessonId)?.status === "completed",
+  };
 }
 
 export async function fetchServerRecommendation(): Promise<Recommendation> {
@@ -168,7 +157,6 @@ export async function fetchServerRecommendation(): Promise<Recommendation> {
   if (!supabaseConfigured()) return none;
   const userId = await getAuthUserId();
   if (!userId) return none;
-  const supabase = await createClient();
   // Three content reads became one shared lookup; the two personalized reads
   // stay exactly as they were. This is the function the dashboard streams
   // behind its Suspense boundary, so it is also the one that benefits most
@@ -182,16 +170,8 @@ export async function fetchServerRecommendation(): Promise<Recommendation> {
     () =>
       Promise.all([
         loadPublicContent().catch(() => null),
-        supabase
-          .from("progress")
-          .select("lesson_id, status")
-          .eq("user_id", userId)
-          .eq("status", "completed"),
-        supabase
-          .from("skill_stats")
-          .select("skill_tag, total_attempts, correct_attempts")
-          .eq("user_id", userId)
-          .gte("total_attempts", 5),
+        getUserProgress(),
+        getUserSkillStats(),
       ])
   );
   if (!content || progressResult.error || skillsResult.error) return none;
@@ -206,16 +186,18 @@ export async function fetchServerRecommendation(): Promise<Recommendation> {
         a.order - b.order ||
         a.id - b.id
     );
-  const completed = new Set(
-    (progressResult.data ?? [])
-      .map((row) => row.lesson_id)
-      .filter((id): id is number => typeof id === "number")
-  );
-  const weakest = [...(skillsResult.data ?? [])].sort((a, b) => {
-    const aAccuracy = a.correct_attempts / a.total_attempts;
-    const bAccuracy = b.correct_attempts / b.total_attempts;
-    return aAccuracy - bAccuracy || String(a.skill_tag).localeCompare(String(b.skill_tag));
-  })[0];
+  const completed = completedLessonIds(progressResult.data);
+  // `gte("total_attempts", 5)` was the query's filter and is now taken here —
+  // the same rule the dashboard's "weakest skill" uses, against the same eight
+  // rows, read once. See `docs/04-roadmap.md` on why that rule lives in one
+  // place: Home and Learn must not be able to disagree about what is weakest.
+  const weakest = [...(skillsResult.data ?? [])]
+    .filter((row) => row.total_attempts >= MIN_SKILL_ATTEMPTS)
+    .sort((a, b) => {
+      const aAccuracy = a.correct_attempts / a.total_attempts;
+      const bAccuracy = b.correct_attempts / b.total_attempts;
+      return aAccuracy - bAccuracy || String(a.skill_tag).localeCompare(String(b.skill_tag));
+    })[0];
 
   const lessonRecommendation = (lesson: Lesson, reason: string, skillTag: string | null): Recommendation => ({
     type: "lesson",

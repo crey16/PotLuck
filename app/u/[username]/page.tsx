@@ -11,7 +11,8 @@ import {
   fetchProfileByUsername,
   fetchSkillStats,
 } from "@/lib/social/queries";
-import { createClient, getAuthUserId } from "@/lib/supabase/server";
+import { getAuthUserId } from "@/lib/supabase/server";
+import { getRequestClient } from "@/lib/supabase/requestContext";
 import { supabaseConfigured } from "@/lib/supabase/env";
 
 function isoDaysAgo(days: number): string {
@@ -28,7 +29,7 @@ export default async function ProfilePage({
   const { username } = await params;
   if (!supabaseConfigured()) notFound();
 
-  const supabase = await createClient();
+  const supabase = await getRequestClient();
   const myId = await getAuthUserId();
   // Middleware already gates unauthenticated visits; this is belt-and-braces.
   if (!myId) notFound();

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { fetchDashboardStats } from "@/lib/drill/serverStats";
+import { MIN_SKILL_ATTEMPTS, fetchDashboardStats } from "@/lib/drill/serverStats";
 import {
   ActivityHeatmap,
   SkillRow,
@@ -140,7 +140,9 @@ export default async function Home() {
 
   // Weakest skill: lowest accuracy among tags with ≥5 attempts — the same
   // rule the recommendation engine uses.
-  const ranked = [...stats.skills].filter((s) => s.attempts >= 5).sort((a, b) => a.accuracy - b.accuracy);
+  const ranked = [...stats.skills]
+    .filter((s) => s.attempts >= MIN_SKILL_ATTEMPTS)
+    .sort((a, b) => a.accuracy - b.accuracy);
   const weakest = ranked[0] ?? null;
   const weakestKind = weakest ? TAG_TO_KIND[weakest.tag] : null;
 

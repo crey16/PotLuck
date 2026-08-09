@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { loadSupabaseClient, warmSupabaseClient } from "@/lib/supabase/lazyClient";
 import { supabaseConfigured } from "@/lib/supabase/env";
@@ -37,11 +37,34 @@ const ACCOUNT_NAV = [
   { href: "/leaderboard", label: "Ranks" },
 ] as const;
 
-export interface SiteHeaderProps {
-  username?: string;
+/** What the header renders once the profile row arrives. */
+export interface HeaderIdentity {
+  username: string;
   displayName?: string;
   level?: number;
   streak?: number;
+}
+
+export interface SiteHeaderProps {
+  /**
+   * Known WITHOUT a database read — the layout gets it from the verified JWT.
+   *
+   * This is the whole reason the profile query could finally be deferred.
+   * M8.8C looked at the same idea and correctly rejected it, because back then
+   * "signed in" and "we have the username" were the same fact, so deferring
+   * meant rendering the signed-out header and swapping it. They are now two
+   * facts with two different costs: identity is local JWT verification, and
+   * the display values are a round trip. The header commits to the signed-in
+   * layout immediately and fills in the text when it lands.
+   */
+  signedIn: boolean;
+  /**
+   * The profile row, still in flight. A promise rather than a value so the
+   * layout does not await it — awaiting is what put 78ms p50 / 139ms p95 in
+   * front of the shell on EVERY route, including the ones that read nothing
+   * else (M8.8A §5.4).
+   */
+  identity?: Promise<HeaderIdentity | null>;
 }
 
 function writeThemeCookie(theme: Theme) {
@@ -52,12 +75,137 @@ function writeThemeCookie(theme: Theme) {
   }
 }
 
-export function SiteHeader({ username, displayName, level, streak }: SiteHeaderProps) {
+/**
+ * The identity text, once the row lands. Suspends on `use()` until then.
+ *
+ * Split into its own component because a `use()` in `SiteHeader` itself would
+ * suspend the entire header — the nav, the theme toggle, everything — which is
+ * exactly the blocking this change exists to remove. The boundary has to sit
+ * around the smallest subtree that genuinely needs the data.
+ */
+export function AccountName({ identity }: { identity: Promise<HeaderIdentity | null> }) {
+  const profile = use(identity);
+  if (!profile) return null;
+  return (
+    <>
+      <span
+        style={{
+          width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center",
+          background: "var(--color-accent)", color: "#fff",
+          fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 13,
+          textTransform: "uppercase",
+        }}
+      >
+        {profile.username.slice(0, 1)}
+      </span>
+      <span className="site-account-name">{profile.username}</span>
+    </>
+  );
+}
+
+/**
+ * Same size and shape as `AccountName`, so nothing moves when it swaps in.
+ *
+ * Layout stability is a budget, not a nicety — B-CLS in
+ * `docs/17-m88a-performance-baseline.md` holds this app to CLS ≤ 0.10, and a
+ * placeholder of the wrong width would spend that budget on the one element
+ * present on every route.
+ */
+export function AccountNameFallback() {
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        style={{
+          width: 26, height: 26, borderRadius: 999,
+          background: "color-mix(in srgb, var(--color-text) 12%, transparent)",
+        }}
+      />
+      <span
+        className="site-account-name"
+        aria-hidden="true"
+        style={{
+          width: "7ch", height: "1em", borderRadius: 3,
+          background: "color-mix(in srgb, var(--color-text) 12%, transparent)",
+        }}
+      />
+    </>
+  );
+}
+
+export function AccountMenuDetails({ identity }: { identity: Promise<HeaderIdentity | null> }) {
+  const profile = use(identity);
+  if (!profile) return null;
+  return (
+    <>
+      <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 17, lineHeight: 1.1 }}>
+        {profile.displayName ?? profile.username}
+      </div>
+      <div
+        style={{
+          fontSize: 12, color: "color-mix(in srgb, var(--color-text) 60%, transparent)",
+          marginBottom: "var(--space-3)",
+        }}
+      >
+        @{profile.username}
+        {profile.level !== undefined ? ` · Level ${profile.level}` : ""}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The profile link needs the username, so it waits with the rest of the menu
+ * rather than rendering a broken `/u/undefined`.
+ */
+export function AccountProfileLink({
+  identity,
+  onNavigate,
+}: {
+  identity: Promise<HeaderIdentity | null>;
+  onNavigate: () => void;
+}) {
+  const profile = use(identity);
+  if (!profile) return null;
+  return (
+    <Link className="menu-item" href={`/u/${profile.username}`} onClick={onNavigate}>
+      Profile
+    </Link>
+  );
+}
+
+/** The streak chip. Absent until the row lands, and absent if there is none. */
+export function StreakChip({ identity }: { identity: Promise<HeaderIdentity | null> }) {
+  const profile = use(identity);
+  if (!profile || profile.streak === undefined) return null;
+  return (
+    <div
+      className="site-streak"
+      title="Days played in a row"
+      style={{
+        display: "flex", alignItems: "center", gap: 6,
+        fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: ".06em",
+        color: "var(--color-accent-700)",
+      }}
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="3" y="4" width="18" height="18" />
+        <path d="M8 2v4M16 2v4M3 10h18" />
+      </svg>
+      <span className="site-streak-label">{profile.streak}-DAY STREAK</span>
+      <span className="site-streak-compact" aria-hidden="true">{profile.streak}D</span>
+    </div>
+  );
+}
+
+export function SiteHeader({ signedIn, identity }: SiteHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [acctOpen, setAcctOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const signedIn = username !== undefined;
+  // Present whenever the layout is signed in. Narrowed here so the JSX below
+  // reads as one condition rather than repeating the guard at four sites.
+  const pending = signedIn ? identity : undefined;
 
   const toggleTheme = useCallback(() => {
     const root = document.documentElement;
@@ -150,23 +298,14 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
             paddingLeft: "var(--space-4)", borderLeft: "1px solid var(--color-divider)",
           }}
         >
-          {signedIn && streak !== undefined && (
-            <div
-              className="site-streak"
-              title="Days played in a row"
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: ".06em",
-                color: "var(--color-accent-700)",
-              }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="4" width="18" height="18" />
-                <path d="M8 2v4M16 2v4M3 10h18" />
-              </svg>
-              <span className="site-streak-label">{streak}-DAY STREAK</span>
-              <span className="site-streak-compact" aria-hidden="true">{streak}D</span>
-            </div>
+          {/* No fallback: the chip is absent for a streak of zero anyway, so
+              reserving space for it would be reserving space for something
+              that often never arrives. It sits left of the theme toggle, which
+              is right-aligned, so its arrival moves nothing after it. */}
+          {pending && (
+            <Suspense fallback={null}>
+              <StreakChip identity={pending} />
+            </Suspense>
           )}
 
           {/* aria-label, not title: `title` is only a last-resort accessible
@@ -195,17 +334,9 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
                   fontFamily: "var(--font-body)", fontSize: 13,
                 }}
               >
-                <span
-                  style={{
-                    width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center",
-                    background: "var(--color-accent)", color: "#fff",
-                    fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 13,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {username.slice(0, 1)}
-                </span>
-                <span className="site-account-name">{username}</span>
+                <Suspense fallback={<AccountNameFallback />}>
+                  {pending ? <AccountName identity={pending} /> : <AccountNameFallback />}
+                </Suspense>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M6 9l6 6 6-6" />
                 </svg>
@@ -221,17 +352,11 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
                   }}
                 >
                   <div className="mono-label" style={{ marginBottom: 6 }}>Account</div>
-                  <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 17, lineHeight: 1.1 }}>
-                    {displayName ?? username}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 12, color: "color-mix(in srgb, var(--color-text) 60%, transparent)",
-                      marginBottom: "var(--space-3)",
-                    }}
-                  >
-                    @{username}{level !== undefined ? ` · Level ${level}` : ""}
-                  </div>
+                  {pending && (
+                    <Suspense fallback={null}>
+                      <AccountMenuDetails identity={pending} />
+                    </Suspense>
+                  )}
                   <div
                     style={{
                       display: "flex", flexDirection: "column", gap: 1,
@@ -248,13 +373,14 @@ export function SiteHeader({ username, displayName, level, streak }: SiteHeaderP
                         {item.label}
                       </Link>
                     ))}
-                    <Link
-                      className="menu-item"
-                      href={`/u/${username}`}
-                      onClick={() => setAcctOpen(false)}
-                    >
-                      Profile
-                    </Link>
+                    {pending && (
+                      <Suspense fallback={null}>
+                        <AccountProfileLink
+                          identity={pending}
+                          onNavigate={() => setAcctOpen(false)}
+                        />
+                      </Suspense>
+                    )}
                     <button className="menu-item danger" onClick={handleSignOut}>
                       Sign out
                     </button>

@@ -1,4 +1,5 @@
-import { createClient, getAuthUserId } from "../supabase/server";
+import { getAuthUserId } from "../supabase/server";
+import { getRequestClient, getUserProgress } from "../supabase/requestContext";
 import { supabaseConfigured } from "../supabase/env";
 import { timeServerRead } from "../observability/serverTiming";
 import { MAX_ENTRY_MODULE_INDEX } from "./blueprint";
@@ -81,7 +82,7 @@ export async function fetchNewPlayerRouting(): Promise<NewPlayerRouting> {
   const userId = await getAuthUserId();
   if (!userId) return NONE;
 
-  const supabase = await createClient();
+  const supabase = await getRequestClient();
   // Timed as `placement.routing` (M8.8A): this runs on `/` BEFORE anything is
   // flushed, because it can redirect, so its latency is pure TTFB for every
   // signed-in visit to the dashboard.
@@ -97,12 +98,16 @@ export async function fetchNewPlayerRouting(): Promise<NewPlayerRouting> {
       .limit(1)
       .maybeSingle(),
     supabase.from("attempts").select("id").eq("user_id", userId).limit(1),
-    supabase
-      .from("progress")
-      .select("lesson_id")
-      .eq("user_id", userId)
-      .in("status", STARTED_LEARNING_STATUSES)
-      .limit(1),
+    // The shared progress read, not a `limit(1)` probe of its own (M8.8B).
+    // `/` and `/learn` both needed the full set anyway — for the course map and
+    // the recommendation — so the probe was a second round trip for a subset of
+    // rows already being fetched. The existence check is taken in memory below.
+    //
+    // The `attempts` probe above deliberately stays a `limit(1)`. The dashboard
+    // reads that table too, but it reads up to 5,000 rows, and this decision
+    // gates a REDIRECT — it is awaited before any byte is flushed. Sharing here
+    // would put the biggest query on the page in front of the redirect.
+    getUserProgress(),
   ]));
 
   if (assessmentResult.error || attemptResult.error || progressResult.error) {
@@ -111,7 +116,11 @@ export async function fetchNewPlayerRouting(): Promise<NewPlayerRouting> {
 
   const latest = assessmentResult.data;
   const hasHistory = (attemptResult.data ?? []).length > 0;
-  const hasStartedLearning = (progressResult.data ?? []).length > 0;
+  // Same rule the `.in("status", …)` filter expressed, applied in memory.
+  const startedStatuses = new Set<string>(STARTED_LEARNING_STATUSES);
+  const hasStartedLearning = (progressResult.data ?? []).some(
+    (row) => typeof row.status === "string" && startedStatuses.has(row.status)
+  );
 
   if (!latest) {
     return {

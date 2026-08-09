@@ -1,6 +1,7 @@
 import { LeaderboardShell } from "./LeaderboardShell";
 import { fetchFriendIds, fetchGlobalLeaderboard, fetchProfileById } from "../../lib/social/queries";
-import { createClient, getAuthUserId } from "../../lib/supabase/server";
+import { getAuthUserId } from "../../lib/supabase/server";
+import { getRequestClient } from "../../lib/supabase/requestContext";
 import { timeServerRead } from "../../lib/observability/serverTiming";
 
 /**
@@ -15,7 +16,7 @@ import { timeServerRead } from "../../lib/observability/serverTiming";
  * reads. Only the point at which they block moved.
  */
 export async function LeaderboardPanel() {
-  const supabase = await createClient();
+  const supabase = await getRequestClient();
   const myId = await getAuthUserId();
   // Timed as `social.leaderboard` (M8.8A). Named after the boundary rather
   // than the route: this is what `/leaderboard` streams, so it is explicitly
