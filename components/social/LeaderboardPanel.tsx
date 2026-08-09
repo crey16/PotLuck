@@ -1,6 +1,7 @@
 import { LeaderboardShell } from "./LeaderboardShell";
 import { fetchFriendIds, fetchGlobalLeaderboard, fetchProfileById } from "../../lib/social/queries";
 import { createClient, getAuthUserId } from "../../lib/supabase/server";
+import { timeServerRead } from "../../lib/observability/serverTiming";
 
 /**
  * The board itself, behind its own Suspense boundary.
@@ -16,11 +17,18 @@ import { createClient, getAuthUserId } from "../../lib/supabase/server";
 export async function LeaderboardPanel() {
   const supabase = await createClient();
   const myId = await getAuthUserId();
-  const [initialGlobal, friendIds, self] = await Promise.all([
-    fetchGlobalLeaderboard(supabase),
-    myId ? fetchFriendIds(supabase, myId) : Promise.resolve([]),
-    myId ? fetchProfileById(supabase, myId) : Promise.resolve(null),
-  ]);
+  // Timed as `social.leaderboard` (M8.8A). Named after the boundary rather
+  // than the route: this is what `/leaderboard` streams, so it is explicitly
+  // NOT part of that route's TTFB, and the report keeps the two apart.
+  const [initialGlobal, friendIds, self] = await timeServerRead(
+    "social.leaderboard",
+    () =>
+      Promise.all([
+        fetchGlobalLeaderboard(supabase),
+        myId ? fetchFriendIds(supabase, myId) : Promise.resolve([]),
+        myId ? fetchProfileById(supabase, myId) : Promise.resolve(null),
+      ])
+  );
   const selfRow = self
     ? {
         id: self.id,

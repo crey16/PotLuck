@@ -1,5 +1,6 @@
 import { createClient, getAuthUserId } from "../supabase/server";
 import { supabaseConfigured } from "../supabase/env";
+import { timeServerRead } from "../observability/serverTiming";
 import {
   lessonById,
   lessonsForModule,
@@ -69,13 +70,15 @@ export async function fetchLearningPath(): Promise<LearningPathData> {
   let content;
   let progressResult;
   try {
-    [content, progressResult] = await Promise.all([
-      loadPublicContent(),
-      supabase
-        .from("progress")
-        .select("lesson_id, status, completed_at, attempts_count, best_score")
-        .eq("user_id", userId),
-    ]);
+    [content, progressResult] = await timeServerRead("learn.path", () =>
+      Promise.all([
+        loadPublicContent(),
+        supabase
+          .from("progress")
+          .select("lesson_id, status, completed_at, attempts_count, best_score")
+          .eq("user_id", userId),
+      ])
+    );
   } catch {
     return { ...EMPTY, error: "The learning path could not be loaded." };
   }
@@ -99,14 +102,16 @@ export async function fetchModule(
   // it costs nothing and avoids a second cache dimension. A per-module entry
   // would multiply the keys by the module count for no gain: the course is
   // read in full by `/learn` and the recommendation on the same visit anyway.
-  const [content, progressResult] = await Promise.all([
-    loadPublicContent().catch(() => null),
-    supabase
-      .from("progress")
-      .select("lesson_id, status")
-      .eq("user_id", userId)
-      .eq("status", "completed"),
-  ]);
+  const [content, progressResult] = await timeServerRead("learn.module", () =>
+    Promise.all([
+      loadPublicContent().catch(() => null),
+      supabase
+        .from("progress")
+        .select("lesson_id, status")
+        .eq("user_id", userId)
+        .eq("status", "completed"),
+    ])
+  );
   if (!content) return null;
   const learningModule = moduleById(content, moduleId);
   if (!learningModule || progressResult.error) return null;
@@ -127,15 +132,17 @@ export async function fetchLesson(
   const userId = await getAuthUserId();
   if (!userId) return null;
   const supabase = await createClient();
-  const [content, progressResult] = await Promise.all([
-    loadPublicContent().catch(() => null),
-    supabase
-      .from("progress")
-      .select("status")
-      .eq("user_id", userId)
-      .eq("lesson_id", lessonId)
-      .maybeSingle(),
-  ]);
+  const [content, progressResult] = await timeServerRead("learn.lesson", () =>
+    Promise.all([
+      loadPublicContent().catch(() => null),
+      supabase
+        .from("progress")
+        .select("status")
+        .eq("user_id", userId)
+        .eq("lesson_id", lessonId)
+        .maybeSingle(),
+    ])
+  );
   if (!content) return null;
   const learningModule = moduleById(content, moduleId);
   // `lessonById` checks the module too, so a lesson id from another module is
@@ -166,19 +173,27 @@ export async function fetchServerRecommendation(): Promise<Recommendation> {
   // stay exactly as they were. This is the function the dashboard streams
   // behind its Suspense boundary, so it is also the one that benefits most
   // from a hit.
-  const [content, progressResult, skillsResult] = await Promise.all([
-    loadPublicContent().catch(() => null),
-    supabase
-      .from("progress")
-      .select("lesson_id, status")
-      .eq("user_id", userId)
-      .eq("status", "completed"),
-    supabase
-      .from("skill_stats")
-      .select("skill_tag, total_attempts, correct_attempts")
-      .eq("user_id", userId)
-      .gte("total_attempts", 5),
-  ]);
+  const [content, progressResult, skillsResult] = await timeServerRead(
+    // The one read the dashboard streams behind a Suspense boundary (M8.8C).
+    // Timed separately because it is explicitly NOT part of `/`'s TTFB — a
+    // report that added it to `dashboard.stats` would be describing a wait
+    // nobody has.
+    "learn.recommendation",
+    () =>
+      Promise.all([
+        loadPublicContent().catch(() => null),
+        supabase
+          .from("progress")
+          .select("lesson_id, status")
+          .eq("user_id", userId)
+          .eq("status", "completed"),
+        supabase
+          .from("skill_stats")
+          .select("skill_tag, total_attempts, correct_attempts")
+          .eq("user_id", userId)
+          .gte("total_attempts", 5),
+      ])
+  );
   if (!content || progressResult.error || skillsResult.error) return none;
   const scenarios = content.scenarios;
   const moduleOrder = new Map<number, number>(

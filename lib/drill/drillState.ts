@@ -1,5 +1,6 @@
 import { loadSupabaseClient } from "../supabase/lazyClient";
 import { supabaseConfigured } from "../supabase/env";
+import { traceHeaders } from "../observability/clientTrace";
 import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
 import { emptyWindows, WINDOW_SIZE, type DrillWindows, type Levels } from "./difficulty";
 
@@ -68,7 +69,11 @@ export async function fetchDrillState(): Promise<DrillState | null> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;
     const res = await fetch("/api/progress/drill-state", {
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      // Trace header joins this to the page load that issued it (M8.8A).
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        ...traceHeaders(),
+      },
     });
     if (!res.ok) {
       console.warn(`fetchDrillState: responded ${res.status}`);

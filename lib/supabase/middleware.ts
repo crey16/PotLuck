@@ -14,9 +14,28 @@ import { shouldRedirectToLogin, LOGIN_PATH } from "./authRules";
  * 2. We call `auth.getUser()`, not `getSession()` — `getSession()` reads the
  *    (possibly stale) cookie without validating it; `getUser()` revalidates
  *    against Supabase and is what actually refreshes an expiring token.
+ *
+ * `extraRequestHeaders` (M8.8A) are added to the headers the RENDER sees —
+ * the request id and the route key. They are rebuilt from `request.headers` at
+ * each `NextResponse.next` rather than captured once, because point 1 above
+ * mutates `request.cookies` (and therefore the cookie header) in between; a
+ * snapshot taken at the top would forward the pre-refresh session and
+ * reintroduce the logged-out-on-refresh bug this comment exists to prevent.
  */
-export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+export async function updateSession(
+  request: NextRequest,
+  extraRequestHeaders?: Record<string, string>
+) {
+  const forwardedHeaders = () => {
+    if (!extraRequestHeaders) return request.headers;
+    const headers = new Headers(request.headers);
+    for (const [name, value] of Object.entries(extraRequestHeaders)) {
+      headers.set(name, value);
+    }
+    return headers;
+  };
+
+  let supabaseResponse = NextResponse.next({ request: { headers: forwardedHeaders() } });
 
   if (!supabaseConfigured()) {
     // Missing-env guard: no .env.local yet. Don't crash the whole app —
@@ -35,7 +54,7 @@ export async function updateSession(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({ request: { headers: forwardedHeaders() } });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );

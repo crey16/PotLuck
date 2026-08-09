@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from psycopg.types.json import Json
 from pydantic import BaseModel, Field
 
+from api import observability
 from api.db import get_connection
 from api.deps import current_user_id
 from api.daily import router as daily_router
@@ -34,6 +35,10 @@ from api.scenarios import router as scenarios_router
 from api.skills import DRILL_KINDS, skill_tag_for
 
 app = FastAPI()
+# Installed before the routers so it wraps every one of them (M8.8A). Starlette
+# runs middleware outermost-first, so this is also the layer that sees the true
+# request duration including FastAPI's own routing and validation.
+observability.install(app)
 app.include_router(learning_router)
 app.include_router(scenarios_router)
 app.include_router(daily_router)

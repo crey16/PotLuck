@@ -1,6 +1,7 @@
 import { responseTypeFor, type AttemptKind, type OptionValue, type ResponseType } from "@/lib/drill/contract";
 import { loadSupabaseClient } from "@/lib/supabase/lazyClient";
 import { supabaseConfigured } from "@/lib/supabase/env";
+import { traceHeaders } from "@/lib/observability/clientTrace";
 
 /** One answered question, from DrillShell. */
 export interface DrillResult {
@@ -88,6 +89,8 @@ export async function recordAttempt(result: DrillResult): Promise<ProfileUpdate 
       headers: {
         Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
+        // Joins this write to the page load that issued it (M8.8A).
+        ...traceHeaders(),
       },
       body: JSON.stringify(body),
     });

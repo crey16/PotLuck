@@ -4,6 +4,7 @@
 // browser Supabase session, JSON in/out, `detail` surfaced on failure.
 
 import { loadSupabaseClient } from "../supabase/lazyClient";
+import { traceHeaders } from "../observability/clientTrace";
 import { supabaseConfigured } from "../supabase/env";
 import type {
   FriendProfile,
@@ -37,6 +38,9 @@ async function authRequest<T>(path: string, init: RequestInit = {}): Promise<T> 
     headers: {
       Authorization: `Bearer ${session.access_token}`,
       "Content-Type": "application/json",
+      // Joins this call to the page load that issued it (M8.8A). One header,
+      // no request of its own — the id is already in memory.
+      ...traceHeaders(),
       ...init.headers,
     },
   });

@@ -1,5 +1,6 @@
 import { createClient, getAuthUserId } from "../supabase/server";
 import { supabaseConfigured } from "../supabase/env";
+import { timeServerRead } from "../observability/serverTiming";
 import { MAX_ENTRY_MODULE_INDEX } from "./blueprint";
 import type { PlacementStatus } from "./types";
 
@@ -81,7 +82,12 @@ export async function fetchNewPlayerRouting(): Promise<NewPlayerRouting> {
   if (!userId) return NONE;
 
   const supabase = await createClient();
-  const [assessmentResult, attemptResult, progressResult] = await Promise.all([
+  // Timed as `placement.routing` (M8.8A): this runs on `/` BEFORE anything is
+  // flushed, because it can redirect, so its latency is pure TTFB for every
+  // signed-in visit to the dashboard.
+  const [assessmentResult, attemptResult, progressResult] = await timeServerRead(
+    "placement.routing",
+    () => Promise.all([
     supabase
       .from("placement_assessments")
       .select("id, status, entry_module_index")
@@ -97,7 +103,7 @@ export async function fetchNewPlayerRouting(): Promise<NewPlayerRouting> {
       .eq("user_id", userId)
       .in("status", STARTED_LEARNING_STATUSES)
       .limit(1),
-  ]);
+  ]));
 
   if (assessmentResult.error || attemptResult.error || progressResult.error) {
     return NONE;

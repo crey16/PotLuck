@@ -1,6 +1,7 @@
 "use client";
 
 import { loadSupabaseClient } from "../supabase/lazyClient";
+import { traceHeaders } from "../observability/clientTrace";
 import { supabaseConfigured } from "../supabase/env";
 import { PLAY_SOLVE_PACK_ID } from "./constants";
 import type { StoppingPoint } from "./setup";
@@ -272,6 +273,8 @@ async function authRequest<T>(path: string, init: RequestInit = {}): Promise<T> 
     headers: {
       Authorization: `Bearer ${session.access_token}`,
       "Content-Type": "application/json",
+      // Joins this call to the page load that issued it (M8.8A).
+      ...traceHeaders(),
       ...init.headers,
     },
   });

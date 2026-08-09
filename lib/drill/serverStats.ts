@@ -5,6 +5,7 @@
  */
 import { createClient, getAuthUserId } from "../supabase/server";
 import { supabaseConfigured } from "../supabase/env";
+import { timeServerRead } from "../observability/serverTiming";
 import { DRILL_KINDS, type DrillKind, type DrillLevel } from "./contract";
 import { levelWithPlacementFloor, WINDOW_SIZE, type Levels } from "./difficulty";
 import { placementLevelsFromResponse } from "./drillState";
@@ -156,14 +157,19 @@ export async function fetchKindStats(): Promise<Record<DrillKind, KindStat>> {
   const userId = await getAuthUserId();
   if (!userId) return emptyKinds();
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("attempts")
-    .select("drill_kind, is_correct")
-    .eq("user_id", userId)
-    .not("drill_kind", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(5000);
-  return aggregateKinds(data ?? [], await fetchPlacementFloors(supabase, userId));
+  // Timed as one group (M8.8A): the 5,000-row transfer M8.8B exists to remove
+  // is inside this boundary, so the number here is the baseline that work will
+  // be measured against.
+  return timeServerRead("drill.kindStats", async () => {
+    const { data } = await supabase
+      .from("attempts")
+      .select("drill_kind, is_correct")
+      .eq("user_id", userId)
+      .not("drill_kind", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    return aggregateKinds(data ?? [], await fetchPlacementFloors(supabase, userId));
+  });
 }
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
@@ -179,8 +185,13 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
   // Added to the existing parallel batch rather than awaited separately: this
   // page's query fan-out is already an M8.8B concern, and a placement floor is
   // not worth a serial round trip.
+  // The dashboard's whole read fan-out, timed as one group (M8.8A). This is
+  // the number M8.8B's consolidated read model has to beat, and it is measured
+  // around the `Promise.all` rather than per query on purpose: five parallel
+  // round trips cost the slowest one, and summing them would report a total
+  // this page never waits for.
   const [profileRes, skillsRes, attemptsRes, activityRes, placementFloors] =
-    await Promise.all([
+    await timeServerRead("dashboard.stats", () => Promise.all([
     supabase
       .from("profiles")
       .select("username, display_name, xp, level, streak_count, created_at")
@@ -204,7 +215,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
       .gte("date", sinceIso)
       .order("date", { ascending: true }),
     fetchPlacementFloors(supabase, userId),
-  ]);
+  ]));
 
   const profile = profileRes.data
     ? {
