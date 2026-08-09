@@ -1,37 +1,45 @@
 import { createClient, getAuthUserId } from "../supabase/server";
 import { supabaseConfigured } from "../supabase/env";
-import { lessonFromRow, recommendationDifficulty } from "./content";
+import {
+  lessonById,
+  lessonsForModule,
+  loadPublicContent,
+  moduleById,
+} from "../content/publicContent";
+import { composeLearningPath } from "./compose";
+import { recommendationDifficulty } from "./content";
 import type {
   LearningModule,
   LearningPathData,
   Lesson,
   LessonProgress,
-  ModuleWithProgress,
   Recommendation,
 } from "./types";
+
+/**
+ * ## Where the content/progress line falls in this file — M8.8C
+ *
+ * Every function below used to fetch the course and the reader's progress in
+ * one `Promise.all`. The course is the same for everyone and changes when it
+ * ships; the progress is different for everyone and changes when they answer.
+ * Blended, neither half could be cached.
+ *
+ * They are now separate reads, still started together so nothing serializes:
+ * `loadPublicContent()` from `lib/content/publicContent.ts` is shared across
+ * requests and versioned, and the `progress` / `skill_stats` queries here stay
+ * per-request, RLS-scoped and uncached. Composition happens in this file.
+ *
+ * **Nothing derived from a user may cross back into the content layer.** The
+ * cached value is read-only here: `completedLessonIds` and every
+ * `ModuleWithProgress` are built on this side, from a fresh progress read, and
+ * are never handed back for storage.
+ */
 
 const EMPTY: LearningPathData = {
   modules: [],
   completedLessonIds: new Set<number>(),
   error: null,
 };
-
-function moduleFromRow(row: Record<string, unknown>): LearningModule | null {
-  if (
-    typeof row.id !== "number" ||
-    typeof row.title !== "string" ||
-    typeof row.description !== "string" ||
-    typeof row.order_index !== "number"
-  ) {
-    return null;
-  }
-  return {
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    order: row.order_index,
-  };
-}
 
 function progressFromRow(row: Record<string, unknown>): LessonProgress | null {
   if (typeof row.lesson_id !== "number" || typeof row.status !== "string") return null;
@@ -51,64 +59,33 @@ export async function fetchLearningPath(): Promise<LearningPathData> {
   const userId = await getAuthUserId();
   if (!userId) return { ...EMPTY, error: "Sign in to open the learning path." };
   const supabase = await createClient();
-  const [modulesResult, lessonsResult, progressResult] = await Promise.all([
-    supabase
-      .from("modules")
-      .select("id, title, description, order_index")
-      .eq("is_active", true)
-      .order("order_index"),
-    supabase
-      .from("lessons")
-      .select(
-        "id, module_id, lesson_type, title, order_index, content_json, estimated_time_seconds, difficulty, version"
-      )
-      .eq("is_active", true)
-      .order("module_id")
-      .order("order_index"),
-    supabase
-      .from("progress")
-      .select("lesson_id, status, completed_at, attempts_count, best_score")
-      .eq("user_id", userId),
-  ]);
-  const error = modulesResult.error ?? lessonsResult.error ?? progressResult.error;
-  if (error) return { ...EMPTY, error: "The learning path could not be loaded." };
+  // Started together: the shared content read and this reader's progress do
+  // not depend on each other, so a cache miss costs no more wall clock than
+  // the old combined query did.
+  // `loadPublicContent` throws when the course cannot be read at all, which is
+  // how an outage stays distinguishable from an empty seed — see its own note.
+  // Each caller below turns that back into the same failure value it returned
+  // before the content/progress split.
+  let content;
+  let progressResult;
+  try {
+    [content, progressResult] = await Promise.all([
+      loadPublicContent(),
+      supabase
+        .from("progress")
+        .select("lesson_id, status, completed_at, attempts_count, best_score")
+        .eq("user_id", userId),
+    ]);
+  } catch {
+    return { ...EMPTY, error: "The learning path could not be loaded." };
+  }
+  if (progressResult.error) return { ...EMPTY, error: "The learning path could not be loaded." };
 
-  const modules = (modulesResult.data ?? []).flatMap((row) => {
-    const parsed = moduleFromRow(row);
-    return parsed ? [parsed] : [];
-  });
-  const lessons = (lessonsResult.data ?? []).flatMap((row) => {
-    const parsed = lessonFromRow(row);
-    return parsed ? [parsed] : [];
-  });
   const progress = (progressResult.data ?? []).flatMap((row) => {
     const parsed = progressFromRow(row);
     return parsed ? [parsed] : [];
   });
-  // `placed_out` counts as satisfied (M8.5B): the placement assessment showed
-  // the player already knows this material, so the path must not route them
-  // back into it. It is a separate status rather than `completed` because they
-  // did not take the lesson — `fetchLesson` below still reports it as
-  // uncompleted, so the lesson itself opens fresh if they choose to.
-  const completedLessonIds = new Set(
-    progress
-      .filter((row) => row.status === "completed" || row.status === "placed_out")
-      .map((row) => row.lessonId)
-  );
-  const withProgress: ModuleWithProgress[] = modules.map((module) => {
-    const moduleLessons = lessons.filter((lesson) => lesson.moduleId === module.id);
-    const completedCount = moduleLessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
-    return {
-      ...module,
-      lessons: moduleLessons,
-      completedCount,
-      nextLessonId:
-        moduleLessons.find((lesson) => !completedLessonIds.has(lesson.id))?.id ??
-        moduleLessons[0]?.id ??
-        null,
-    };
-  });
-  return { modules: withProgress, completedLessonIds, error: null };
+  return composeLearningPath(content, progress);
 }
 
 export async function fetchModule(
@@ -118,33 +95,22 @@ export async function fetchModule(
   const userId = await getAuthUserId();
   if (!userId) return null;
   const supabase = await createClient();
-  const [moduleResult, lessonsResult, progressResult] = await Promise.all([
-    supabase
-      .from("modules")
-      .select("id, title, description, order_index")
-      .eq("id", moduleId)
-      .eq("is_active", true)
-      .maybeSingle(),
-    supabase
-      .from("lessons")
-      .select(
-        "id, module_id, lesson_type, title, order_index, content_json, estimated_time_seconds, difficulty, version"
-      )
-      .eq("module_id", moduleId)
-      .eq("is_active", true)
-      .order("order_index"),
+  // The whole course is already the cached unit, so selecting one module from
+  // it costs nothing and avoids a second cache dimension. A per-module entry
+  // would multiply the keys by the module count for no gain: the course is
+  // read in full by `/learn` and the recommendation on the same visit anyway.
+  const [content, progressResult] = await Promise.all([
+    loadPublicContent().catch(() => null),
     supabase
       .from("progress")
       .select("lesson_id, status")
       .eq("user_id", userId)
       .eq("status", "completed"),
   ]);
-  const learningModule = moduleResult.data ? moduleFromRow(moduleResult.data) : null;
-  if (!learningModule || moduleResult.error || lessonsResult.error || progressResult.error) return null;
-  const lessons = (lessonsResult.data ?? []).flatMap((row) => {
-    const parsed = lessonFromRow(row);
-    return parsed ? [parsed] : [];
-  });
+  if (!content) return null;
+  const learningModule = moduleById(content, moduleId);
+  if (!learningModule || progressResult.error) return null;
+  const lessons = lessonsForModule(content, moduleId);
   const completedLessonIds = new Set(
     (progressResult.data ?? [])
       .map((row) => row.lesson_id)
@@ -161,22 +127,8 @@ export async function fetchLesson(
   const userId = await getAuthUserId();
   if (!userId) return null;
   const supabase = await createClient();
-  const [moduleResult, lessonResult, progressResult] = await Promise.all([
-    supabase
-      .from("modules")
-      .select("id, title, description, order_index")
-      .eq("id", moduleId)
-      .eq("is_active", true)
-      .maybeSingle(),
-    supabase
-      .from("lessons")
-      .select(
-        "id, module_id, lesson_type, title, order_index, content_json, estimated_time_seconds, difficulty, version"
-      )
-      .eq("id", lessonId)
-      .eq("module_id", moduleId)
-      .eq("is_active", true)
-      .maybeSingle(),
+  const [content, progressResult] = await Promise.all([
+    loadPublicContent().catch(() => null),
     supabase
       .from("progress")
       .select("status")
@@ -184,9 +136,14 @@ export async function fetchLesson(
       .eq("lesson_id", lessonId)
       .maybeSingle(),
   ]);
-  const learningModule = moduleResult.data ? moduleFromRow(moduleResult.data) : null;
-  const lesson = lessonResult.data ? lessonFromRow(lessonResult.data) : null;
-  if (!learningModule || !lesson || moduleResult.error || lessonResult.error) return null;
+  if (!content) return null;
+  const learningModule = moduleById(content, moduleId);
+  // `lessonById` checks the module too, so a lesson id from another module is
+  // still a miss — the old query enforced that with `.eq("module_id", …)` and
+  // dropping it would turn a wrong URL into someone else's lesson under the
+  // wrong heading.
+  const lesson = lessonById(content, moduleId, lessonId);
+  if (!learningModule || !lesson) return null;
   return { module: learningModule, lesson, completed: progressResult.data?.status === "completed" };
 }
 
@@ -205,48 +162,29 @@ export async function fetchServerRecommendation(): Promise<Recommendation> {
   const userId = await getAuthUserId();
   if (!userId) return none;
   const supabase = await createClient();
-  const [modulesResult, lessonsResult, progressResult, skillsResult, scenariosResult] =
-    await Promise.all([
-      supabase.from("modules").select("id, order_index").eq("is_active", true),
-      supabase
-        .from("lessons")
-        .select(
-          "id, module_id, lesson_type, title, order_index, content_json, estimated_time_seconds, difficulty, version"
-        )
-        .eq("is_active", true),
-      supabase
-        .from("progress")
-        .select("lesson_id, status")
-        .eq("user_id", userId)
-        .eq("status", "completed"),
-      supabase
-        .from("skill_stats")
-        .select("skill_tag, total_attempts, correct_attempts")
-        .eq("user_id", userId)
-        .gte("total_attempts", 5),
-      supabase
-        .from("scenarios")
-        .select("id, module_id, skill_tag, difficulty")
-        .eq("is_active", true)
-        .order("id"),
-    ]);
-  if (
-    modulesResult.error ||
-    lessonsResult.error ||
-    progressResult.error ||
-    skillsResult.error ||
-    scenariosResult.error
-  ) {
-    return none;
-  }
+  // Three content reads became one shared lookup; the two personalized reads
+  // stay exactly as they were. This is the function the dashboard streams
+  // behind its Suspense boundary, so it is also the one that benefits most
+  // from a hit.
+  const [content, progressResult, skillsResult] = await Promise.all([
+    loadPublicContent().catch(() => null),
+    supabase
+      .from("progress")
+      .select("lesson_id, status")
+      .eq("user_id", userId)
+      .eq("status", "completed"),
+    supabase
+      .from("skill_stats")
+      .select("skill_tag, total_attempts, correct_attempts")
+      .eq("user_id", userId)
+      .gte("total_attempts", 5),
+  ]);
+  if (!content || progressResult.error || skillsResult.error) return none;
+  const scenarios = content.scenarios;
   const moduleOrder = new Map<number, number>(
-    (modulesResult.data ?? []).map((row) => [row.id as number, row.order_index as number])
+    content.modules.map((entry) => [entry.id, entry.order])
   );
-  const lessons = (lessonsResult.data ?? [])
-    .flatMap((row) => {
-      const lesson = lessonFromRow(row);
-      return lesson ? [lesson] : [];
-    })
+  const lessons = [...content.lessons]
     .sort(
       (a, b) =>
         (moduleOrder.get(a.moduleId) ?? a.moduleId) - (moduleOrder.get(b.moduleId) ?? b.moduleId) ||
@@ -294,16 +232,16 @@ export async function fetchServerRecommendation(): Promise<Recommendation> {
       weakest.correct_attempts as number,
       weakest.total_attempts as number
     );
-    const scenario = (scenariosResult.data ?? []).find(
-      (row) => row.skill_tag === tag && row.difficulty === difficulty
+    const scenario = scenarios.find(
+      (row) => row.skillTag === tag && row.difficulty === difficulty
     );
     if (scenario) {
       return {
         type: "scenario",
         lesson_id: null,
-        module_id: scenario.module_id as number,
+        module_id: scenario.moduleId,
         lesson: null,
-        scenario_id: scenario.id as number,
+        scenario_id: scenario.id,
         reason: `Practice your ${tag.replaceAll("_", " ")}`,
         skill_tag: tag,
         difficulty,
@@ -314,16 +252,16 @@ export async function fetchServerRecommendation(): Promise<Recommendation> {
   if (nextLesson) {
     return lessonRecommendation(nextLesson, "Continue the learning path", weakest?.skill_tag ?? null);
   }
-  const scenario = (scenariosResult.data ?? []).find((row) => row.difficulty === 2) ?? scenariosResult.data?.[0];
+  const scenario = scenarios.find((row) => row.difficulty === 2) ?? scenarios[0];
   if (!scenario) return none;
   return {
     type: "scenario",
     lesson_id: null,
-    module_id: scenario.module_id as number,
+    module_id: scenario.moduleId,
     lesson: null,
-    scenario_id: scenario.id as number,
+    scenario_id: scenario.id,
     reason: "Keep sharpening your decisions",
-    skill_tag: scenario.skill_tag as string,
-    difficulty: scenario.difficulty as number,
+    skill_tag: scenario.skillTag,
+    difficulty: scenario.difficulty,
   };
 }

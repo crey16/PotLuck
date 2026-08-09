@@ -1,6 +1,37 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /**
+   * Solve files are immutable because their PATH is content-addressed — M8.8C.
+   *
+   * `scripts/sync-solve-pack.mjs` publishes the pack to
+   * `/solves/<spot>/<fingerprint>/`, where the fingerprint is the first 16 hex
+   * characters of the catalog's `content_hash` over the manifest, every flop
+   * file, the preflop pack and the metadata. A republished pack therefore
+   * lands on a different URL, and this one can never return different bytes.
+   *
+   * That ordering matters: `immutable` was correctly REJECTED while the files
+   * lived at the mutable `/solves/<spot>/…`, because a browser holding a cached
+   * flop file would have gone on serving stale solver output against a newer
+   * grader for a year. The naming change is what earns the header.
+   *
+   * Only the fingerprinted depth is matched. A request to the old flat path
+   * gets Next's default `public/` headers, so nothing that predates this can
+   * be cached forever by accident.
+   */
+  async headers() {
+    return [
+      {
+        source: "/solves/:spot/:fingerprint([0-9a-f]{16})/:file*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     // Dev: proxy /api/* to the local uvicorn server (npm run api).
     //

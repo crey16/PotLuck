@@ -99,6 +99,13 @@ test("nothing outside lib/supabase reaches for the SDK packages directly", () =>
       path.join("lib", "supabase", "client.ts"),
       path.join("lib", "supabase", "server.ts"),
       path.join("lib", "supabase", "middleware.ts"),
+      // M8.8C's userless client for shipped content. It belongs on this list
+      // for the same reason as the three above: it is one of the wrappers, not
+      // a caller reaching past them. It is server-only and imported solely by
+      // lib/content/publicContent.ts, so it adds nothing to a client bundle —
+      // the route table in `npm run measure:bundle` is what actually proves
+      // that, and it did not move when this landed.
+      path.join("lib", "supabase", "contentClient.ts"),
     ]),
     [],
     "route the browser through lib/supabase/lazyClient.ts and the server through lib/supabase/server.ts"

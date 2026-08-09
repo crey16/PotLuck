@@ -292,9 +292,18 @@ export function measureSolvePack() {
   }
   const spots = [];
   for (const spot of readdirSync(SOLVE_DIR)) {
-    const dir = join(SOLVE_DIR, spot);
-    if (!statSync(dir).isDirectory()) continue;
+    const spotDir = join(SOLVE_DIR, spot);
+    if (!statSync(spotDir).isDirectory()) continue;
+    // M8.8C put the pack behind a content-addressed segment
+    // (`<spot>/<fingerprint>/…`) so the assets can be served immutable. Find
+    // it rather than hard-coding the hash, and still handle the flat layout so
+    // this keeps working against an older build.
+    const fingerprint = readdirSync(spotDir).find(
+      (entry) => /^[0-9a-f]{16}$/.test(entry) && statSync(join(spotDir, entry)).isDirectory()
+    );
+    const dir = fingerprint ? join(spotDir, fingerprint) : spotDir;
     const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
+    if (files.length === 0) continue;
     const sized = files.map((name) => {
       const bytes = readFileSync(join(dir, name));
       return { name, raw: bytes.length, gzip: gzipSync(bytes, { level: 9 }).length };
@@ -306,6 +315,7 @@ export function measureSolvePack() {
     const median = boards.length ? boards[Math.floor(boards.length / 2)] : { raw: 0, gzip: 0 };
     spots.push({
       spot,
+      fingerprint: fingerprint ?? null,
       files: sized.length,
       totalRaw: sized.reduce((a, f) => a + f.raw, 0),
       totalGzip: sized.reduce((a, f) => a + f.gzip, 0),
@@ -369,7 +379,12 @@ function report({ chunks: withChunks }) {
     console.log("Solve pack: public/solves is absent — run `npm run sync:solves`");
   }
   for (const spot of pack.spots) {
-    console.log(`Solve pack ${spot.spot} — static assets, fetched on /play, never bundled`);
+    console.log(
+      `Solve pack ${spot.spot} — static assets, fetched on /play, never bundled` +
+        (spot.fingerprint
+          ? `\n  url               /solves/${spot.spot}/${spot.fingerprint}/ (content-addressed, immutable)`
+          : "\n  url               /solves/" + spot.spot + "/ (NOT content-addressed — not cacheable as immutable)")
+    );
     console.log(`  whole pack        ${kb(spot.totalRaw)} raw / ${kb(spot.totalGzip)} gzip across ${spot.files} files`);
     console.log(`  session preamble  ${kb(spot.manifest.raw + spot.preflop.raw)} raw / ${kb(spot.manifest.gzip + spot.preflop.gzip)} gzip (index.json + preflop.json)`);
     console.log(`  per hand (median) ${kb(spot.medianBoard.raw)} raw / ${kb(spot.medianBoard.gzip)} gzip of ${spot.boardCount} boards`);

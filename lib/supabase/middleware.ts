@@ -58,7 +58,22 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = LOGIN_PATH;
     url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
-    return NextResponse.redirect(url);
+    const redirect = NextResponse.redirect(url);
+    // An auth redirect must never be cacheable — M8.8C.
+    //
+    // `headers()` in next.config.ts matches on PATH, and its rules are applied
+    // to whatever response comes back for that path, including this one. The
+    // solve assets are served `immutable` for a year, so without this line a
+    // signed-out request to a solve URL would hand a shared cache a
+    // year-long "go to /login" for an address that must return JSON. Found by
+    // reading the real response headers, not by reasoning about them: the
+    // redirect carried `max-age=31536000, immutable`.
+    //
+    // Written for every redirect rather than just that path. The response
+    // depends on a cookie, so it is per-user by definition and belongs in no
+    // cache, shared or private, whatever rule a future path picks up.
+    redirect.headers.set("Cache-Control", "no-store");
+    return redirect;
   }
 
   // IMPORTANT: return supabaseResponse as-is — see cookie note above.

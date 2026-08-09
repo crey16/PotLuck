@@ -36,6 +36,7 @@ import {
   type PlayHandSummary,
   type PlaySession,
 } from "@/lib/play/api";
+import { PLAY_SOLVE_PACK_FINGERPRINT } from "@/lib/play/constants";
 import {
   fetchManifest, fetchPreflopPack, fetchSolve, handId, pickHand, pickInstance,
   preflopSignature, PREFLOP_REPEAT_WINDOW, SPOT,
@@ -928,7 +929,8 @@ export function PlayShell({ seed }: PlayShellProps) {
         <div className="blueprint" style={{ padding: "var(--space-6)" }}>
           <p>Could not load the play-mode data: {loadError}</p>
           <p style={{ fontSize: 13 }}>
-            The solve files live under <code>/solves/{SPOT}/</code> — run
+            The solve files live under{" "}
+            <code>/solves/{SPOT}/{PLAY_SOLVE_PACK_FINGERPRINT}/</code> — run
             <code> solver/run-all.sh</code> and <code>solver/publish.sh</code> to build them.
           </p>
         </div>

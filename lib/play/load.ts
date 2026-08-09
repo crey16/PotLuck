@@ -5,11 +5,19 @@
  * replays the same scripted instance.
  */
 import type { Rng } from "../poker/engine";
+import { PLAY_SOLVE_PACK_FINGERPRINT } from "./constants";
 import { handNotation, type PreflopPack } from "./preflop";
 import type { SolveFile, SolveManifest } from "./types";
 
 export const SPOT = "srp-btn-bb";
-const BASE = `/solves/${SPOT}`;
+
+/**
+ * Solve files live under a content-addressed path segment (M8.8C), so the URL
+ * changes whenever the pack's bytes do and the assets can be served
+ * `immutable`. `scripts/sync-solve-pack.mjs` publishes to the matching
+ * directory and fails the build if the two ever disagree.
+ */
+const BASE = `/solves/${SPOT}/${PLAY_SOLVE_PACK_FINGERPRINT}`;
 
 export async function fetchManifest(): Promise<SolveManifest> {
   const res = await fetch(`${BASE}/index.json`);
