@@ -500,7 +500,15 @@ def _preflop_grade(
         "grading_version": PREFLOP_GRADING_VERSION,
         # Absolute, unlike postflop's "relative_to_best": these EVs are the net
         # stack change the solve actually produces.
-        "ev_basis": "absolute_bb",
+        #
+        # The value is "absolute", NOT "absolute_bb". `play_decisions.ev_basis`
+        # carries a three-value vocabulary fixed by migration 0004 —
+        # absolute / relative_to_best / unknown — and it describes what KIND of
+        # EV claim the row makes, not what unit it is in. Every EV column on
+        # the table is already big blinds, so a `_bb` suffix here says nothing
+        # and matches no constraint: it made every preflop decision insert
+        # fail its check and the whole M8.7A grading path 500.
+        "ev_basis": "absolute",
         "chosen_frequency": 1.0 if chosen_ev_bb == best_ev_bb else 0.0,
         "chosen_ev_bb": round(chosen_ev_bb, 4),
         "best_ev_bb": round(best_ev_bb, 4),

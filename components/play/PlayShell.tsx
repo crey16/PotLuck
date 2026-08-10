@@ -1167,13 +1167,13 @@ export function PlayShell({ seed }: PlayShellProps) {
                           const chosenOption = preflop.options.find((o) => o.key === preflopChosen);
                           const loss = chosenOption?.lossBb ?? 0;
                           if (preflop.tooCloseToCall) {
-                            return `Too close to call at this solve&rsquo;s precision (±${bbLossExact(preflop.seBb)})`;
+                            return `Too close to call at this solve\u2019s precision (±${bbLossExact(preflop.seBb)})`;
                           }
                           if (loss === 0) return "Highest EV";
                           if (chosenOption?.indistinguishable) {
                             return `Costs ${bbLossExact(loss)}, inside this hand's ±${bbLossExact(preflop.seBb)} margin`;
                           }
-                          return `Costs ${bbLossExact(loss)} against the solver&rsquo;s best`;
+                          return `Costs ${bbLossExact(loss)} against the solver\u2019s best`;
                         })()}
                         {!preflopOnly && preflopChosen !== preflop.continues &&
                           ` — the hand continues down the solved line (${inst.hero === 1 ? "you open, BB calls" : "you call"})`}

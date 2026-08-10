@@ -160,7 +160,9 @@ def test_preflop_grade_comes_from_solver_evs_not_reference_ranges() -> None:
     assert grade["grading_version"] == PREFLOP_GRADING_VERSION
     # Absolute, unlike postflop's "relative_to_best": the preflop solve really
     # does produce a net stack change, so it is published as one.
-    assert grade["ev_basis"] == "absolute_bb"
+    # "absolute", not "absolute_bb" — this assertion used to encode the bug
+    # rather than the contract, which is why a green suite shipped a 500.
+    assert grade["ev_basis"] == "absolute"
     assert grade["verdict"] == "correct"
     assert grade["ev_loss_bb"] == 0
     assert grade["chosen_ev_bb"] == grade["best_ev_bb"]
@@ -914,3 +916,51 @@ def test_recent_aggregates_exclude_unverified_legacy_grades() -> None:
         assert "d.grading_status in ('validated', 'reference_graded')" in source
         assert "sum(d.ev_loss_bb) filter" in source
     assert "d.verdict = 'blunder'" in hands_source
+
+
+def test_grading_vocabularies_match_the_database_constraints() -> None:
+    """Every enum-ish value the grader writes must satisfy its check constraint.
+
+    This is the test that was missing when M8.7A shipped ``ev_basis =
+    "absolute_bb"``. The column's vocabulary is fixed by migration 0004 at
+    absolute / relative_to_best / unknown, nothing widened it, and so every
+    preflop decision insert failed its check and the endpoint 500'd — in
+    production, on the first hand anyone played.
+
+    The suite was green throughout, because the unit test asserted
+    ``grade["ev_basis"] == "absolute_bb"``: it pinned what the code did rather
+    than what the database would accept. So this reads the ALLOWED values out
+    of the migration and the WRITTEN values out of the grader, and compares
+    them. A new value on either side has to appear on both.
+    """
+    import re
+
+    root = Path(__file__).resolve().parent.parent
+    schema = (root / "supabase" / "migrations" / "0004_m8_play_history.sql").read_text()
+    grader = (root / "api" / "play_solver.py").read_text()
+
+    columns = ["ev_basis", "grading_source", "grading_status", "verdict"]
+
+    checked = 0
+    for column in columns:
+        # Tolerant of line breaks: 0004 wraps the longer vocabularies across
+        # several lines, and a regex that assumed one line silently matched
+        # nothing — which would have made this guard pass by finding no rules.
+        match = re.search(
+            rf"check\s*\(\s*{column}\s+in\s*\(([^)]*)\)", schema, re.S
+        )
+        assert match, f"could not read the {column} vocabulary out of migration 0004"
+        allowed = set(re.findall(r"'([^']+)'", match.group(1)))
+        assert allowed, f"{column} has no allowed values"
+
+        # Every literal the grader assigns to this key.
+        written = set(re.findall(rf'"{column}":\s*"([^"]+)"', grader))
+        for value in written:
+            assert value in allowed, (
+                f'api/play_solver.py writes {column}="{value}", which violates '
+                f"the check constraint from migration 0004 (allowed: "
+                f"{sorted(allowed)}). Every insert with that value will fail."
+            )
+        checked += len(written)
+
+    assert checked >= 4, "expected the grader to write several of these"
