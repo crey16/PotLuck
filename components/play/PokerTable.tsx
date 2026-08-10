@@ -126,7 +126,11 @@ export function PokerTable({
                 ? {
                     onSelect: () => selectPosition.onSelect(spot.pos),
                     isSelected: selectPosition.selected === spot.pos,
-                    ...(choice?.available ? {} : { unavailableReason: choice?.reason }),
+                    // Availability governs the control; the reason is only
+                    // ever a tooltip. Passing them separately is what stops a
+                    // caller that omits the reason from re-enabling the seat.
+                    isUnavailable: !choice?.available,
+                    ...(choice?.reason ? { unavailableReason: choice.reason } : {}),
                   }
                 : {})}
               left={slot.left}

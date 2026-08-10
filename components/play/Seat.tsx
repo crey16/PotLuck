@@ -25,7 +25,18 @@ export interface TableSeatProps {
    */
   onSelect?: () => void;
   isSelected?: boolean;
-  /** Offered, but no solve covers it. Disabled with `title` as the reason. */
+  /**
+   * No solve covers this seat, so it cannot be picked.
+   *
+   * **Separate from `unavailableReason` on purpose.** These used to be one
+   * field, with `disabled={Boolean(unavailableReason)}` — availability
+   * expressed through the presence of a string. The day the setup screen
+   * stopped showing reasons, every unsolved seat silently became clickable.
+   * "Can it be chosen" and "why not" are two facts and only one of them
+   * governs the control.
+   */
+  isUnavailable?: boolean;
+  /** Shown as `title` when a caller wants the seat to explain itself. */
   unavailableReason?: string;
   /** Placement on the oval, as a percentage of the table box. */
   left: number;
@@ -56,6 +67,7 @@ export function TableSeat({
   betChips = 0,
   onSelect,
   isSelected = false,
+  isUnavailable = false,
   unavailableReason,
   left,
   top,
@@ -67,7 +79,7 @@ export function TableSeat({
     isFolded ? "folded" : "",
     onSelect ? "selectable" : "",
     isSelected ? "selected" : "",
-    unavailableReason ? "unavailable" : "",
+    isUnavailable ? "unavailable" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -113,7 +125,7 @@ export function TableSeat({
         className={classes}
         style={placement}
         onClick={onSelect}
-        disabled={Boolean(unavailableReason)}
+        disabled={isUnavailable}
         aria-pressed={isSelected}
         title={unavailableReason}
       >

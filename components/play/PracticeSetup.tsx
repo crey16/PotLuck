@@ -14,17 +14,28 @@
  *    seat map would be two things to keep truthful about position order, the
  *    dealer button, and which seats folded — and they would diverge.
  *
- * 2. **Never offer what cannot be delivered.** Every unsupported option is
- *    visibly disabled with the reason on it, sourced from `lib/play/setup.ts`
- *    and asserted by its tests. Nothing is silently substituted, and nothing
- *    is hidden — a player must be able to tell what the product does not do
- *    yet from what it will never do.
+ * 2. **Never offer what cannot be delivered — and never advertise it either.**
+ *    Unbuilt options are not drawn. An axis whose options have all collapsed
+ *    to one is not drawn at all, because a control with a single choice is a
+ *    label pretending to be a control.
+ *
+ *    This reverses the original M10A treatment, which struck every unbuilt
+ *    option through and printed the reason — including its roadmap milestone
+ *    — underneath. That was written for a reader who wanted to know what was
+ *    coming; it reads to a player as a product that mostly does not work, and
+ *    `(M8.7D)` in a product string is a leak rather than an explanation.
+ *
+ *    **What did not change is the model.** `SUPPORT` in `lib/play/setup.ts`
+ *    still lists every option with its availability, and `validateConfig`
+ *    still refuses anything unavailable whatever route the configuration
+ *    arrived by — a stale URL, a restored session, a future caller. Hiding is
+ *    a rendering decision layered on top of a validator that never learned
+ *    about it, which is the only arrangement in which hiding is safe.
  */
 import { useState } from "react";
 import { PokerTable } from "./PokerTable";
 import {
   ACTION_FAMILY_LABEL,
-  SIX_MAX_POSITIONS,
   STACK_DEPTH_LABEL,
   STACK_DEPTHS,
   STOPPING_POINT_LABEL,
@@ -63,50 +74,32 @@ interface ChoiceRowProps<T extends string | number> {
 function ChoiceRow<T extends string | number>({
   legend, hint, options, value, label, availability, onChange,
 }: ChoiceRowProps<T>) {
+  const offered = options.filter((option) => availability(option).available);
+  // One option is not a choice, and zero would be an empty fieldset with a
+  // heading over it. Either way the axis is a fact about the pack, not a
+  // question for the player — the Solve assumptions panel already states it.
+  if (offered.length < 2) return null;
+
   return (
     <fieldset className="pt-setup-field">
       <legend className="mono-label accent">{legend}</legend>
       {hint && <p className="pt-setup-hint">{hint}</p>}
       <div className="pt-choices">
-        {options.map((option) => {
-          const { available, reason } = availability(option);
+        {offered.map((option) => {
           const selected = option === value;
           return (
             <button
               key={String(option)}
               type="button"
-              className={`pt-choice${selected ? " selected" : ""}${available ? "" : " unavailable"}`}
-              disabled={!available}
+              className={`pt-choice${selected ? " selected" : ""}`}
               aria-pressed={selected}
-              // The reason travels on the control itself. A disabled option
-              // whose explanation lives elsewhere reads as a broken button.
-              title={reason}
               onClick={() => onChange(option)}
             >
               {label(option)}
-              {!available && (
-                <span className="pt-choice-lock" aria-hidden="true">
-                  ✕
-                </span>
-              )}
             </button>
           );
         })}
       </div>
-      {/* Spelled out below the row as well as in the tooltip: a tooltip is
-          invisible on touch and to a keyboard user who has not focused the
-          control. */}
-      {options.some((o) => !availability(o).available) && (
-        <ul className="pt-setup-reasons">
-          {options
-            .filter((o) => !availability(o).available)
-            .map((o) => (
-              <li key={String(o)}>
-                <strong>{label(o)}</strong> — {availability(o).reason}
-              </li>
-            ))}
-        </ul>
-      )}
     </fieldset>
   );
 }
@@ -148,15 +141,19 @@ export function PracticeSetup({ config, onChange, onStart, loading = false }: Pr
 
           {/*
             The positional selector IS the play table. Clicking a seat picks
-            the hero position; seats with no solve behind them are disabled
-            with their reason, and the villain seat updates to show the
-            matchup the pack actually contains.
+            the hero position, and the villain seat updates to show the matchup.
+
+            **The four folded seats stay.** They are not unbuilt options being
+            advertised — they are the hand: everyone folded round to the
+            button, which is the spot being trained. Removing them would draw
+            a two-handed table for a 6-max game and misstate the thing the
+            player is about to practise. What went is the caption that framed
+            them as a missing feature and named a roadmap milestone for it.
           */}
           <fieldset className="pt-setup-field">
             <legend className="mono-label accent">Your position</legend>
             <p className="pt-setup-hint">
-              Pick a seat. Only the BTN-versus-BB matchup is solved so far, so the other four
-              seats are shown but cannot be selected.
+              Pick your seat. The rest of the table has folded round to the button.
             </p>
             <div className="pt-setup-table">
               <PokerTable
@@ -175,19 +172,18 @@ export function PracticeSetup({ config, onChange, onStart, loading = false }: Pr
                 spotLabel="Choose a seat"
                 selectPosition={{
                   selected: config.heroPosition,
-                  availability: (position) => SUPPORT.heroPosition[position as Position],
+                  // Availability still comes from SUPPORT — an unsolved seat
+                  // stays unclickable — but the REASON is dropped, so a folded
+                  // seat does not explain itself as a missing feature on
+                  // hover. It reads as what it is: a player who has folded.
+                  availability: (position) => ({
+                    available: SUPPORT.heroPosition[position as Position].available,
+                  }),
                   onSelect: (position) =>
                     onChange({ ...config, heroPosition: position as Position }),
                 }}
               />
             </div>
-            <ul className="pt-setup-reasons">
-              {SIX_MAX_POSITIONS.filter((p) => !SUPPORT.heroPosition[p].available).length > 0 && (
-                <li>
-                  <strong>UTG, HJ, CO, SB</strong> — {SUPPORT.heroPosition.UTG.reason}
-                </li>
-              )}
-            </ul>
           </fieldset>
 
           <ChoiceRow

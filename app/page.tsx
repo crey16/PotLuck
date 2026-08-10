@@ -446,8 +446,12 @@ export default async function Home() {
               Friends · leaderboards
             </div>
             <p style={{ fontSize: 13, color: "color-mix(in srgb, var(--color-text) 60%, transparent)", margin: 0 }}>
+              {/* No "challenges are next" — the card describes what this
+                  card does. A roadmap item in product copy is an unbuilt
+                  feature being advertised, which is the same thing the
+                  `/play` setup screen stopped doing. */}
               Add friends by username, compare skill profiles, and watch the
-              XP and streak boards move live. Head-to-head challenges are next.
+              XP and streak boards move live.
             </p>
             <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-2)", flexWrap: "wrap" }}>
               <Link href="/friends" className="btn btn-secondary btn-caps">Friends</Link>

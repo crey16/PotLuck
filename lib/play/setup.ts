@@ -9,18 +9,31 @@
  *
  * ## The rule this file exists to enforce
  *
- * An unsupported option is disabled and explained. It is never offered and
- * then quietly substituted, and it is never silently hidden. Those are the
- * two failure modes a trainer must avoid: the first tells the player they
- * practised something they did not, and the second leaves them unable to tell
- * a missing feature from a missing option.
+ * An unsupported option is never offered and then quietly substituted. That
+ * is the failure a trainer must not have: it tells the player they practised
+ * something they did not.
  *
  * So `SUPPORT` below is deliberately written as "every option that exists,
- * each with its availability", not as "the options that work". When M8.7A
- * lands real preflop solver data and M10E widens the postflop catalog, this
- * table is where they become available — and the tests that assert the
- * *reasons* are what stop an option flipping to available before its data
- * exists.
+ * each with its availability", not as "the options that work". It is the
+ * MODEL, and it stays complete: `validateConfig` refuses anything unavailable
+ * however the configuration was arrived at, and this table is where an option
+ * flips on once its data exists.
+ *
+ * ## What the model does NOT decide: whether an option is drawn
+ *
+ * The setup screen used to render every option, striking through the
+ * unavailable ones with the reason underneath. That is now a **presentation**
+ * decision and the answer is no — an unbuilt feature is not advertised to
+ * players. `availableOptions()` and `isChoosable()` below are what the screen
+ * asks; `SUPPORT` is what the validator asks. Keeping them separate is the
+ * point: hiding an option must never be able to make an invalid configuration
+ * startable, and the tests check both halves.
+ *
+ * **Reasons are still required and still have to be true.** They are what
+ * `validateConfig` reports, what a disabled seat carries, and what stops an
+ * option being marked available before its data lands. They are written in
+ * the player's language and carry no internal milestone codes — a roadmap
+ * ticket in a product string is a leak, not an explanation.
  *
  * ## Why so little is available today
  *
@@ -101,23 +114,23 @@ const no = (reason: string): Availability => ({ available: false, reason });
 export const SUPPORT = {
   tableSize: {
     6: YES,
-    2: no("Heads-up is a different game, not 6-max with seats removed — it needs its own solves (M8.7D)."),
-    9: no("Full ring has the largest preflop tree and has not been solved yet (M8.7D)."),
+    2: no("Heads-up is a different game, not 6-max with seats removed — it needs its own solves."),
+    9: no("Full ring has the largest preflop tree and has not been solved yet."),
   } as Record<TableSize, Availability>,
 
   heroPosition: {
     BTN: YES,
     BB: YES,
-    UTG: no("Only the BTN-versus-BB matchup is solved so far (M10E)."),
-    HJ: no("Only the BTN-versus-BB matchup is solved so far (M10E)."),
-    CO: no("Only the BTN-versus-BB matchup is solved so far (M10E)."),
-    SB: no("Only the BTN-versus-BB matchup is solved so far (M10E)."),
+    UTG: no("Only the BTN-versus-BB matchup is solved so far."),
+    HJ: no("Only the BTN-versus-BB matchup is solved so far."),
+    CO: no("Only the BTN-versus-BB matchup is solved so far."),
+    SB: no("Only the BTN-versus-BB matchup is solved so far."),
   } as Record<Position, Availability>,
 
   actionFamily: {
     single_raised_pot: YES,
-    three_bet: no("No 3-bet pot solves are published yet (M10E)."),
-    four_bet: no("No 4-bet pot solves are published yet (M10E)."),
+    three_bet: no("No 3-bet pot solves are published yet."),
+    four_bet: no("No 4-bet pot solves are published yet."),
     // These three are not "not yet" — the M8.7A scope prunes the tree to
     // heads-up, so they are outside the solved game by design and saying
     // "coming soon" would be untrue.
@@ -155,11 +168,41 @@ export const SUPPORT = {
    */
   stackDepth: {
     100: YES,
-    10: no("Solved and trainable now — in the Short stack drill and on /ranges. Playing full hands at this depth needs its own hand source here (M8.7E)."),
-    15: no("Solved and trainable now — in the Short stack drill and on /ranges. Playing full hands at this depth needs its own hand source here (M8.7E)."),
-    20: no("Solved and trainable now — in the Short stack drill and on /ranges. Playing full hands at this depth needs its own hand source here (M8.7E)."),
+    10: no("Solved and trainable now — in the Short stack drill and on /ranges. Playing full hands at this depth needs its own hand source here."),
+    15: no("Solved and trainable now — in the Short stack drill and on /ranges. Playing full hands at this depth needs its own hand source here."),
+    20: no("Solved and trainable now — in the Short stack drill and on /ranges. Playing full hands at this depth needs its own hand source here."),
   } as Record<StackDepth, Availability>,
 } as const;
+
+/**
+ * The options a control should actually draw.
+ *
+ * Presentation only — `validateConfig` still consults `SUPPORT` and still
+ * refuses everything unavailable, so a configuration cannot become startable
+ * by virtue of an option being hidden. `setup.test.ts` asserts exactly that.
+ */
+export function availableOptions<T extends string | number>(
+  options: readonly T[],
+  support: Record<T, Availability>
+): T[] {
+  return options.filter((option) => support[option]?.available);
+}
+
+/**
+ * Whether an axis is worth showing at all.
+ *
+ * A control offering ONE choice is not a choice — it is a label pretending to
+ * be a control, and with today's pack that is what "Table size", "Preflop
+ * action" and "Effective stack" would each become once the unbuilt options
+ * stop being drawn. The single surviving value is not lost: it is stated as
+ * fact in the Solve assumptions panel, which is the honest place for it.
+ */
+export function isChoosable<T extends string | number>(
+  options: readonly T[],
+  support: Record<T, Availability>
+): boolean {
+  return availableOptions(options, support).length > 1;
+}
 
 export const TABLE_SIZE_LABEL: Record<TableSize, string> = {
   2: "Heads-up",
