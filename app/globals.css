@@ -7,13 +7,48 @@
    pill-shaped controls.
    ============================================================ */
 
+/* ------------------------------------------------------------------
+   Light, and why it is built the way it is.
+
+   Dark mode reads well for a reason that light mode cannot borrow: on a
+   near-black page every surface is lighter than its background, so depth
+   comes free from the fill alone, and a black shadow does the rest.
+
+   Light has no such gift. Panels here are white, so a white-ish page gives
+   them nothing to sit on — the previous canvas was #f6f7f9 against a #ffffff
+   panel, three percent apart, and the result was a page with no figure and no
+   ground. The borders were worse: #e7e9ee is four percent below white, which
+   is a line you can measure and cannot see. Everything looked unfinished
+   because nothing was separated from anything.
+
+   So light gets its depth from three things dark does not need:
+
+   1. **A canvas with real weight.** #e9edf3 is about 8% below white — enough
+      that a white panel is unmistakably ON something, still light enough to
+      read as paper rather than grey.
+   2. **Borders you can actually see.** ~16% below white, and carrying a blue
+      cast rather than neutral grey. A neutral hairline on white goes muddy;
+      a cool one reads as drawn.
+   3. **Shadows tinted toward the ink, never black.** Black shadows on white
+      turn to smudge. These use the same slate the rest of the palette is
+      built from, so a lifted panel looks lit rather than dirty.
+
+   The accent also deepens from #5980a6 to #46709b. The dark theme's #94bce3
+   sits on near-black at ~9:1; the old light accent sat on white at ~4.1:1,
+   which is why buttons and meters looked washed out next to their dark
+   counterparts. Deeper is not a different brand — it is the same hue doing
+   the same job against the opposite background.
+   ------------------------------------------------------------------ */
 :root {
-  --color-bg: #f6f7f9;
-  --color-surface: #e9e9ea;
-  --color-text: #1d1f20;
-  --color-accent: #5980a6;
-  --color-accent-2: #728fab;
-  --color-divider: color-mix(in srgb, #1d1f20 16%, transparent);
+  --color-bg: #e9edf3;
+  /* The recessed fill — inputs and inline code. Sits between the canvas and a
+     white panel, so a field reads as sunken into the card it is on without
+     becoming a grey slab. */
+  --color-surface: #edf1f7;
+  --color-text: #16191d;
+  --color-accent: #46709b;
+  --color-accent-2: #6487ad;
+  --color-divider: color-mix(in srgb, #24384f 20%, transparent);
 
   /* Tonal ramps — one shared lightness scale. */
   --color-neutral-100: #f5f5f8;
@@ -49,38 +84,62 @@
   --space-8: 27.2px;
 
   --surface: #ffffff;
-  --line: #e7e9ee;
-  --line-soft: #eef0f4;
+  --line: #ccd6e3;
+  --line-soft: #dfe6f0;
   --grid-ink: #12202c;
   --grid-halo: #ffffff;
-  --wash-a: color-mix(in srgb, var(--color-accent) 26%, transparent);
-  --wash-b: color-mix(in srgb, var(--color-accent) 20%, transparent);
-  --wash-c: color-mix(in srgb, var(--color-accent) 13%, transparent);
+  /* Stronger than dark's, because a blurred wash loses far more contrast
+     against a light canvas than against a dark one — at the old 13–26% the
+     whole effect was invisible in light and the page had no atmosphere at
+     all, while the identical values glow on near-black. */
+  --wash-a: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  --wash-b: color-mix(in srgb, var(--color-accent) 32%, transparent);
+  --wash-c: color-mix(in srgb, var(--color-accent) 22%, transparent);
   --r: 14px;
   --r-sm: 10px;
+
+  /* Secondary text, as tokens rather than a mix repeated at each call site —
+     light needs a higher ink percentage than dark to reach the same apparent
+     weight, because dark text loses contrast on white faster than light text
+     loses it on black. */
+  --ink-label: color-mix(in srgb, var(--color-text) 66%, transparent);
+  --ink-dim: color-mix(in srgb, var(--color-text) 72%, transparent);
 
   --radius-sm: var(--r-sm);
   --radius-md: var(--r-sm);
   --radius-lg: var(--r);
 
-  --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
-  --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
-  --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);
+  /* Slate, never black. `rgba(36,56,79,…)` is the same family as the accent
+     and the borders, so a raised panel looks lit from above rather than
+     grubby — which is what a neutral grey shadow on white always looks like. */
+  --shadow-sm: 0 1px 2px rgba(36, 56, 79, 0.10);
+  --shadow-md: 0 3px 10px rgba(36, 56, 79, 0.13);
+  --shadow-lg: 0 12px 32px rgba(36, 56, 79, 0.18);
   --lift:
-    0 1px 1px rgba(29, 31, 32, 0.04),
-    0 2px 6px -1px rgba(29, 31, 32, 0.08),
-    0 18px 40px -20px rgba(29, 31, 32, 0.28);
+    0 1px 1px rgba(36, 56, 79, 0.05),
+    0 3px 8px -2px rgba(36, 56, 79, 0.10),
+    0 20px 44px -22px rgba(36, 56, 79, 0.34);
   --lift-hi:
-    0 1px 1px rgba(29, 31, 32, 0.05),
-    0 4px 10px -2px rgba(29, 31, 32, 0.1),
-    0 28px 56px -22px rgba(29, 31, 32, 0.34);
+    0 1px 2px rgba(36, 56, 79, 0.07),
+    0 6px 14px -3px rgba(36, 56, 79, 0.14),
+    0 30px 60px -24px rgba(36, 56, 79, 0.42);
 
-  --felt-grid: color-mix(in srgb, var(--color-text) 9%, transparent);
-  --good: #166534; --good-fill: #e3f0e6;
-  --crit: #992014; --crit-fill: #f6e5e3;
-  --warn: #7a5300; --warn-fill: #f6efdf;
-  --card-face: #ffffff; --card-ink: #1d1f20; --card-red: #a3231b;
-  --keycap: color-mix(in srgb, var(--color-text) 8%, transparent);
+  --felt-grid: color-mix(in srgb, #24384f 13%, transparent);
+  /* The table reads as a recessed felt: a tinted fill a few percent below the
+     white panel, a rim with real contrast, and a soft inner shadow so the
+     rail looks like an edge rather than a stroke. */
+  --felt-core: #dde5ef;
+  --felt-edge: #eaeff6;
+  --felt-rim: #b9c6d6;
+  --felt-inset: inset 0 2px 6px rgba(36, 56, 79, 0.10);
+  --folded-fade: 0.55;
+  --on-accent: #ffffff;
+  --track: color-mix(in srgb, #24384f 8%, var(--surface));
+  --good: #14663c; --good-fill: #e4f3ea;
+  --crit: #a02318; --crit-fill: #fceae7;
+  --warn: #7a5300; --warn-fill: #fcf2db;
+  --card-face: #ffffff; --card-ink: #16191d; --card-red: #a3231b;
+  --keycap: color-mix(in srgb, #24384f 11%, transparent);
 
   color-scheme: light;
 }
@@ -106,6 +165,11 @@
   --warn: #d9b466; --warn-fill: #2e2718;
   --card-face: #e7e7ea; --card-ink: #1d1f20; --card-red: #a3231b;
   --keycap: color-mix(in srgb, #eceef0 14%, transparent);
+  /* Lower percentages than light's on purpose: light-on-dark holds its
+     apparent weight much further down the scale, and 66% here would read as
+     nearly full-strength body text. */
+  --ink-label: color-mix(in srgb, var(--color-text) 55%, transparent);
+  --ink-dim: color-mix(in srgb, var(--color-text) 60%, transparent);
   --surface: #1e2126;
   --line: #2e3238;
   --line-soft: #272b31;
@@ -114,6 +178,15 @@
   --wash-a: color-mix(in srgb, var(--color-accent) 20%, transparent);
   --wash-b: color-mix(in srgb, var(--color-accent) 15%, transparent);
   --wash-c: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  /* Dark keeps the original treatment: the table is a lighter shape on a
+     darker page, so a faint accent wash over the panel is all it needs. */
+  --felt-core: color-mix(in srgb, var(--color-accent) 8%, var(--surface));
+  --felt-edge: var(--surface);
+  --felt-rim: var(--color-divider);
+  --felt-inset: none;
+  --folded-fade: 0.34;
+  --on-accent: #12181f;
+  --track: color-mix(in srgb, #000000 28%, var(--surface));
   --lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 30px -16px rgba(0, 0, 0, 0.7);
   --lift-hi: 0 1px 2px rgba(0, 0, 0, 0.5), 0 20px 44px -18px rgba(0, 0, 0, 0.85);
   color-scheme: dark;
@@ -221,11 +294,11 @@ img { display: block; max-width: 100%; }
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  color: var(--ink-label);
 }
 .mono-label.accent { color: var(--color-accent-700); }
 .hatch { background-image: repeating-linear-gradient(45deg, currentColor 0 1px, transparent 1px 5px); }
-.text-dim { color: color-mix(in srgb, var(--color-text) 60%, transparent); }
+.text-dim { color: var(--ink-dim); }
 
 /* — buttons — */
 .btn {
@@ -454,7 +527,11 @@ img { display: block; max-width: 100%; }
 
 /* — meters and pips — */
 .meter {
-  height: 12px; border: 1px solid var(--line); background: var(--surface);
+  /* The unfilled part is a recessed track, not the panel showing through. It
+     was `--surface`, which on a panel of the same colour left a bar whose
+     empty portion was invisible in BOTH themes — you could see how much was
+     filled but not what it was filled out of. */
+  height: 12px; border: 1px solid var(--line); background: var(--track);
   border-radius: 999px; overflow: hidden; position: relative;
 }
 .meter > i { position: absolute; inset: 0 auto 0 0; background: var(--color-accent); }
@@ -955,7 +1032,10 @@ img { display: block; max-width: 100%; }
   border-radius: var(--r); overflow: hidden; background: var(--surface); box-shadow: var(--lift);
 }
 .session-box .head {
-  background: var(--color-accent); color: #fff;
+  /* `#fff` was correct on light's deep accent and wrong on dark's pale one —
+     white on #94bce3 is roughly 1.8:1. The ink is a token so each theme picks
+     the legible one. */
+  background: var(--color-accent); color: var(--on-accent);
   padding: 8px var(--space-3);
   font-family: var(--font-mono); font-size: 10px;
   letter-spacing: 0.14em; text-transform: uppercase;
@@ -965,7 +1045,7 @@ img { display: block; max-width: 100%; }
 .session-box .cell { padding: var(--space-3); }
 .session-box .cell .k {
   font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em;
-  text-transform: uppercase; color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  text-transform: uppercase; color: var(--ink-label);
 }
 .session-box .cell .v {
   font-family: var(--font-heading); font-weight: 600; font-size: 27px; line-height: 1.1;
@@ -976,7 +1056,7 @@ img { display: block; max-width: 100%; }
   display: flex; justify-content: space-between;
   font-family: var(--font-mono); font-size: 10px;
   letter-spacing: 0.1em; text-transform: uppercase;
-  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  color: var(--ink-dim);
 }
 
 /* drill page layout */
@@ -1563,7 +1643,11 @@ body:has(.auth-mesh) .ambient-wash i:nth-child(6) { background: var(--wash-d); }
 .pt-seat.hero .pt-seat-plate {
   border-left-width: 3px; border-left-color: var(--color-accent);
 }
-.pt-seat.folded { opacity: .34; }
+/* Opacity is theme-dependent, which is easy to miss: .34 of a pale plate on
+   a DARK page still leaves a visible grey shape, but .34 of a pale plate on a
+   LIGHT felt fades into it completely — the four folded seats were ghosts in
+   the shipped light build. Same intent, different number. */
+.pt-seat.folded { opacity: var(--folded-fade); }
 .pt-seat.folded .pt-seat-plate { min-width: 0; padding: 3px 8px; }
 .pt-seat-bet {
   position: absolute; left: 50%; transform: translateX(-50%);
@@ -1606,11 +1690,18 @@ body:has(.auth-mesh) .ambient-wash i:nth-child(6) { background: var(--wash-d); }
      wrap width. */
   position: relative; aspect-ratio: 2 / 1; min-height: 220px; max-height: 300px;
   margin-inline: auto;
-  border: 1px solid var(--color-divider); border-radius: 46% / 38%;
+  border: 1px solid var(--felt-rim); border-radius: 46% / 38%;
+  /* The rim and the fill are tokens because the two themes need opposite
+     treatments. On dark the table is a lighter shape on a darker page and an
+     8% accent wash is plenty. On light the panel behind it is already white,
+     so the same wash produced an oval that was, in the shipped build, a
+     hairline around nothing — the felt has to be DARKER than its panel to
+     exist at all. */
   background:
     radial-gradient(ellipse at 50% 45%,
-      color-mix(in srgb, var(--color-accent) 8%, var(--surface)) 0%,
-      var(--surface) 72%);
+      var(--felt-core) 0%,
+      var(--felt-edge) 74%);
+  box-shadow: var(--felt-inset);
 }
 .pt-center {
   position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%);
