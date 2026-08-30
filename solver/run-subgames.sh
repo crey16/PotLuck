@@ -39,6 +39,15 @@
 #
 # RATE: measured ~900s/flop on this machine, not the 343s docs/14 quotes. That
 # is ~15 days per complete pass. Run ./batch-status.sh for the live number.
+#
+# FLOP LISTS DO NOT MIX. flops.txt became the stratified set on 2026-08-08
+# (M8.7F); ev-all/ holds 51 flops solved against the hand-picked list it
+# replaced, preserved as flops/legacy-25.txt. Resuming into ev-all with the
+# new default list would interleave two samples in one directory and the
+# average would be over neither — so an out-root already holding boards the
+# current list does not ask for is refused, not resumed. A stratified run
+# gets a fresh out-root; the legacy batch resumes only with its own list
+# passed explicitly.
 set -e
 cd "$(dirname "$0")"
 SUBGAMES="${1:-subgames}"
@@ -47,6 +56,17 @@ FLOPS="${3:-flops.txt}"
 
 cargo build --release 2>/dev/null
 mkdir -p "$OUTROOT"
+
+STRAYS=$(comm -13 \
+  <(tr -d ' \r' < "$FLOPS" | grep -v '^$' | sort -u) \
+  <(ls "$OUTROOT"/*/*.ev.json 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/\.ev\.json$//' | sort -u))
+if [[ -n "$STRAYS" ]]; then
+  echo "run-subgames: $OUTROOT already holds boards that are not on $FLOPS:"
+  echo "$STRAYS" | head -5 | sed 's/^/  /'
+  echo "It was solved against a different flop list. Use a fresh out-root, or"
+  echo "pass the list it was started with (the legacy batch: flops/legacy-25.txt)."
+  exit 1
+fi
 
 total=$(ls "$SUBGAMES"/*.json | wc -l | tr -d ' ')
 n=0

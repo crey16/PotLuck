@@ -12,10 +12,18 @@
 # COMPLETION IS A COUNT, NEVER AN EXIT STATUS. See docs/14-m87a-solver-scope.md:
 # a batch has already been silently truncated twice in this project, and both
 # times it looked exactly like a batch that had not started.
+#
+# This measures the LEGACY batch. ev-all/ was solved against the hand-picked
+# list preserved as flops/legacy-25.txt, so its completion is counted against
+# that list — counting it against the stratified flops.txt (M8.7F, 2026-08-08)
+# would compare apples to a different 25 boards. The M8.7F scope cut also
+# SUPERSEDED this 60-subgame batch: the plan is 3–5 subgames on the stratified
+# set in a fresh out-root, and run-subgames.sh now refuses to resume ev-all
+# with any list but its own.
 cd "$(dirname "$0")"
 source ./proc.sh  # proc_running — NOT pgrep -f; see that file for why
 
-FLOPS=$(wc -l < flops.txt | tr -d ' ')
+FLOPS=$(wc -l < flops/legacy-25.txt | tr -d ' ')
 SUBGAMES=$(ls subgames/*.json | wc -l | tr -d ' ')
 TOTAL=$((SUBGAMES * FLOPS))
 DONE=$(ls ev-all/*/*.ev.json 2>/dev/null | wc -l | tr -d ' ')
@@ -32,8 +40,9 @@ else
   if (( DONE == TOTAL )); then
     print -r -- "  COMPLETE"
   else
-    print -r -- "  NOT RUNNING — and not finished. Resume with:"
-    print -r -- "    nohup ./solver/run-subgames.sh subgames ev-all >> solver/batch-m87a.log 2>&1 & disown"
+    print -r -- "  NOT RUNNING — and not finished. Superseded by the M8.7F scope cut;"
+    print -r -- "  resume only deliberately, and only with the list it was started with:"
+    print -r -- "    nohup ./solver/run-subgames.sh subgames ev-all flops/legacy-25.txt >> solver/batch-m87a.log 2>&1 & disown"
   fi
 fi
 

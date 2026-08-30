@@ -195,6 +195,25 @@ export function stability(
   };
 }
 
+/**
+ * Which of a directory's solved boards the flop set does not ask for.
+ *
+ * Non-empty means the directory was solved over a DIFFERENT flop set, and a
+ * stability comparison against it would conflate a composition change with a
+ * stability change: the measured movement would be about which boards were
+ * sampled, not about whether the strategy stopped moving — precisely the
+ * confusion section 3 exists to prevent. So the refusal stands; this exists
+ * only to report it in the report's own voice instead of a stack trace.
+ * (`loadEvTable`'s throw stays in place as the backstop for every other
+ * caller.)
+ *
+ * Under EQUAL_WEIGHTS there is no set to disagree with, so nothing is absent.
+ */
+export function flopsAbsentFromSet(flops: readonly string[], weights: FlopWeights): string[] {
+  if (weights === EQUAL_WEIGHTS) return [];
+  return flops.filter((f) => !weights.has(f));
+}
+
 /** Flop ids present in an ev directory, without loading the EVs. */
 function flopsIn(dir: string): string[] {
   return readdirSync(dir)
@@ -268,6 +287,26 @@ function main(): void {
   // ---- 3. stability --------------------------------------------------------
   const againstDir = flag("against");
   if (againstDir) {
+    const previousFlops = flopsIn(resolve(againstDir));
+    const absent = flopsAbsentFromSet(previousFlops, weights);
+    if (absent.length > 0) {
+      const named = absent.slice(0, 4).join(", ") + (absent.length > 4 ? ", ..." : "");
+      console.log(`\n3. STABILITY — NOT MEASURED: the two directories were solved over different flop sets`);
+      console.log(
+        `   ${againstDir} holds ${previousFlops.length} boards, of which ${absent.length} are\n` +
+          `   absent from ${setPath ?? "the flop set"} (${named}).`
+      );
+      console.log(
+        "   Comparing EV tables built over different flop sets conflates a\n" +
+          "   COMPOSITION change with a STABILITY change: the movement would measure\n" +
+          "   which boards were sampled, not whether the strategy stopped moving."
+      );
+      console.log(
+        "   --against needs a directory solved over the SAME flop set as --ev."
+      );
+      console.log("");
+      process.exit(1);
+    }
     const previous = loadEvTable(resolve(againstDir), weights);
     const stab = stability(previous, table, setPath ? strata : undefined);
     console.log(`\n3. STABILITY — movement since ${againstDir}`);
