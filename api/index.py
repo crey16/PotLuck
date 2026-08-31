@@ -18,6 +18,7 @@ from api.db import get_connection
 from api.deps import current_user_id
 from api.daily import router as daily_router
 from api.friends import router as friends_router
+from api.games import router as games_router
 from api.profile import router as profile_router
 from api.play import router as play_router
 from api.placement import (
@@ -43,6 +44,7 @@ app.include_router(learning_router)
 app.include_router(scenarios_router)
 app.include_router(daily_router)
 app.include_router(friends_router)
+app.include_router(games_router)
 app.include_router(profile_router)
 app.include_router(play_router)
 app.include_router(placement_router)
