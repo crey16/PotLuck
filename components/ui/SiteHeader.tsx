@@ -23,6 +23,13 @@ const NAV = [
   // in the app and the one M10 builds on; buried behind an avatar it gets no
   // use and therefore generates no feedback about what M10 has to fix.
   { href: "/play", label: "Play" },
+  // Games is the home-game tracker (M15) — real cash games, not training. It
+  // sits in the top bar rather than the account dropdown for the same reason
+  // Play does: it is used live, on a phone, between hands, and a surface that
+  // has to be reached through an avatar menu at a poker table gets no use. It
+  // follows Play because everything left of it is the training loop and
+  // everything right of it is reference material.
+  { href: "/games", label: "Games" },
   { href: "/ranges", label: "Ranges" },
   { href: "/reference", label: "Reference" },
   // `/system` is deliberately absent. It is the design-system reference —
