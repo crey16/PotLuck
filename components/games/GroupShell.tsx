@@ -291,7 +291,7 @@ export function GroupShell({ groupId }: { groupId: string }) {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: "var(--space-2)" }}>
+      <div style={{ display: "flex", gap: 2 }}>
         {(
           [
             ["board", "Board"],
@@ -301,8 +301,8 @@ export function GroupShell({ groupId }: { groupId: string }) {
         ).map(([key, label]) => (
           <button
             key={key}
-            className={tab === key ? "btn btn-secondary" : "btn btn-ghost"}
-            style={{ flex: 1 }}
+            className={`btn btn-caps ${tab === key ? "btn-primary" : "btn-secondary"}`}
+            aria-pressed={tab === key}
             onClick={() => setTab(key)}
           >
             {label}
@@ -317,7 +317,10 @@ export function GroupShell({ groupId }: { groupId: string }) {
       ) : null}
 
       {tab === "sessions" ? (
-        <div>
+        <div
+          className={sessions.length === 0 ? undefined : "blueprint"}
+          style={sessions.length === 0 ? undefined : { padding: 0, overflow: "hidden" }}
+        >
           {sessions.length === 0 ? (
             <p className="text-dim" style={{ margin: 0 }}>No sessions yet.</p>
           ) : (
@@ -341,7 +344,7 @@ export function GroupShell({ groupId }: { groupId: string }) {
                     display: "flex",
                     alignItems: "baseline",
                     gap: "var(--space-3)",
-                    padding: "12px 0",
+                    padding: "12px var(--space-4)",
                     borderBottom: "1px solid var(--color-divider)",
                     textDecoration: "none",
                     color: "inherit",
@@ -376,7 +379,7 @@ export function GroupShell({ groupId }: { groupId: string }) {
 
       {tab === "roster" ? (
         <div style={{ display: "grid", gap: "var(--space-4)" }}>
-          <div>
+          <div className="blueprint" style={{ padding: 0, overflow: "hidden" }}>
             {players.map((p) => (
               <div
                 key={p.id}
@@ -384,7 +387,7 @@ export function GroupShell({ groupId }: { groupId: string }) {
                   display: "flex",
                   alignItems: "center",
                   gap: "var(--space-3)",
-                  padding: "10px 0",
+                  padding: "10px var(--space-4)",
                   borderBottom: "1px solid var(--color-divider)",
                 }}
               >

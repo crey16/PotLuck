@@ -119,9 +119,10 @@ export function SettlePanel({
           <UnbalancedBanner balanceCents={balanceCents} />
         )
       ) : null}
-      <div style={{ display: "flex", gap: "var(--space-2)" }}>
+      <div style={{ display: "flex", gap: 2 }}>
         <button
-          className={mode === "banker" ? "btn btn-secondary" : "btn btn-ghost"}
+          className={`btn btn-caps ${mode === "banker" ? "btn-primary" : "btn-secondary"}`}
+          aria-pressed={mode === "banker"}
           style={{ flex: 1 }}
           onClick={() => {
             setMode("banker");
@@ -131,7 +132,8 @@ export function SettlePanel({
           Banker
         </button>
         <button
-          className={mode === "fewest_transfers" ? "btn btn-secondary" : "btn btn-ghost"}
+          className={`btn btn-caps ${mode === "fewest_transfers" ? "btn-primary" : "btn-secondary"}`}
+          aria-pressed={mode === "fewest_transfers"}
           style={{ flex: 1 }}
           onClick={() => {
             setMode("fewest_transfers");
@@ -146,7 +148,8 @@ export function SettlePanel({
           {players.map((pid) => (
             <button
               key={pid}
-              className={banker === pid ? "btn btn-primary" : "btn btn-ghost"}
+              className={`btn ${banker === pid ? "btn-primary" : "btn-secondary"}`}
+              aria-pressed={banker === pid}
               style={{ padding: "6px 12px" }}
               onClick={() => {
                 setBanker(pid);

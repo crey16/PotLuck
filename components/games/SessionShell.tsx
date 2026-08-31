@@ -256,7 +256,7 @@ export function SessionShell({
 
       {error ? <p style={{ margin: 0, color: "var(--crit)" }}>{error}</p> : null}
 
-      <div>
+      <div className="blueprint" style={{ padding: 0, overflow: "hidden" }}>
         {seated.map((sp) => {
           const name = playerNames.get(sp.player_id) ?? "?";
           const stats = perPlayer.get(sp.player_id)!;
@@ -266,7 +266,10 @@ export function SessionShell({
           return (
             <div
               key={sp.player_id}
-              style={{ borderBottom: "1px solid var(--color-divider)", padding: "12px 0" }}
+              style={{
+                borderBottom: "1px solid var(--color-divider)",
+                padding: "12px var(--space-4)",
+              }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -415,7 +418,7 @@ export function SessionShell({
           {showTimeline ? "Hide" : "Show"} entry log ({entries.length})
         </button>
         {showTimeline ? (
-          <div style={{ marginTop: "var(--space-2)" }}>
+          <div className="blueprint" style={{ marginTop: "var(--space-2)", padding: 0, overflow: "hidden" }}>
             {entries.map((e) => {
               const voided = e.voided_at !== null;
               return (
@@ -425,7 +428,7 @@ export function SessionShell({
                     display: "flex",
                     alignItems: "baseline",
                     gap: "var(--space-3)",
-                    padding: "8px 0",
+                    padding: "8px var(--space-4)",
                     borderBottom: "1px solid var(--color-divider)",
                     fontSize: 14,
                     opacity: voided ? 0.5 : 1,

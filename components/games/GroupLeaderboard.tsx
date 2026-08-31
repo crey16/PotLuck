@@ -80,19 +80,24 @@ export function GroupLeaderboard({
 
   return (
     <div style={{ display: "grid", gap: "var(--space-3)" }}>
-      <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", alignItems: "center" }}>
-        {SORTS.map((s) => (
-          <button
-            key={s.key}
-            className={s.key === sortKey ? "btn btn-primary" : "btn btn-ghost"}
-            style={{ padding: "6px 12px" }}
-            onClick={() => setSortKey(s.key)}
-          >
-            {s.label}
-          </button>
-        ))}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "var(--space-3)" }}>
+        <div style={{ display: "flex", gap: 2 }}>
+          {SORTS.map((s) => (
+            <button
+              key={s.key}
+              className={`btn btn-caps ${s.key === sortKey ? "btn-primary" : "btn-secondary"}`}
+              aria-pressed={s.key === sortKey}
+              onClick={() => setSortKey(s.key)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
         {rateSort ? (
-          <label className="text-dim" style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center" }}>
+          <label
+            className="text-dim"
+            style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center", marginLeft: "auto" }}
+          >
             <input
               type="checkbox"
               checked={showAll}
@@ -111,7 +116,7 @@ export function GroupLeaderboard({
         </p>
       ) : null}
 
-      <div>
+      <div className="blueprint" style={{ padding: 0, overflow: "hidden" }}>
         {rows.map((row, index) => {
           const name = playerNames.get(row.playerId) ?? "Unknown";
           const open = openPlayer === row.playerId;
@@ -125,7 +130,7 @@ export function GroupLeaderboard({
                   width: "100%",
                   alignItems: "baseline",
                   gap: "var(--space-3)",
-                  padding: "12px 0",
+                  padding: "12px var(--space-4)",
                   background: "none",
                   border: "none",
                   cursor: "pointer",
@@ -154,7 +159,13 @@ export function GroupLeaderboard({
                 </span>
               </button>
               {open && deep ? (
-                <div style={{ padding: "0 0 var(--space-4) 22px", display: "grid", gap: "var(--space-3)" }}>
+                <div
+                  style={{
+                    padding: "0 var(--space-4) var(--space-4) calc(var(--space-4) + 22px + var(--space-3))",
+                    display: "grid",
+                    gap: "var(--space-3)",
+                  }}
+                >
                   <ProfitChart series={cumulativeSeries(sessions, row.playerId)} />
                   <div className="text-dim" style={{ fontSize: 13, display: "flex", gap: "var(--space-4)", flexWrap: "wrap" }}>
                     <span>{deep.appearances} sessions</span>
