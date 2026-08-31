@@ -79,7 +79,10 @@ create table public.game_sessions (
   settled_at       timestamptz,
   notes            text,
   created_by       uuid not null references public.profiles(id),
-  check (status <> 'settled' or (settled_at is not null and settlement_mode is not null)),
+  -- A settled session always has settled_at. settlement_mode is set when the
+  -- app produced the transfers; imported sheet nights were squared in cash
+  -- before the app existed and carry no mode.
+  check (status <> 'settled' or settled_at is not null),
   check (settlement_mode is distinct from 'banker' or banker_player_id is not null)
 );
 
