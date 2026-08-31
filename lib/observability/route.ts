@@ -38,6 +38,8 @@
  */
 const PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/^\/u\/[^/]+$/, "/u/[username]"],
+  [/^\/games\/[^/]+\/session\/[^/]+$/, "/games/[groupId]/session/[sessionId]"],
+  [/^\/games\/[^/]+$/, "/games/[groupId]"],
   [/^\/play\/history\/[^/]+$/, "/play/history/[handId]"],
   [/^\/learn\/[0-9]+\/[0-9]+$/, "/learn/[moduleId]/[lessonId]"],
   [/^\/learn\/[0-9]+$/, "/learn/[moduleId]"],
@@ -50,6 +52,7 @@ const STATIC_ROUTES: ReadonlySet<string> = new Set([
   "/drill",
   "/drill/outs",
   "/friends",
+  "/games",
   "/leaderboard",
   "/learn",
   "/learn/practice",

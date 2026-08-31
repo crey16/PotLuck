@@ -31,6 +31,15 @@ test("dynamic segments collapse to the App Router pattern", () => {
   assert.equal(routeKey("/play/history/9f2c-4d1a"), "/play/history/[handId]");
   assert.equal(routeKey("/learn/3"), "/learn/[moduleId]");
   assert.equal(routeKey("/learn/3/12"), "/learn/[moduleId]/[lessonId]");
+  // Home-game ids are group ids — other people's money; never log them raw.
+  assert.equal(
+    routeKey("/games/6b1f6a1e-8a1b-4a3e-9d1c-000000000000"),
+    "/games/[groupId]"
+  );
+  assert.equal(
+    routeKey("/games/6b1f6a1e-8a1b-4a3e-9d1c-000000000000/session/9f2c"),
+    "/games/[groupId]/session/[sessionId]"
+  );
 });
 
 test("two people's profiles are one key, so the row has a sample size", () => {
