@@ -91,7 +91,7 @@ export function GroupsShell() {
   return (
     <div style={{ display: "grid", gap: "var(--space-4)" }}>
       {groups.length === 0 ? (
-        <div className="card" style={{ padding: "var(--space-4)" }}>
+        <div className="blueprint" style={{ padding: "var(--space-4)" }}>
           <p style={{ margin: 0 }}>
             No groups yet. Create one for your game, or join a friend’s with
             their invite code.
@@ -103,7 +103,7 @@ export function GroupsShell() {
             <Link
               key={g.id}
               href={`/games/${g.id}`}
-              className="card"
+              className="blueprint"
               style={{
                 padding: "var(--space-4)",
                 display: "flex",
@@ -111,6 +111,7 @@ export function GroupsShell() {
                 justifyContent: "space-between",
                 gap: "var(--space-3)",
                 textDecoration: "none",
+                color: "inherit",
               }}
             >
               <span style={{ fontFamily: "var(--font-heading)", fontSize: 20 }}>
@@ -122,7 +123,7 @@ export function GroupsShell() {
         </div>
       )}
 
-      <div className="card" style={{ padding: "var(--space-4)", display: "grid", gap: "var(--space-3)" }}>
+      <div className="blueprint" style={{ padding: "var(--space-4)", display: "grid", gap: "var(--space-3)" }}>
         <strong>Start a group</strong>
         <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
           <input

@@ -103,6 +103,14 @@ export function GroupLeaderboard({
         ) : null}
       </div>
 
+      {rows.length === 0 ? (
+        <p className="text-dim" style={{ margin: 0 }}>
+          Nobody has {MIN_APPEARANCES_DEFAULT}+ games yet — a rate needs a
+          sample. Tick “include under {MIN_APPEARANCES_DEFAULT} games” to see
+          everyone anyway.
+        </p>
+      ) : null}
+
       <div>
         {rows.map((row, index) => {
           const name = playerNames.get(row.playerId) ?? "Unknown";

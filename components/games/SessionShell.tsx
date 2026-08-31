@@ -475,6 +475,9 @@ export function SessionShell({
           sessionId={sessionId}
           balanced={balance === 0 && entries.some((e) => e.voided_at === null)}
           balanceCents={balance}
+          awaitingCashouts={seated.some(
+            (sp) => (perPlayer.get(sp.player_id)?.outCents ?? 0) === 0
+          )}
           players={seated.map((sp) => sp.player_id)}
           playerNames={playerNames}
           onSettled={reload}

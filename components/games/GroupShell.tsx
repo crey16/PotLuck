@@ -222,13 +222,14 @@ export function GroupShell({ groupId }: { groupId: string }) {
       {liveSession ? (
         <Link
           href={`/games/${groupId}/session/${liveSession.id}`}
-          className="card"
+          className="blueprint"
           style={{
             padding: "var(--space-3) var(--space-4)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             textDecoration: "none",
+            color: "inherit",
           }}
         >
           <span>
@@ -244,7 +245,7 @@ export function GroupShell({ groupId }: { groupId: string }) {
               Start tonight’s session
             </button>
           ) : (
-            <div className="card" style={{ padding: "var(--space-4)", display: "grid", gap: "var(--space-3)" }}>
+            <div className="blueprint" style={{ padding: "var(--space-4)", display: "grid", gap: "var(--space-3)" }}>
               <strong>Who’s playing?</strong>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
                 {players.map((p) => {
@@ -438,7 +439,7 @@ export function GroupShell({ groupId }: { groupId: string }) {
           </div>
 
           {myRole === "owner" || myRole === "admin" ? (
-            <div className="card" style={{ padding: "var(--space-4)", display: "grid", gap: "var(--space-3)" }}>
+            <div className="blueprint" style={{ padding: "var(--space-4)", display: "grid", gap: "var(--space-3)" }}>
               <strong>Invite</strong>
               <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
                 <code className="tag tag-mono" style={{ fontSize: 16, letterSpacing: 2 }}>

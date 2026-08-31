@@ -29,7 +29,7 @@ function errorMessage(e: unknown): string {
 export function UnbalancedBanner({ balanceCents }: { balanceCents: number }) {
   return (
     <div
-      className="card"
+      className="blueprint"
       style={{
         padding: "var(--space-3) var(--space-4)",
         borderColor: "var(--crit)",
@@ -55,6 +55,7 @@ export function SettlePanel({
   sessionId,
   balanced,
   balanceCents,
+  awaitingCashouts,
   players,
   playerNames,
   onSettled,
@@ -62,6 +63,9 @@ export function SettlePanel({
   sessionId: string;
   balanced: boolean;
   balanceCents: number;
+  /** Someone seated has no cash-out yet — chips are still on the table, so
+   * an unbalanced ledger is the normal mid-game state, not an error. */
+  awaitingCashouts: boolean;
   players: string[]; // seated player ids
   playerNames: Map<string, string>;
   onSettled: () => Promise<void>;
@@ -101,9 +105,20 @@ export function SettlePanel({
   }
 
   return (
-    <div className="card" style={{ padding: "var(--space-4)", display: "grid", gap: "var(--space-3)" }}>
+    <div className="blueprint" style={{ padding: "var(--space-4)", display: "grid", gap: "var(--space-3)" }}>
       <strong>Settle up</strong>
-      {!balanced ? <UnbalancedBanner balanceCents={balanceCents} /> : null}
+      {!balanced ? (
+        awaitingCashouts ? (
+          <p className="text-dim" style={{ margin: 0, fontSize: 13 }}>
+            {formatCents(Math.abs(balanceCents))} still on the table — record
+            everyone’s cash-out to settle the night.
+          </p>
+        ) : (
+          // Everyone is cashed out and it still doesn't count to zero: a
+          // real counting error, surfaced, never silently absorbed.
+          <UnbalancedBanner balanceCents={balanceCents} />
+        )
+      ) : null}
       <div style={{ display: "flex", gap: "var(--space-2)" }}>
         <button
           className={mode === "banker" ? "btn btn-secondary" : "btn btn-ghost"}
@@ -223,7 +238,7 @@ export function SettlementList({
   }
 
   return (
-    <div className="card" style={{ padding: "var(--space-4)", display: "grid", gap: "var(--space-3)" }}>
+    <div className="blueprint" style={{ padding: "var(--space-4)", display: "grid", gap: "var(--space-3)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <strong>Who pays whom</strong>
         {mode ? (

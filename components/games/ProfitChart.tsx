@@ -32,7 +32,8 @@ export function ProfitChart({
   const last = values[values.length - 1];
 
   return (
-    <div>
+    // Full width on a phone, capped on desktop — the 320x120 viewBox scales.
+    <div style={{ maxWidth: 440 }}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         role="img"
