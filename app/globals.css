@@ -710,12 +710,17 @@ img { display: block; max-width: 100%; }
   .not-sure-btn { min-height: 44px; }
 }
 
-/* An unsure verdict is a gap, not a wrong belief — warn, never crit. */
-.fb.unsure { border-color: var(--warn); }
-.fb.unsure .bar { background: var(--warn-fill); border-bottom-color: var(--warn); }
-.fb.unsure .bar .glyph { border-color: var(--warn); color: var(--warn); }
+/* An unsure verdict is a gap, not a wrong belief — warn, never crit.
+   `.warn` is the same tone under an honest name, for verdicts that are
+   mid-band on their own terms (an inaccuracy in a played hand) rather than
+   an "I don't know" answer. */
+.fb.unsure, .fb.warn { border-color: var(--warn); }
+.fb.unsure .bar, .fb.warn .bar { background: var(--warn-fill); border-bottom-color: var(--warn); }
+.fb.unsure .bar .glyph, .fb.warn .bar .glyph { border-color: var(--warn); color: var(--warn); }
 .fb.unsure .bar .word,
-.fb.unsure .bar .xp { color: var(--warn); }
+.fb.unsure .bar .xp,
+.fb.warn .bar .word,
+.fb.warn .bar .xp { color: var(--warn); }
 
 /* — feedback panel — */
 .fb { margin-top: var(--space-6); border: 1px solid var(--good); }

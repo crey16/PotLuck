@@ -1232,12 +1232,36 @@ export function PlayShell({ seed }: PlayShellProps) {
             )}
 
             {/* — hand over — */}
-            {over && outcome && (
+            {over && outcome && (() => {
+              // The banner's colour answers "did you play it well?", never
+              // "did the chips come your way?". `.fb` is the app-wide answer
+              // feedback panel — every drill and lesson teaches that its red
+              // means "you were wrong" — so colouring it by the pot made a
+              // CORRECT fold open in red while the review below called the
+              // same fold the best move. The worst graded verdict decides the
+              // tone; the chip result is still shown, but as neutral fact,
+              // because losing the pot is not a statement about the play.
+              const blunders = review.filter((r) => r.verdict === "blunder").length;
+              const inaccuracies = review.filter((r) => r.verdict === "inaccuracy").length;
+              const tone = blunders > 0 ? " no" : inaccuracies > 0 ? " warn" : "";
+              const word =
+                blunders > 1 ? `${blunders} blunders`
+                : blunders === 1 ? "Blunder"
+                : inaccuracies > 1 ? `${inaccuracies} inaccuracies`
+                : inaccuracies === 1 ? "Inaccuracy"
+                : "No mistakes";
+              const evLost = review.reduce((sum, r) => sum + (r.lossDollars ?? 0), 0);
+              return (
               <>
-                <div className={`fb${(outcome.net ?? 0) >= 0 ? "" : " no"}`}>
+                <div className={`fb${tone}`}>
                   <div className="bar">
-                    <span className="word">{outcome.text}</span>
-                    <span className="xp">{signedBb(outcome.net)}</span>
+                    <span className="word">{word}</span>
+                    <span className="xp">
+                      {evLost > 0 ? `−${bb(evLost)} EV` : "0bb EV lost"}
+                    </span>
+                    <span className="run">
+                      {outcome.text} · {signedBb(outcome.net)}
+                    </span>
                   </div>
                   <div className="body">
                     <WorkTable>
@@ -1267,7 +1291,8 @@ export function PlayShell({ seed }: PlayShellProps) {
                   />
                 )}
               </>
-            )}
+              );
+            })()}
 
             {/* — stopped at the configured street, not played out — */}
             {stopped && !preflopOnly && (
